@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
+from ase2sprkkr.execution import ProjectRepository
 
 from guy4ase.gui.application.execution_profiles import profile_description
 from guy4ase.gui.application.potential_version import PotentialFileVersion
@@ -72,16 +73,25 @@ def _select_profile(
     *,
     input_parameters,
     directory: str | None = None,
+    project_repository: ProjectRepository | None = None,
+    active_project_id: str | None = None,
     position_like_window: str | None = None,
-) -> tuple[bool, str | None, RunIdentification | None, str | None]:
-    """Choose execution, run identifiers and the working directory together."""
+) -> tuple[bool, str | None, RunIdentification | None, str | None, str | None]:
+    """Choose execution, run identifiers, working directory and project."""
     dialog = ProfileSelectionDialog(
-        parent, input_parameters=input_parameters, directory=directory
+        parent,
+        input_parameters=input_parameters,
+        directory=directory,
+        project_repository=project_repository,
+        active_project_id=active_project_id,
     )
     _position_like_window(dialog, position_like_window)
     if dialog.exec() != dialog.DialogCode.Accepted:
-        return False, None, None, None
-    return True, dialog.profile_name(), dialog.identification(), dialog.directory_name()
+        return False, None, None, None, None
+    return (
+        True, dialog.profile_name(), dialog.identification(),
+        dialog.directory_name(), dialog.project_id(),
+    )
 
 
 def _apply_run_identification(parameters, identification: RunIdentification | None) -> None:
@@ -104,6 +114,7 @@ def run_calculation(
     profile_name: str | None = None,
     position_like_window: str | None = None,
     track_launch_monitor: LaunchMonitorTracker | None = None,
+    project_repository: ProjectRepository | None = None,
 ) -> SprkkrRunWindow | None:
     """Choose execution, run a task and record its immutable provenance.
 
@@ -114,6 +125,7 @@ def run_calculation(
     ownership.
     """
     identification = None
+    project_id = controller.active_project_id
     if select_profile:
         # Resolve the directory only after input-parameter editing. Cancelling
         # execution setup must not change the workspace.
@@ -125,10 +137,12 @@ def run_calculation(
         ):
             return None
         directory_generation = controller.directory_generation
-        accepted, profile_name, identification, directory = _select_profile(
+        accepted, profile_name, identification, directory, project_id = _select_profile(
             parent,
             input_parameters=controller.input_parameters,
             directory=controller.directory,
+            project_repository=project_repository,
+            active_project_id=project_id,
             position_like_window=position_like_window,
         )
         if not accepted or not directory:
@@ -174,6 +188,7 @@ def run_calculation(
         request=request,
         profile_name=profile_name,
         profile_description=description,
+        project_id=project_id,
         parent=None if track_launch_monitor is not None else parent,
         on_finished=finished,
     )
@@ -197,6 +212,7 @@ def configure_and_run_task(
     *,
     dataset_default_mode: str,
     track_launch_monitor: LaunchMonitorTracker | None = None,
+    project_repository: ProjectRepository | None = None,
 ) -> SprkkrRunWindow | None:
     """Configure one Guided task, commit it, choose execution, and run it."""
     structure_generation = controller.structure_generation
@@ -242,6 +258,7 @@ def configure_and_run_task(
         parent,
         position_like_window="guided-input",
         track_launch_monitor=track_launch_monitor,
+        project_repository=project_repository,
     )
 
 
@@ -299,6 +316,7 @@ def recompute_result(
     result_id: int,
     *,
     track_launch_monitor: LaunchMonitorTracker | None = None,
+    project_repository: ProjectRepository | None = None,
 ) -> SprkkrRunWindow | None:
     """Re-run historical settings on the state active in the workspace.
 
@@ -356,4 +374,5 @@ def recompute_result(
         parent,
         position_like_window=position_like_window,
         track_launch_monitor=track_launch_monitor,
+        project_repository=project_repository,
     )
