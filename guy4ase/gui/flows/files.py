@@ -169,6 +169,86 @@ def choose_and_load_output(
     return bool(file_path and load_output(controller, recent_files, file_path, parent))
 
 
+def load_output_directory(
+    controller: WorkspaceController,
+    recent_files: RecentFiles,
+    directory: str | Path,
+    parent: QWidget,
+) -> tuple[Path, ...]:
+    """Import recognized outputs from a directory into result history."""
+    folder = Path(directory).expanduser().resolve()
+    if not folder.is_dir():
+        raise NotADirectoryError(folder)
+    candidates = sorted(
+        (p for p in folder.iterdir()
+         if p.is_file() and p.suffix.lower() in {".out", ".log", ".txt"}),
+        key=lambda p: p.name.casefold(),
+    )
+    if not candidates:
+        QMessageBox.information(
+            parent, "No Output Files", f"No output files found in:\\n{folder}"
+        )
+        return ()
+
+    def read_all():
+        loaded, failures = [], []
+        for path in candidates:
+            try:
+                loaded.append((path, load_result_file(path)))
+            except Exception as exc:  # noqa: BLE001 - unrelated logs may exist
+                failures.append((path.name, str(exc)))
+        return loaded, failures
+
+    try:
+        loaded, failures = run_modal_task(
+            parent, read_all,
+            title="Importing Results",
+            label="Reading SPR-KKR outputs…",
+        )
+    except Exception as exc:  # noqa: BLE001 - backend errors
+        QMessageBox.critical(parent, "Directory Import Failed", str(exc))
+        return ()
+
+    imported = []
+    for index, (path, result) in enumerate(loaded):
+        controller.adopt_external_result(
+            result, select_result=index == len(loaded) - 1
+        )
+        recent_files.remember("output", path)
+        imported.append(path)
+
+    if failures:
+        summary = "\\n".join(
+            f"{name}: {reason}" for name, reason in failures[:8]
+        )
+        QMessageBox.warning(
+            parent, "Output Directory",
+            f"Imported {len(imported)} result(s). "
+            f"Skipped {len(failures)} file(s):\\n{summary}",
+        )
+    elif imported:
+        QMessageBox.information(
+            parent, "Output Directory",
+            f"Imported {len(imported)} result(s) from:\\n{folder}",
+        )
+    return tuple(imported)
+
+
+def choose_and_load_output_directory(
+    controller: WorkspaceController,
+    recent_files: RecentFiles,
+    parent: QWidget,
+) -> tuple[Path, ...]:
+    """Choose and import an existing directory of calculation outputs."""
+    folder = QFileDialog.getExistingDirectory(
+        parent, "Open Output Directory", controller.directory or ""
+    )
+    return (
+        load_output_directory(controller, recent_files, folder, parent)
+        if folder else ()
+    )
+
+
 def _read_output(file_path: str | Path, parent: QWidget) -> LoadedResult | None:
     try:
         return run_modal_task(
