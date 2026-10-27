@@ -150,3 +150,30 @@ def test_later_import_errors_are_not_misreported_as_task_unavailable(
         )
 
     assert controller.input_parameters is parameters
+
+
+def test_guided_parameter_editor_opens_without_directory_prompt(monkeypatch, tmp_path):
+    controller = _controller(tmp_path)
+    controller.change_directory(None)
+    parameters = object()
+    monkeypatch.setattr(
+        calculation_flow, "choose_working_directory",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Directory selection must follow input editing")
+        ),
+    )
+    monkeypatch.setattr(
+        calculation_flow, "select_guided_input_parameters",
+        lambda *_args, **_kwargs: parameters,
+    )
+    calls = []
+    monkeypatch.setattr(
+        calculation_flow, "run_calculation",
+        lambda *_args, **_kwargs: calls.append(controller.directory) or "run",
+    )
+    assert calculation_flow.configure_and_run_task(
+        controller, RecentFiles(tmp_path / "recent.json"), object(),
+        "scf", dataset_default_mode="auto"
+    ) == "run"
+    assert calls == [None]
+    assert controller.input_parameters is parameters

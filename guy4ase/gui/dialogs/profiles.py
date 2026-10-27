@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
@@ -9,6 +10,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -216,11 +218,14 @@ class ProfileSelectionDialog(QDialog):
         *,
         store: ExecutionProfileStore | None = None,
         input_parameters=None,
+        directory: str | None = None,
+        require_directory: bool = True,
     ) -> None:
         super().__init__(parent)
+        self._require_directory = require_directory
         self._store = store or ExecutionProfileStore()
         self.setWindowTitle("Run SPR-KKR Calculation")
-        self.resize(650, 330)
+        self.resize(650, 480)
         self.setMinimumWidth(560)
 
         layout = QVBoxLayout(self)
@@ -296,6 +301,18 @@ class ProfileSelectionDialog(QDialog):
         self.description.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         profile_layout.addWidget(self.description)
         layout.addWidget(profile_box)
+
+        directory_box = QGroupBox("Working directory", self)
+        directory_row = QHBoxLayout(directory_box)
+        self.directory_edit = QLineEdit(directory_box)
+        self.directory_edit.setText(directory or "")
+        self.directory_edit.setPlaceholderText("Select the calculation directory")
+        directory_row.addWidget(self.directory_edit, 1)
+        browse = QPushButton("Browse…", directory_box)
+        browse.clicked.connect(self._browse_directory)
+        directory_row.addWidget(browse)
+        layout.addWidget(directory_box)
+        directory_box.setVisible(require_directory)
         layout.addStretch(1)
 
         buttons = QDialogButtonBox(
@@ -336,7 +353,29 @@ class ProfileSelectionDialog(QDialog):
         if ProfilesDialog(self, store=self._store).exec() == QDialog.DialogCode.Accepted:
             self._reload_profiles(selected)
 
+    def directory_name(self) -> str | None:
+        """Return the directory selected for this calculation."""
+        value = self.directory_edit.text().strip()
+        return str(Path(value).expanduser().resolve()) if value else None
+
+    def _browse_directory(self) -> None:
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "Select Calculation Directory",
+            self.directory_name() or str(Path.home()),
+        )
+        if selected:
+            self.directory_edit.setText(selected)
+
     def accept(self) -> None:  # type: ignore[override]
+        if self._require_directory and not self.directory_name():
+            QMessageBox.warning(
+                self,
+                "Calculation Directory Required",
+                "Choose a working directory before starting the calculation.",
+            )
+            self.directory_edit.setFocus()
+            return
         if self.dataset_edit is not None and not self.dataset_edit.hasAcceptableInput():
             QMessageBox.warning(
                 self, "Invalid output prefix",
@@ -375,7 +414,7 @@ class ProfileSelectionDialog(QDialog):
 
 def select_execution_profile(parent: QWidget | None = None) -> str | None:
     """Return the selected profile name, or ``None`` if cancelled/automatic."""
-    dialog = ProfileSelectionDialog(parent)
+    dialog = ProfileSelectionDialog(parent, require_directory=False)
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     return dialog.profile_name()

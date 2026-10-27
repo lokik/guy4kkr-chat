@@ -203,11 +203,25 @@ def load_output(
     file_path: str | Path,
     parent: QWidget,
 ) -> bool:
-    """Import an output into result history without changing the workspace."""
+    """Import an output and use its directory for subsequent calculations.
+
+    This does not activate the imported structure or potential: only the
+    working-directory context changes once the output has been loaded.
+    """
+    directory_generation = controller.directory_generation
     loaded = _read_output(file_path, parent)
     if loaded is None:
         return False
     adoption = controller.adopt_external_result(loaded, select_result=True)
+    if not document_change_applied(
+        parent,
+        controller.change_directory(
+            str(Path(file_path).resolve().parent),
+            expected_directory_generation=directory_generation,
+        ),
+    ):
+        _finish_output_load(adoption, recent_files, file_path, parent)
+        return False
     _finish_output_load(adoption, recent_files, file_path, parent)
     return True
 

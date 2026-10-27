@@ -51,7 +51,7 @@ def test_workspace_calculation_input_completeness_requires_all_inputs():
     assert not controller.can_calculate()
 
     controller.replace_input_parameters(_Parameters("scf"))
-    assert not controller.can_calculate()
+    assert controller.can_calculate()
 
     controller.change_directory("calculation")
     assert controller.can_calculate()

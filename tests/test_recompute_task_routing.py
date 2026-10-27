@@ -35,6 +35,13 @@ def test_non_guided_result_recompute_uses_expert_editor(monkeypatch):
     )
     replacements = []
     controller = _controller(record, replacements)
+    controller.directory = None
+    monkeypatch.setattr(
+        calculation_flow, "choose_working_directory",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Directory selection must follow input editing")
+        ),
+    )
     editor_calls = []
 
     def edit(parameters, *, parent, atoms):

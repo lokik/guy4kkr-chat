@@ -71,14 +71,17 @@ def _select_profile(
     parent: QWidget,
     *,
     input_parameters,
+    directory: str | None = None,
     position_like_window: str | None = None,
-) -> tuple[bool, str | None, RunIdentification | None]:
-    """Choose execution and run identifiers without changing the input draft."""
-    dialog = ProfileSelectionDialog(parent, input_parameters=input_parameters)
+) -> tuple[bool, str | None, RunIdentification | None, str | None]:
+    """Choose execution, run identifiers and the working directory together."""
+    dialog = ProfileSelectionDialog(
+        parent, input_parameters=input_parameters, directory=directory
+    )
     _position_like_window(dialog, position_like_window)
     if dialog.exec() != dialog.DialogCode.Accepted:
-        return False, None, None
-    return True, dialog.profile_name(), dialog.identification()
+        return False, None, None, None
+    return True, dialog.profile_name(), dialog.identification(), dialog.directory_name()
 
 
 def _apply_run_identification(parameters, identification: RunIdentification | None) -> None:
@@ -112,22 +115,30 @@ def run_calculation(
     """
     identification = None
     if select_profile:
-        # Cancel without touching the workspace, and snapshot inputs only once
-        # the user has confirmed execution settings.
+        # Resolve the directory only after input-parameter editing. Cancelling
+        # execution setup must not change the workspace.
         if (
             controller.atoms is None
             or controller.input_parameters is None
-            or not controller.directory
             or controller.structure_id is None
             or controller.state_id is None
         ):
             return None
-        accepted, profile_name, identification = _select_profile(
+        directory_generation = controller.directory_generation
+        accepted, profile_name, identification, directory = _select_profile(
             parent,
             input_parameters=controller.input_parameters,
+            directory=controller.directory,
             position_like_window=position_like_window,
         )
-        if not accepted:
+        if not accepted or not directory:
+            return None
+        if not document_change_applied(
+            parent,
+            controller.change_directory(
+                directory, expected_directory_generation=directory_generation
+            ),
+        ):
             return None
 
     try:
@@ -188,16 +199,6 @@ def configure_and_run_task(
     track_launch_monitor: LaunchMonitorTracker | None = None,
 ) -> SprkkrRunWindow | None:
     """Configure one Guided task, commit it, choose execution, and run it."""
-    if (
-        not controller.directory
-        and not choose_working_directory(
-            controller,
-            parent,
-            title="Choose the directory for this calculation",
-        )
-    ):
-        return None
-
     structure_generation = controller.structure_generation
     input_generation = controller.input_parameters_generation
     atoms = controller.atoms
@@ -307,13 +308,6 @@ def recompute_result(
     """
     record = controller.result_store.result(result_id)
     if record.input_parameters is None:
-        return None
-
-    if not controller.directory and not choose_working_directory(
-        controller,
-        parent,
-        title="Choose the directory for this calculation",
-    ):
         return None
 
     structure_generation = controller.structure_generation

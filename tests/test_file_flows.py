@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pytest
 from ase import Atoms
+from types import SimpleNamespace
 
 from guy4ase.gui.application.recent_files import RecentFiles
+from guy4ase.gui.application.result_loading import LoadedResult
 from guy4ase.gui.application.workspace import WorkspaceState
 from guy4ase.gui.application.workspace_controller import DocumentChange, WorkspaceController
 from guy4ase.gui.flows import files as file_flows
@@ -134,3 +136,68 @@ def test_loading_unknown_structure_from_file_warns_but_keeps_it(tmp_path, monkey
 
     assert file_flows.load_structure(controller, history, tmp_path / "layer.xyz", object())
     assert [title for title, _message in warnings] == ["Unknown Structure Type"]
+
+
+def _external_output(path):
+    return LoadedResult(
+        result=SimpleNamespace(
+            task_name="scf", produces_potential=True, output_values={}
+        ),
+        output_path=path,
+        potential_path=None,
+        atoms=Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True),
+        potential_error=None,
+        directory=str(path.parent),
+        input_parameters=None,
+    )
+
+
+@pytest.mark.parametrize("from_recent", (False, True))
+def test_opening_output_updates_directory_without_replacing_structure(
+    tmp_path, monkeypatch, from_recent
+):
+    old_directory = tmp_path / "previous"
+    new_directory = tmp_path / "old-calculation"
+    new_directory.mkdir()
+    output = new_directory / "SCF.out"
+    output.write_text("saved output", encoding="utf-8")
+    original_atoms = Atoms("Cu")
+    original_parameters = object()
+    controller = WorkspaceController(
+        WorkspaceState(
+            atoms=original_atoms,
+            input_parameters=original_parameters,
+            directory=str(old_directory),
+        )
+    )
+    history = RecentFiles(tmp_path / "recent.json")
+    monkeypatch.setattr(
+        file_flows, "_read_output", lambda _path, _parent: _external_output(output)
+    )
+
+    if from_recent:
+        assert file_flows.open_recent(
+            controller, history, "output", output, None
+        )
+    else:
+        assert file_flows.load_output(controller, history, output, None)
+
+    assert controller.directory == str(new_directory)
+    assert controller.atoms is original_atoms
+    assert controller.input_parameters is original_parameters
+    assert len(controller.result_store.results) == 1
+    assert history.paths("output") == (str(output),)
+
+
+def test_failed_output_load_keeps_working_directory(tmp_path, monkeypatch):
+    controller = WorkspaceController(WorkspaceState(directory="original"))
+    generation = controller.directory_generation
+    history = RecentFiles(tmp_path / "recent.json")
+    monkeypatch.setattr(file_flows, "_read_output", lambda *_args: None)
+
+    assert not file_flows.load_output(
+        controller, history, tmp_path / "bad.out", None
+    )
+    assert controller.directory == "original"
+    assert controller.directory_generation == generation
+    assert controller.result_store.results == ()
