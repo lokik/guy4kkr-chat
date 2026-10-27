@@ -93,7 +93,14 @@ def test_execution_requests_persistent_backend_run(monkeypatch, tmp_path):
 
 def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_path):
     captured = {}
-    manager = object()
+    project_context = object()
+    project_ids = []
+
+    def for_project(project_id):
+        project_ids.append(project_id)
+        return project_context
+
+    manager = SimpleNamespace(for_project=for_project)
 
     class Runner:
         id = "run-1"
@@ -125,7 +132,8 @@ def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_p
 
     execution.run()
 
-    assert captured["project"] == (manager, "project-17")
+    assert captured["project"] is project_context
+    assert project_ids == ["project-17"]
 
 
 def test_cancel_before_registration_never_submits(monkeypatch, tmp_path):

@@ -126,7 +126,6 @@ class CalculationSetupPanel(QWidget):
         self,
         layout: QVBoxLayout,
         *,
-        choose_directory: Callable[[], None],
         run_calculation_action: QAction,
         load_output: Callable[[], None],
     ) -> None:

@@ -23,10 +23,10 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
     tmp_path,
 ):
     """Preserve effective task and schema across persistence and Guy routing."""
-    parameters = InputParameters.create("ARPES")
+    parameters = InputParameters.create("SPLEED")
     parameters.TASK.TASK = "SPLEED"
     parameters.CONTROL.DATASET = "contract"
-    assert parameters.definition_name.upper() == "ARPES"
+    assert parameters.definition_name.upper() == "SPLEED"
     assert parameters.task_name.upper() == "SPLEED"
 
     input_path = tmp_path / "contract.inp"
@@ -40,7 +40,7 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
     manager = ExecutionManager(store=RunStore(tmp_path / "runs"), project_repository=projects, project=project)
     run = manager.new_record(
         task="SPLEED",
-        input_definition="ARPES",
+        input_definition="SPLEED",
         directory=tmp_path,
         files=FileManifest(
             inputs=(FileEntry(local_path=str(input_path)),),
@@ -95,12 +95,12 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
 
     assert len(resolved_tasks) == 1
     assert resolved_tasks[0].name == "SPLEED"
-    assert resolved_tasks[0].input_parameters_definition_name == "ARPES"
+    assert resolved_tasks[0].input_parameters_definition_name == "SPLEED"
     assert loaded.task_name.upper() == "SPLEED"
-    assert loaded.input_parameters.definition_name.upper() == "ARPES"
+    assert loaded.input_parameters.definition_name.upper() == "SPLEED"
     assert loaded.input_parameters.task_name.upper() == "SPLEED"
     assert loaded.run_record.task == "SPLEED"
-    assert loaded.run_record.input_definition == "ARPES"
+    assert loaded.run_record.input_definition == "SPLEED"
 
     history = ResultStore()
     record = history.add_external_result(
@@ -113,7 +113,7 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
         persistent_ref=run.id,
     )
     assert record.task_name == "spleed"
-    assert record.input_parameters.definition_name.upper() == "ARPES"
+    assert record.input_parameters.definition_name.upper() == "SPLEED"
     assert record.input_parameters.task_name.upper() == "SPLEED"
 
     edited = record.input_parameters.copy(copy_values=True)
@@ -164,7 +164,7 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
     assert result is launched
     assert len(editor_calls) == 1
     editor_parameters, _parent, editor_atoms = editor_calls[0]
-    assert editor_parameters.definition_name.upper() == "ARPES"
+    assert editor_parameters.definition_name.upper() == "SPLEED"
     assert editor_parameters.task_name.upper() == "SPLEED"
     assert editor_atoms is controller.atoms
     assert replacements == [(
