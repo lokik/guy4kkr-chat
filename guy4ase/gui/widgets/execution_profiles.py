@@ -132,6 +132,7 @@ class ProfileForm(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._expert_mode = False
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 14, 18, 14)
         root.setSpacing(14)
@@ -189,6 +190,7 @@ class ProfileForm(QWidget):
         self.executable_suffix = QLineEdit(executable_box)
         self.executable_suffix.setPlaceholderText("e.g. _v8")
         executable_form.addRow("Suffix:", self.executable_suffix)
+        self._executable_form = executable_form
         form_root.addWidget(executable_box)
 
         self.ssh_box = QGroupBox("SSH connection and workspace", self.form_widget)
@@ -214,6 +216,7 @@ class ProfileForm(QWidget):
             self.output_sync.addItem(policy)
         ssh_form.addRow("Input sync:", self.input_sync)
         ssh_form.addRow("Output sync:", self.output_sync)
+        self._ssh_form = ssh_form
         form_root.addWidget(self.ssh_box)
 
         self.psij_box = QGroupBox("Workload manager (PSI/J)", self.form_widget)
@@ -225,35 +228,59 @@ class ProfileForm(QWidget):
         self.psij_url = QLineEdit(self.psij_box)
         self.psij_url.setPlaceholderText("Optional executor URL")
         psij_form.addRow("URL:", self.psij_url)
+        self._psij_form = psij_form
         form_root.addWidget(self.psij_box)
 
         root.addWidget(self.form_widget)
         root.addStretch(1)
         self._update_visibility()
 
+    @staticmethod
+    def _set_row_visible(layout: QFormLayout, field: QWidget, visible: bool) -> None:
+        """Hide both the editor and its label (not just the editor)."""
+        field.setVisible(visible)
+        label = layout.labelForField(field)
+        if label is not None:
+            label.setVisible(visible)
+
+    @property
+    def expert_mode(self) -> bool:
+        """Whether advanced profile fields are currently shown."""
+        return self._expert_mode
+
+    def set_expert_mode(self, enabled: bool) -> None:
+        """Control advanced-field visibility without modifying any profile value."""
+        self._expert_mode = bool(enabled)
+        self._update_visibility()
+
     def _update_mpi_warning_visibility(self) -> None:
-        self.mpi_warning.setVisible(self.mpi.mode.currentData() == "auto")
+        self.mpi_warning.setVisible(
+            self._expert_mode and self.mpi.mode.currentData() == "auto"
+        )
 
     def _update_visibility(self) -> None:
         kind = str(self.kind.currentData())
         ssh = kind in {"ssh", "ssh-psij"}
         psij = kind in {"psij", "ssh-psij"}
+        expert = self._expert_mode
+
         self.run_target_description.setText(RUN_TARGET_DESCRIPTIONS.get(kind, ""))
         self.ssh_box.setVisible(ssh)
         self.psij_box.setVisible(psij)
         self._update_mpi_warning_visibility()
-        for widget in (
-            self.host,
-            self.local_root,
-            self.remote_root,
+
+        self._set_row_visible(self._executable_form, self.executable_suffix, expert)
+        for field in (self.host, self.local_root, self.remote_root):
+            self._set_row_visible(self._ssh_form, field, ssh)
+        for field in (
             self.ssh_options,
             self.remote_command,
             self.input_sync,
             self.output_sync,
         ):
-            widget.setVisible(ssh)
-        self.psij_backend.setVisible(psij)
-        self.psij_url.setVisible(psij)
+            self._set_row_visible(self._ssh_form, field, ssh and expert)
+        self._set_row_visible(self._psij_form, self.psij_backend, psij)
+        self._set_row_visible(self._psij_form, self.psij_url, psij and expert)
 
     def load(self, draft: ProfileDraft) -> None:
         values = draft.values

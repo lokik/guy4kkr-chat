@@ -71,3 +71,24 @@ def test_read_only_profile_cannot_be_deleted_or_edited():
     assert not dialog.delete_button.isEnabled()
     assert not dialog.form.form_widget.isEnabled()
     dialog.close()
+
+
+def test_advanced_settings_toggle_is_outside_profile_fields():
+    _application = _app()
+    dialog = profiles_dialogs.ProfilesDialog(store=_ReadOnlyStore())
+
+    assert dialog.show_advanced.parent() is dialog
+    assert dialog.show_advanced.text() == "Show advanced settings"
+    assert not dialog.show_advanced.isChecked()
+    assert not dialog.form.expert_mode
+    assert dialog.form.executable_suffix.isHidden()
+
+    # The view switch remains usable even when the selected profile is read-only.
+    assert dialog.show_advanced.isEnabled()
+    dialog.show_advanced.setChecked(True)
+    assert dialog.form.expert_mode
+    assert not dialog.form.executable_suffix.isHidden()
+    dialog.show_advanced.setChecked(False)
+    assert not dialog.form.expert_mode
+    assert dialog.form.executable_suffix.isHidden()
+    dialog.close()

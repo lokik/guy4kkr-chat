@@ -153,6 +153,8 @@ def test_mpi_warning_is_visible_only_for_autodetection_and_is_preserved():
     _application = _app()
     form = ProfileForm()
 
+    assert form.mpi_warning.isHidden()
+    form.set_expert_mode(True)
     form.mpi.set_value("auto")
     assert not form.mpi_warning.isHidden()
     assert form.mpi_warning.isChecked()
@@ -183,4 +185,92 @@ def test_profile_form_loads_mpi_warning_with_true_default():
     )
     assert not form.mpi_warning.isChecked()
     assert form.values()["mpi_warning"] is False
+    form.close()
+
+
+def test_profile_form_defaults_to_simple_with_only_common_settings():
+    _application = _app()
+    form = ProfileForm()
+    assert not form.expert_mode
+    assert not form.kind.isHidden()
+    assert not form.mpi.isHidden()
+    assert not form.executable_dir.isHidden()
+    assert form.executable_suffix.isHidden()
+    assert form.mpi_warning.isHidden()
+
+    form.kind.setCurrentIndex(form.kind.findData("ssh"))
+    for field in (form.host, form.local_root, form.remote_root):
+        assert not field.isHidden()
+    for field in (
+        form.ssh_options,
+        form.remote_command,
+        form.input_sync,
+        form.output_sync,
+    ):
+        assert field.isHidden()
+        assert form._ssh_form.labelForField(field).isHidden()
+
+    form.kind.setCurrentIndex(form.kind.findData("ssh-psij"))
+    assert not form.psij_backend.isHidden()
+    assert form.psij_url.isHidden()
+    assert form._psij_form.labelForField(form.psij_url).isHidden()
+    form.close()
+
+
+def test_profile_form_expert_switch_restores_all_advanced_fields():
+    _application = _app()
+    form = ProfileForm()
+    form.kind.setCurrentIndex(form.kind.findData("ssh-psij"))
+    form.set_expert_mode(True)
+    for field in (
+        form.executable_suffix,
+        form.ssh_options,
+        form.remote_command,
+        form.input_sync,
+        form.output_sync,
+        form.psij_url,
+        form.mpi_warning,
+    ):
+        assert not field.isHidden()
+
+    form.mpi.set_value(8)
+    assert form.mpi_warning.isHidden()
+    form.set_expert_mode(False)
+    assert form.remote_command.isHidden()
+    assert not form.remote_root.isHidden()
+    form.set_expert_mode(True)
+    assert not form.remote_command.isHidden()
+    form.close()
+
+
+def test_simple_mode_preserves_advanced_values_when_editing_common_settings():
+    _application = _app()
+    form = ProfileForm()
+    configured = {
+        "executor": "ssh",
+        "mpi": "auto",
+        "mpi_warning": False,
+        "executable_dir": "/opt/sprkkr",
+        "executable_suffix": "_v8",
+        "host": "user@cluster",
+        "local_root": "/local/work",
+        "remote_root": "/remote/work",
+        "ssh_options": ["-p", "2222"],
+        "remote_command": ["ase2sprkkr", "remote"],
+        "input_sync": "never",
+        "output_sync": "always",
+        "psij_backend": "slurm",
+        "psij_url": "ssh://batch.example",
+    }
+    form.load(ProfileDraft("cluster", configured))
+    assert not form.expert_mode
+    assert form.values() == configured
+
+    form.host.setText("other@cluster")
+    expected = {**configured, "host": "other@cluster"}
+    assert form.values() == expected
+    form.set_expert_mode(True)
+    assert form.values() == expected
+    form.set_expert_mode(False)
+    assert form.values() == expected
     form.close()

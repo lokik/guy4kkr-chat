@@ -7,6 +7,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -76,7 +77,16 @@ class ProfilesDialog(QDialog):
         heading_font.setPointSize(heading_font.pointSize() + 3)
         heading_font.setBold(True)
         heading.setFont(heading_font)
-        root.addWidget(heading)
+        header = QHBoxLayout()
+        header.addWidget(heading)
+        header.addStretch(1)
+        self.show_advanced = QCheckBox("Show advanced settings", self)
+        self.show_advanced.setToolTip(
+            "Show command overrides, synchronization policies and other advanced "
+            "options. This only changes what is visible, not the profile values."
+        )
+        header.addWidget(self.show_advanced)
+        root.addLayout(header)
         intro = QLabel(
             "Profiles define where SPR-KKR runs and how executables, MPI and remote workspaces are configured.",
             self,
@@ -114,6 +124,7 @@ class ProfilesDialog(QDialog):
         splitter.addWidget(left)
 
         self.form = ProfileForm(splitter)
+        self.show_advanced.toggled.connect(self.form.set_expert_mode)
         splitter.addWidget(self.form)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 700])
