@@ -35,6 +35,7 @@ from guy4ase.gui.application.execution_profiles import (
     kind_label,
 )
 from guy4ase.gui.application.window_geometry import manage_window_geometry
+from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
 from guy4ase.gui.input_parameters.dataset import dataset_value, filename_component
 from guy4ase.gui.widgets.execution_profiles import ProfileForm
 
@@ -227,6 +228,9 @@ class ProfileSelectionDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._require_directory = require_directory
+        self._manual_directory = directory or ""
+        self._project_directories = {}
+        self._updating_directory = False
         self._projects = project_repository if project_repository is not None else ProjectRepository()
         self._store = store or ExecutionProfileStore()
         self.setWindowTitle("Run SPR-KKR Calculation")
@@ -311,6 +315,7 @@ class ProfileSelectionDialog(QDialog):
         project_row = QHBoxLayout(self.project_box)
         self.project_selector = QComboBox(self.project_box)
         self._load_projects(active_project_id)
+        self.project_selector.currentIndexChanged.connect(self._project_changed)
         project_row.addWidget(self.project_selector, 1)
         self.new_project_button = QPushButton("New…", self.project_box)
         self.new_project_button.setToolTip(
@@ -326,6 +331,7 @@ class ProfileSelectionDialog(QDialog):
         directory_row = QHBoxLayout(directory_box)
         self.directory_edit = QLineEdit(directory_box)
         self.directory_edit.setText(directory or "")
+        self.directory_edit.textEdited.connect(self._directory_edited)
         self.directory_edit.setPlaceholderText("Select the calculation directory")
         directory_row.addWidget(self.directory_edit, 1)
         browse = QPushButton("Browse…", directory_box)
@@ -333,6 +339,7 @@ class ProfileSelectionDialog(QDialog):
         directory_row.addWidget(browse)
         layout.addWidget(directory_box)
         directory_box.setVisible(require_directory)
+        self._project_changed()
         layout.addStretch(1)
 
         buttons = QDialogButtonBox(
@@ -354,6 +361,7 @@ class ProfileSelectionDialog(QDialog):
             return
 
         by_id = {project.id: project for project in projects}
+        self._project_directories = {project.id: project.directory for project in projects}
 
         def label(project):
             parts = [project.name]
@@ -373,23 +381,42 @@ class ProfileSelectionDialog(QDialog):
         selected = self.project_selector.findData(selected_project_id)
         self.project_selector.setCurrentIndex(max(selected, 0))
 
+    def _directory_edited(self, text: str) -> None:
+        if not self._updating_directory:
+            self._manual_directory = text
+
+    def _project_changed(self) -> None:
+        project_directory = self._project_directories.get(self.project_id())
+        desired = project_directory or self._manual_directory
+        if hasattr(self, "directory_edit") and self.directory_edit.text() != desired:
+            self._updating_directory = True
+            try:
+                self.directory_edit.setText(desired)
+            finally:
+                self._updating_directory = False
+
     def project_id(self) -> str | None:
         """Return the project selected for this run, or None if unassigned."""
         return self.project_selector.currentData()
 
     def _create_project(self) -> None:
-        """Create and immediately select a project without changing the workspace."""
-        name, accepted = QInputDialog.getText(self, "New Project", "Project name:")
-        if not accepted:
+        """Create and select a new project with its optional directory."""
+        dialog = ProjectEditDialog(
+            self, directory=self.directory_name(),
+            title="New Project",
+        )
+        if dialog.exec() != dialog.DialogCode.Accepted:
             return
         try:
             created = self._projects.create(
-                name.strip(), parent_id=self.project_id()
+                dialog.project_name(), parent_id=self.project_id(),
+                directory=dialog.project_directory(),
             )
         except (ProjectRepositoryError, KeyError, OSError, ValueError) as exc:
             QMessageBox.warning(self, "Create Project Failed", str(exc))
             return
         self._load_projects(created.id)
+        self._project_changed()
 
     def _reload_profiles(self, selected: str | None = None) -> None:
         if selected is None and self.profiles.count():
@@ -432,6 +459,7 @@ class ProfileSelectionDialog(QDialog):
         )
         if selected:
             self.directory_edit.setText(selected)
+            self._directory_edited(selected)
 
     def accept(self) -> None:  # type: ignore[override]
         if self._require_directory and not self.directory_name():

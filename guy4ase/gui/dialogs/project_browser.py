@@ -29,6 +29,7 @@ from ase2sprkkr.execution import (
 from guy4ase.gui.application.window_geometry import manage_window_geometry
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.object_view import execute_value_action
+from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
 from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
 
 _PROJECT_ID_ROLE = int(Qt.ItemDataRole.UserRole)
@@ -104,9 +105,9 @@ class ProjectBrowserDialog(QDialog):
         self.new_project_button = QPushButton("New", project_panel)
         self.new_project_button.clicked.connect(self._create_project)
         project_buttons.addWidget(self.new_project_button)
-        self.rename_project_button = QPushButton("Rename", project_panel)
-        self.rename_project_button.clicked.connect(self._rename_project)
-        project_buttons.addWidget(self.rename_project_button)
+        self.edit_project_button = QPushButton("Edit", project_panel)
+        self.edit_project_button.clicked.connect(self._edit_project)
+        project_buttons.addWidget(self.edit_project_button)
         self.move_project_button = QPushButton("Move", project_panel)
         self.move_project_button.clicked.connect(self._move_project)
         project_buttons.addWidget(self.move_project_button)
@@ -311,7 +312,7 @@ class ProjectBrowserDialog(QDialog):
 
     def _refresh_action_availability(self) -> None:
         project = self._selected_project()
-        self.rename_project_button.setEnabled(project is not None)
+        self.edit_project_button.setEnabled(project is not None)
         self.move_project_button.setEnabled(project is not None)
         self.delete_project_button.setEnabled(project is not None)
         self.set_active_project_button.setEnabled(
@@ -334,22 +335,23 @@ class ProjectBrowserDialog(QDialog):
         self._selected_project_id = created.id
         self.reload_projects()
 
-    def _rename_project(self) -> None:
+    def _edit_project(self) -> None:
         project = self._selected_project()
         if project is None:
             return
-        name, accepted = QInputDialog.getText(
-            self,
-            "Rename Project",
-            "Project name:",
-            text=project.name,
+        dialog = ProjectEditDialog(
+            self, name=project.name, directory=project.directory,
+            title="Edit Project",
         )
-        if not accepted:
+        if dialog.exec() != dialog.DialogCode.Accepted:
             return
         self._save_project_change(
             project,
-            lambda current: current.rename(name),
-            "Rename Project",
+            lambda current: current.modify(
+                name=dialog.project_name(),
+                directory=dialog.project_directory(),
+            ),
+            "Edit Project",
         )
 
     def _move_project(self) -> None:
@@ -374,7 +376,7 @@ class ProjectBrowserDialog(QDialog):
             parent_id = candidates[labels.index(label) - 1].id
         self._save_project_change(
             project,
-            lambda current: current.move_to(parent_id),
+            lambda current: current.modify(parent_id=parent_id),
             "Move Project",
         )
 
