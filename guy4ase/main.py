@@ -172,10 +172,21 @@ class GuiApplication(QObject):
                 result_id=source.result_id,
             )
         )
+        widget.assignToProjectRequested.connect(
+            lambda result_ids, target=window: self._assign_results_to_project(
+                result_ids, target
+            )
+        )
         presenter.newCalculationUnavailable.connect(
             lambda target=window: calculation_flow.show_new_calculation_source_required(
                 target
             )
+        )
+
+    def _assign_results_to_project(self, result_ids, parent: QWidget) -> None:
+        from guy4ase.gui.dialogs.assign_results import assign_results_to_project
+        assign_results_to_project(
+            self.projects, self.controller.result_store, result_ids, parent
         )
 
     def _adopt_persistent_result(
