@@ -161,7 +161,7 @@ def test_repository_refresh_updates_open_project_browser(tmp_path):
     second = ProjectRepository(directory)
     snapshot = second.project(project.id)
     second.save(
-        snapshot.rename("Changed elsewhere"),
+        snapshot.modify(name="Changed elsewhere"),
         expected_generation=snapshot.generation,
     )
 
@@ -182,7 +182,7 @@ def test_conflict_replays_only_requested_project_change(tmp_path, monkeypatch):
     external = ProjectRepository(directory)
     current = external.project(project.id)
     external.save(
-        current.rename("Externally renamed"),
+        current.modify(name="Externally renamed"),
         expected_generation=current.generation,
     )
 
@@ -194,7 +194,7 @@ def test_conflict_replays_only_requested_project_change(tmp_path, monkeypatch):
 
     saved = dialog._save_project_change(
         project,
-        lambda current: current.rename("Local rename"),
+        lambda current: current.modify(name="Local rename"),
         "Rename Project",
     )
 
@@ -215,7 +215,7 @@ def test_failed_conflict_retry_reloads_external_project_state(tmp_path, monkeypa
     external = ProjectRepository(directory)
     current = external.project(project.id)
     external.save(
-        current.rename("Changed elsewhere"),
+        current.modify(name="Changed elsewhere"),
         expected_generation=current.generation,
     )
 
@@ -239,7 +239,7 @@ def test_failed_conflict_retry_reloads_external_project_state(tmp_path, monkeypa
 
     saved = dialog._save_project_change(
         project,
-        lambda current: current.rename("Locally renamed"),
+        lambda current: current.modify(name="Locally renamed"),
         "Rename Project",
     )
 
@@ -249,4 +249,28 @@ def test_failed_conflict_retry_reloads_external_project_state(tmp_path, monkeypa
     assert persisted.name == "Changed elsewhere"
 
     assert _find_project_item(dialog, "Changed elsewhere").text(0) == "Changed elsewhere"
+    dialog.close()
+
+
+def test_project_edit_changes_name_and_directory(tmp_path, monkeypatch):
+    from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
+
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    original = repository.create("Original")
+    dialog = _dialog(repository, _JobSource(()))
+    item = _find_project_item(dialog, "Original")
+    dialog.project_tree.setCurrentItem(item)
+
+    def edit(project_dialog):
+        project_dialog.name_edit.setText("Edited")
+        project_dialog.directory_edit.setText(str(tmp_path / "calculations"))
+        return project_dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ProjectEditDialog, "exec", edit)
+    dialog._edit_project()
+    current = repository.project(original.id)
+    assert current.name == "Edited"
+    assert current.directory == str(tmp_path / "calculations")
+    assert _find_project_item(dialog, "Edited").text(0) == "Edited"
     dialog.close()

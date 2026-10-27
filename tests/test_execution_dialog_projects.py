@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import QApplication
 from ase2sprkkr.execution import ProjectRepository
 
 from guy4ase.gui.dialogs import profiles as profiles_module
+from guy4ase.gui.dialogs import project_edit as project_edit_module
+from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
 from guy4ase.gui.dialogs.profiles import ProfileSelectionDialog
 
 
@@ -78,8 +80,8 @@ def test_create_project_in_execution_dialog_is_selected_and_persisted(
         project_repository=repository, directory=str(tmp_path)
     )
     monkeypatch.setattr(
-        profiles_module.QInputDialog, "getText",
-        lambda *_args: ("New calculation", True),
+        ProjectEditDialog, "exec",
+        lambda self: (self.name_edit.setText("New calculation") or self.DialogCode.Accepted),
     )
     dialog.new_project_button.click()
 
@@ -112,8 +114,8 @@ def test_create_subproject_under_current_selection(
         directory=str(tmp_path),
     )
     monkeypatch.setattr(
-        profiles_module.QInputDialog, "getText",
-        lambda *_args: ("Fe", True),
+        ProjectEditDialog, "exec",
+        lambda self: (self.name_edit.setText("Fe") or self.DialogCode.Accepted),
     )
     dialog.new_project_button.click()
 
@@ -135,10 +137,7 @@ def test_cancel_create_project_preserves_selection(
         active_project_id=current.id,
         directory=str(tmp_path),
     )
-    monkeypatch.setattr(
-        profiles_module.QInputDialog, "getText",
-        lambda *_args: ("Discarded", False),
-    )
+    monkeypatch.setattr(ProjectEditDialog, "exec", lambda self: self.DialogCode.Rejected)
     dialog.new_project_button.click()
 
     assert dialog.project_id() == current.id
@@ -158,11 +157,11 @@ def test_project_creation_error_does_not_close_execution_dialog(
         directory=str(tmp_path),
     )
     monkeypatch.setattr(
-        profiles_module.QInputDialog, "getText",
-        lambda *_args: ("Invalid", True),
+        ProjectEditDialog, "exec",
+        lambda self: (self.name_edit.setText("Invalid") or self.DialogCode.Accepted),
     )
 
-    def fail_create(name, *, parent_id=None):
+    def fail_create(name, *, parent_id=None, directory=None):
         assert name == "Invalid"
         assert parent_id == current.id
         raise ValueError("Invalid project name")
@@ -178,4 +177,51 @@ def test_project_creation_error_does_not_close_execution_dialog(
     assert warnings == [("Create Project Failed", "Invalid project name")]
     assert dialog.project_id() == current.id
     assert dialog.result() == dialog.DialogCode.Rejected
+    dialog.close()
+
+
+def test_project_directory_switch_and_manual_fallback(application, tmp_path):
+    repository = ProjectRepository(tmp_path / "projects")
+    work = tmp_path / "project_work"
+    assigned = repository.create("Assigned", directory=work)
+    no_directory = repository.create("Not assigned")
+    initial = str(tmp_path / "workspace")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, directory=initial
+    )
+    assert dialog.directory_name() == initial
+
+    dialog.project_selector.setCurrentIndex(dialog.project_selector.findData(assigned.id))
+    assert dialog.directory_name() == str(work)
+    dialog.project_selector.setCurrentIndex(0)
+    assert dialog.directory_name() == initial
+
+    manual = str(tmp_path / "manual")
+    dialog.directory_edit.setText(manual)
+    dialog._directory_edited(manual)
+    dialog.project_selector.setCurrentIndex(dialog.project_selector.findData(assigned.id))
+    assert dialog.directory_name() == str(work)
+    dialog.project_selector.setCurrentIndex(dialog.project_selector.findData(no_directory.id))
+    assert dialog.directory_name() == manual
+    dialog.project_selector.setCurrentIndex(0)
+    assert dialog.directory_name() == manual
+    dialog.close()
+
+
+def test_new_project_dialog_sets_working_directory(application, monkeypatch, tmp_path):
+    repository = ProjectRepository(tmp_path / "projects")
+    directory = tmp_path / "new-project"
+    dialog = ProfileSelectionDialog(project_repository=repository, directory=str(tmp_path))
+
+    def create(project_dialog):
+        project_dialog.name_edit.setText("New")
+        project_dialog.directory_edit.setText(str(directory))
+        return project_dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ProjectEditDialog, "exec", create)
+    dialog.new_project_button.click()
+    project_id = dialog.project_id()
+    assert project_id is not None
+    assert repository.project(project_id).directory == str(directory)
+    assert dialog.directory_name() == str(directory)
     dialog.close()
