@@ -64,20 +64,17 @@ def test_calculation_setup_panel_renders_supplied_presentation():
         edit_input=noop,
         load_input=noop,
         save_input=noop,
-        choose_directory=noop,
         run_calculation_action=run_action,
         load_output=noop,
     )
 
     panel.set_input_preview("TASK SCF", input_available=True)
     panel.set_save_input_enabled(True)
-    panel.set_directory("/tmp/run")
     panel.set_potential_path("/tmp/run/Fe.pot")
 
     assert panel.input_button_text == "Edit SPRKKR Input File..."
     assert panel.input_preview_text == "TASK SCF"
     assert panel.save_input_enabled
-    assert panel.directory_text == "/tmp/run"
     assert panel.potential_path_text == "/tmp/run/Fe.pot"
     assert panel.findChild(BrowserPanel) is None
     assert panel.findChild(ResultActionsWidget) is None
@@ -130,7 +127,6 @@ def test_main_window_wires_controller_state_to_child_presentations(tmp_path):
 
     assert "Formula: Fe" in overview.info_text
     assert setup.input_preview_text == parameters.to_string(validate=False)
-    assert setup.directory_text == str(tmp_path)
     assert setup.save_input_enabled
     window.close()
 
@@ -155,4 +151,18 @@ def test_main_window_reuses_recent_start_menu(tmp_path):
     menus_after_second = overview.findChildren(QMenu)
 
     assert len(menus_after_second) == len(menus_after_first)
+    window.close()
+
+
+def test_main_window_has_no_working_directory_control(tmp_path):
+    _app()
+    window = MainWindow(
+        WorkspaceController(), RecentFiles(tmp_path / "recent.json"),
+        ApplicationSettings(tmp_path / "settings.json"),
+        track_launch_monitor=lambda _window: None,
+    )
+    assert not hasattr(window._calculation_setup, "_directory_label")
+    output_menu = next(menu for menu in window.menuBar().findChildren(QMenu)
+                       if menu.title() == "&Output")
+    assert any("Directory" in action.text() for action in output_menu.actions())
     window.close()

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Callable
 
-from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QDesktopServices, QIcon, QPalette
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QPalette
 from PyQt6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -88,13 +87,9 @@ class WorkflowWindow(QMainWindow):
         self.project_repository = project_repository
         self._workflow_planner = WorkflowPlanner()
         self.controller.structureChanged.connect(self._on_structure_changed)
-        self.controller.directoryChanged.connect(
-            lambda _directory: self._refresh_working_directory()
-        )
         self.controller.resultChanged.connect(lambda _result: self._refresh())
         self.recent_history.changed.connect(self._refresh)
         self._build_ui()
-        self._refresh_working_directory()
         self._refresh()
 
     @property
@@ -156,69 +151,6 @@ class WorkflowWindow(QMainWindow):
         side_layout.setContentsMargins(0, 0, 0, 0)
         side_layout.setSpacing(SPACE_SM)
 
-        working_directory = QWidget(side)
-        working_directory.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        working_directory_layout = QVBoxLayout(working_directory)
-        working_directory_layout.setContentsMargins(0, 0, 0, 0)
-        working_directory_layout.setSpacing(SPACE_XS)
-        working_directory_title = QLabel("Working directory", working_directory)
-        working_directory_title.setFont(
-            heading_font(working_directory_title.font(), "section")
-        )
-        working_directory_layout.addWidget(working_directory_title)
-
-        directory_row = QHBoxLayout()
-        directory_row.setContentsMargins(0, 0, 0, 0)
-        directory_row.setSpacing(SPACE_XS)
-        self._working_directory_label = QLabel(working_directory)
-        self._working_directory_label.setWordWrap(False)
-        self._working_directory_label.setMinimumWidth(0)
-        self._working_directory_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
-        )
-        self._working_directory_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        directory_row.addWidget(self._working_directory_label, 1)
-
-        change_directory = QToolButton(working_directory)
-        change_directory.setIcon(
-            QIcon.fromTheme(
-                "document-open",
-                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
-            )
-        )
-        change_directory.setToolTip("Change working directory")
-        change_directory.setAccessibleName("Change working directory")
-        change_directory.clicked.connect(
-            lambda _checked=False: calculation_flow.choose_working_directory(
-                self.controller,
-                self,
-            )
-        )
-        directory_row.addWidget(change_directory)
-
-        self._browse_working_directory_button = QToolButton(working_directory)
-        self._browse_working_directory_button.setIcon(
-            QIcon.fromTheme(
-                "system-file-manager",
-                self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon),
-            )
-        )
-        self._browse_working_directory_button.setToolTip(
-            "Open working directory in file manager"
-        )
-        self._browse_working_directory_button.setAccessibleName(
-            "Open working directory in file manager"
-        )
-        self._browse_working_directory_button.clicked.connect(
-            self._browse_working_directory
-        )
-        directory_row.addWidget(self._browse_working_directory_button)
-        working_directory_layout.addLayout(directory_row)
-        side_layout.addWidget(working_directory)
         self._browser_panel = BrowserPanel(side)
         self._browser_panel.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -288,24 +220,6 @@ class WorkflowWindow(QMainWindow):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([560, 360])
-
-    def _refresh_working_directory(self) -> None:
-        directory = self.controller.directory
-        self._working_directory_label.setText(directory or "(not defined)")
-        self._working_directory_label.setToolTip(directory or "")
-        self._browse_working_directory_button.setEnabled(bool(directory))
-
-    def _browse_working_directory(self) -> None:
-        directory = self.controller.directory
-        if not directory:
-            return
-        path = Path(directory).expanduser().resolve()
-        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
-            QMessageBox.warning(
-                self,
-                "Cannot Open Directory",
-                f"Could not open the working directory in the system file manager:\n{path}",
-            )
 
     def _refresh(self) -> None:
         plan = self._workflow_planner.for_workspace(

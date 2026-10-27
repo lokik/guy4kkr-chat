@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
-    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -35,7 +34,6 @@ class CalculationSetupPanel(QWidget):
         edit_input: Callable[[], None],
         load_input: Callable[[], None],
         save_input: Callable[[], None],
-        choose_directory: Callable[[], None],
         run_calculation_action: QAction,
         load_output: Callable[[], None],
         parent: Optional[QWidget] = None,
@@ -52,7 +50,6 @@ class CalculationSetupPanel(QWidget):
         )
         self._build_calculation_panel(
             layout,
-            choose_directory=choose_directory,
             run_calculation_action=run_calculation_action,
             load_output=load_output,
         )
@@ -68,11 +65,6 @@ class CalculationSetupPanel(QWidget):
 
     def set_save_input_enabled(self, enabled: bool) -> None:
         self._save_input_btn.setEnabled(enabled)
-
-    def set_directory(self, directory: Optional[str]) -> None:
-        value = directory or "—"
-        self._directory_label.setText(value)
-        self._directory_label.setToolTip(directory or "")
 
     def set_potential_path(self, path: Optional[str]) -> None:
         value = path or "—"
@@ -90,10 +82,6 @@ class CalculationSetupPanel(QWidget):
     @property
     def save_input_enabled(self) -> bool:
         return self._save_input_btn.isEnabled()
-
-    @property
-    def directory_text(self) -> str:
-        return self._directory_label.text()
 
     @property
     def potential_path_text(self) -> str:
@@ -142,25 +130,6 @@ class CalculationSetupPanel(QWidget):
         run_calculation_action: QAction,
         load_output: Callable[[], None],
     ) -> None:
-        directory_row = QWidget(self)
-        directory_layout = QHBoxLayout(directory_row)
-        directory_layout.setContentsMargins(0, 0, 0, 0)
-        directory_layout.setSpacing(6)
-        directory_layout.addWidget(QLabel("Directory:"))
-        self._directory_label = QLabel("—")
-        self._directory_label.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        )
-        directory_layout.addWidget(self._directory_label, 1)
-        choose_button = QToolButton()
-        choose_button.setToolTip("Choose directory")
-        choose_button.setIcon(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
-        )
-        choose_button.clicked.connect(choose_directory)
-        directory_layout.addWidget(choose_button, 0)
-        layout.addWidget(directory_row)
-
         potential_row = QWidget(self)
         potential_layout = QHBoxLayout(potential_row)
         potential_layout.setContentsMargins(0, 0, 0, 0)
