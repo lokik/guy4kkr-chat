@@ -57,9 +57,9 @@ def application():
     return QApplication.instance() or QApplication([])
 
 
-def test_run_dialog_edits_both_identifiers_without_mutating_inputs(application):
+def test_run_dialog_edits_both_identifiers_without_mutating_inputs(application, tmp_path):
     parameters = _Parameters()
-    dialog = ProfileSelectionDialog(input_parameters=parameters, store=_Profiles())
+    dialog = ProfileSelectionDialog(input_parameters=parameters, store=_Profiles(), directory=str(tmp_path))
 
     assert dialog.dataset_edit.text() == "original"
     assert dialog.adsi_edit.text() == "SCF"
@@ -76,9 +76,9 @@ def test_run_dialog_edits_both_identifiers_without_mutating_inputs(application):
     dialog.close()
 
 
-def test_empty_dataset_means_automatic_naming(application):
+def test_empty_dataset_means_automatic_naming(application, tmp_path):
     dialog = ProfileSelectionDialog(
-        input_parameters=_Parameters(), store=_Profiles()
+        input_parameters=_Parameters(), store=_Profiles(), directory=str(tmp_path)
     )
     dialog.dataset_edit.clear()
     dialog.accept()
@@ -112,7 +112,7 @@ def test_accepted_run_identification_overrides_only_request(application, monkeyp
         calculation_flow,
         "_select_profile",
         lambda _parent, **_kwargs: (
-            True, None, RunIdentification("new_dataset", "new_label")
+            True, None, RunIdentification("new_dataset", "new_label"), str(tmp_path)
         ),
     )
     monkeypatch.setattr(calculation_flow, "profile_description", lambda _name: None)
@@ -140,7 +140,7 @@ def test_cancelling_run_dialog_leaves_workspace_unchanged(application, monkeypat
     generation = controller.input_parameters_generation
     monkeypatch.setattr(
         calculation_flow, "_select_profile",
-        lambda _parent, **_kwargs: (False, None, None),
+        lambda _parent, **_kwargs: (False, None, None, None),
     )
 
     assert calculation_flow.run_calculation(
@@ -148,3 +148,31 @@ def test_cancelling_run_dialog_leaves_workspace_unchanged(application, monkeypat
     ) is None
     assert controller.input_parameters is parameters
     assert controller.input_parameters_generation == generation
+
+
+def test_execution_dialog_requires_working_directory_and_can_browse(
+    application, monkeypatch, tmp_path
+):
+    from guy4ase.gui.dialogs import profiles
+
+    dialog = ProfileSelectionDialog(
+        input_parameters=_Parameters(), store=_Profiles()
+    )
+    warnings = []
+    monkeypatch.setattr(
+        profiles.QMessageBox, "warning",
+        lambda _dialog, title, message: warnings.append((title, message)),
+    )
+    dialog.accept()
+    assert warnings and warnings[0][0] == "Calculation Directory Required"
+    assert dialog.result() == dialog.DialogCode.Rejected
+
+    monkeypatch.setattr(
+        profiles.QFileDialog, "getExistingDirectory",
+        lambda *_args: str(tmp_path),
+    )
+    dialog._browse_directory()
+    assert dialog.directory_name() == str(tmp_path)
+    dialog.accept()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    dialog.close()

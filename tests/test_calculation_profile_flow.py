@@ -43,7 +43,7 @@ def test_run_flow_tracks_top_level_monitor_before_start(monkeypatch, tmp_path):
     monkeypatch.setattr(
         calculation_flow,
         "_select_profile",
-        lambda _parent, **_kwargs: (True, "cluster", None),
+        lambda _parent, **_kwargs: (True, "cluster", None, str(tmp_path)),
     )
     monkeypatch.setattr(
         calculation_flow,
@@ -92,7 +92,7 @@ def test_monitor_is_closed_when_ownership_transfer_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(
         calculation_flow,
         "_select_profile",
-        lambda _parent, **_kwargs: (True, None, None),
+        lambda _parent, **_kwargs: (True, None, None, str(tmp_path)),
     )
     monkeypatch.setattr(calculation_flow, "profile_description", lambda _name: None)
 
@@ -133,7 +133,7 @@ def test_tracked_monitor_is_closed_and_start_error_propagates(monkeypatch, tmp_p
     monkeypatch.setattr(
         calculation_flow,
         "_select_profile",
-        lambda _parent, **_kwargs: (True, None, None),
+        lambda _parent, **_kwargs: (True, None, None, str(tmp_path)),
     )
     monkeypatch.setattr(calculation_flow, "profile_description", lambda _name: None)
 
@@ -170,7 +170,7 @@ def test_tracked_monitor_is_closed_when_show_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(
         calculation_flow,
         "_select_profile",
-        lambda _parent, **_kwargs: (True, None, None),
+        lambda _parent, **_kwargs: (True, None, None, str(tmp_path)),
     )
     monkeypatch.setattr(calculation_flow, "profile_description", lambda _name: None)
 
@@ -203,7 +203,7 @@ def test_standalone_run_keeps_parent_ownership(monkeypatch, tmp_path):
     monkeypatch.setattr(
         calculation_flow,
         "_select_profile",
-        lambda _parent, **_kwargs: (True, None, None),
+        lambda _parent, **_kwargs: (True, None, None, str(tmp_path)),
     )
     monkeypatch.setattr(calculation_flow, "profile_description", lambda _name: None)
 
@@ -223,7 +223,7 @@ def test_cancelled_profile_selection_does_not_construct_window(monkeypatch, tmp_
     monkeypatch.setattr(
         calculation_flow,
         "_select_profile",
-        lambda _parent, **_kwargs: (False, None, None),
+        lambda _parent, **_kwargs: (False, None, None, None),
     )
     monkeypatch.setattr(
         calculation_flow,
@@ -257,7 +257,7 @@ def test_automatic_profile_is_distinct_from_cancel(monkeypatch, tmp_path):
     monkeypatch.setattr(
         calculation_flow,
         "_select_profile",
-        lambda _parent, **_kwargs: (True, None, None),
+        lambda _parent, **_kwargs: (True, None, None, str(tmp_path)),
     )
     monkeypatch.setattr(
         calculation_flow,
@@ -271,3 +271,51 @@ def test_automatic_profile_is_distinct_from_cancel(monkeypatch, tmp_path):
         object(),
     ) is not None
     assert captured["profile_name"] is None
+
+
+def test_directory_is_chosen_with_execution_profile(monkeypatch, tmp_path):
+    controller = _controller(tmp_path)
+    controller.change_directory(None)
+    assert controller.can_calculate()
+    events = []
+
+    class Window:
+        def __init__(self, **kwargs):
+            events.append(("launch", kwargs["request"].directory))
+
+        def show(self):
+            pass
+
+        def start(self):
+            pass
+
+    def select(_parent, **kwargs):
+        events.append(("settings", kwargs["directory"]))
+        return True, None, None, str(tmp_path)
+
+    monkeypatch.setattr(calculation_flow, "_select_profile", select)
+    monkeypatch.setattr(calculation_flow, "SprkkrRunWindow", Window)
+    monkeypatch.setattr(calculation_flow, "profile_description", lambda _: None)
+
+    assert calculation_flow.run_calculation(
+        controller, RecentFiles(tmp_path / "recent.json"), object()
+    ) is not None
+    assert events == [("settings", None), ("launch", str(tmp_path))]
+    assert controller.directory == str(tmp_path)
+
+
+def test_cancelling_execution_setup_with_no_directory_is_side_effect_free(
+    monkeypatch, tmp_path
+):
+    controller = _controller(tmp_path)
+    controller.change_directory(None)
+    old_generation = controller.directory_generation
+    monkeypatch.setattr(
+        calculation_flow, "_select_profile",
+        lambda _parent, **_kwargs: (False, None, None, None),
+    )
+    assert calculation_flow.run_calculation(
+        controller, RecentFiles(tmp_path / "recent.json"), object()
+    ) is None
+    assert controller.directory is None
+    assert controller.directory_generation == old_generation

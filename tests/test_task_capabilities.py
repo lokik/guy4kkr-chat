@@ -157,7 +157,6 @@ def test_expert_run_action_uses_generic_calculation_readiness(tmp_path):
     expert.controller.replace_structure(
         Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True)
     )
-    expert.controller.change_directory(str(tmp_path))
     expert.controller.replace_input_parameters(InputParameters.create("TORQUE"))
     application.processEvents()
 

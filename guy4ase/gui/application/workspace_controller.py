@@ -218,12 +218,8 @@ class WorkspaceController(QObject):
         return self.structure_state.structure_kind()
 
     def can_calculate(self) -> bool:
-        """Return generic launch readiness, independent of Guided workflow policy."""
-        return (
-            self.atoms is not None
-            and self.input_parameters is not None
-            and bool(self.directory)
-        )
+        """Allow execution setup before choosing the working directory."""
+        return self.atoms is not None and self.input_parameters is not None
 
     def can_build_2d(self) -> bool:
         return self.structure_kind() == "3d"
