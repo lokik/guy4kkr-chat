@@ -126,8 +126,48 @@ def test_launch_captures_active_project_before_later_selection_change(tmp_path):
     gui.set_active_project(later_project.id)
 
     assert captured_manager is gui.execution_manager
-        assert captured_manager.projects is repository
+    assert captured_manager.projects is repository
     assert captured_manager.store.directory == repository.directory.parent / "projects_runs"
     assert captured_project == launch_project.id
     assert gui.active_project_id == later_project.id
     monitor_window.close()
+
+
+def test_monitor_uses_project_selected_for_launch_instead_of_active_one(tmp_path):
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    active = repository.create("Active")
+    chosen = repository.create("Chosen")
+    gui = GuiApplication(
+        recent_files_path=tmp_path / "recent.json",
+        settings_path=tmp_path / "settings.json",
+        persistent_jobs=_JobSource(),
+        project_repository=repository,
+    )
+    gui.set_active_project(active.id)
+    monitor = _LaunchWindow()
+    monitor.launch_project_id = chosen.id
+
+    gui._track_launch_monitor(monitor)
+    assert monitor.execution_context == (gui.execution_manager, chosen.id)
+    assert gui.active_project_id == active.id
+    monitor.close()
+
+
+def test_monitor_respects_explicit_unassigned_selection(tmp_path):
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    active = repository.create("Active")
+    gui = GuiApplication(
+        recent_files_path=tmp_path / "recent.json",
+        settings_path=tmp_path / "settings.json",
+        persistent_jobs=_JobSource(),
+        project_repository=repository,
+    )
+    gui.set_active_project(active.id)
+    monitor = _LaunchWindow()
+    monitor.launch_project_id = None
+    gui._track_launch_monitor(monitor)
+    assert monitor.execution_context == (gui.execution_manager, None)
+    assert gui.active_project_id == active.id
+    monitor.close()

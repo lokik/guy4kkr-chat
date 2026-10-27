@@ -6,6 +6,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
+from ase2sprkkr.execution import ProjectRepository, ProjectRepositoryError
+
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -220,9 +222,12 @@ class ProfileSelectionDialog(QDialog):
         input_parameters=None,
         directory: str | None = None,
         require_directory: bool = True,
+        project_repository: ProjectRepository | None = None,
+        active_project_id: str | None = None,
     ) -> None:
         super().__init__(parent)
         self._require_directory = require_directory
+        self._projects = project_repository if project_repository is not None else ProjectRepository()
         self._store = store or ExecutionProfileStore()
         self.setWindowTitle("Run SPR-KKR Calculation")
         self.resize(650, 480)
@@ -302,6 +307,21 @@ class ProfileSelectionDialog(QDialog):
         profile_layout.addWidget(self.description)
         layout.addWidget(profile_box)
 
+        self.project_box = QGroupBox("Project", self)
+        project_row = QHBoxLayout(self.project_box)
+        self.project_selector = QComboBox(self.project_box)
+        self._load_projects(active_project_id)
+        project_row.addWidget(self.project_selector, 1)
+        self.new_project_button = QPushButton("New…", self.project_box)
+        self.new_project_button.setToolTip(
+            "Create a subproject of the selected project, or a top-level "
+            "project when Unassigned is selected."
+        )
+        self.new_project_button.clicked.connect(self._create_project)
+        project_row.addWidget(self.new_project_button)
+        layout.addWidget(self.project_box)
+        self.project_box.setVisible(require_directory)
+
         directory_box = QGroupBox("Working directory", self)
         directory_row = QHBoxLayout(directory_box)
         self.directory_edit = QLineEdit(directory_box)
@@ -324,6 +344,52 @@ class ProfileSelectionDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
         self._reload_profiles()
+
+    def _load_projects(self, selected_project_id: str | None) -> None:
+        """Reload project choices and select an ID rather than a display label."""
+        try:
+            projects = tuple(self._projects.projects())
+        except (ProjectRepositoryError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Projects Unavailable", str(exc))
+            return
+
+        by_id = {project.id: project for project in projects}
+
+        def label(project):
+            parts = [project.name]
+            seen = {project.id}
+            parent_id = project.parent_id
+            while parent_id in by_id and parent_id not in seen:
+                seen.add(parent_id)
+                ancestor = by_id[parent_id]
+                parts.insert(0, ancestor.name)
+                parent_id = ancestor.parent_id
+            return " / ".join(parts)
+
+        self.project_selector.clear()
+        self.project_selector.addItem("Unassigned (no project)", None)
+        for project in sorted(projects, key=lambda item: label(item).casefold()):
+            self.project_selector.addItem(label(project), project.id)
+        selected = self.project_selector.findData(selected_project_id)
+        self.project_selector.setCurrentIndex(max(selected, 0))
+
+    def project_id(self) -> str | None:
+        """Return the project selected for this run, or None if unassigned."""
+        return self.project_selector.currentData()
+
+    def _create_project(self) -> None:
+        """Create and immediately select a project without changing the workspace."""
+        name, accepted = QInputDialog.getText(self, "New Project", "Project name:")
+        if not accepted:
+            return
+        try:
+            created = self._projects.create(
+                name.strip(), parent_id=self.project_id()
+            )
+        except (ProjectRepositoryError, KeyError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Create Project Failed", str(exc))
+            return
+        self._load_projects(created.id)
 
     def _reload_profiles(self, selected: str | None = None) -> None:
         if selected is None and self.profiles.count():

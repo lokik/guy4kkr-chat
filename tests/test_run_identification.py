@@ -112,7 +112,7 @@ def test_accepted_run_identification_overrides_only_request(application, monkeyp
         calculation_flow,
         "_select_profile",
         lambda _parent, **_kwargs: (
-            True, None, RunIdentification("new_dataset", "new_label"), str(tmp_path)
+            True, None, RunIdentification("new_dataset", "new_label"), str(tmp_path), None
         ),
     )
     monkeypatch.setattr(calculation_flow, "profile_description", lambda _name: None)
@@ -140,7 +140,7 @@ def test_cancelling_run_dialog_leaves_workspace_unchanged(application, monkeypat
     generation = controller.input_parameters_generation
     monkeypatch.setattr(
         calculation_flow, "_select_profile",
-        lambda _parent, **_kwargs: (False, None, None, None),
+        lambda _parent, **_kwargs: (False, None, None, None, None),
     )
 
     assert calculation_flow.run_calculation(

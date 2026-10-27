@@ -75,6 +75,7 @@ class WorkflowWindow(QMainWindow):
         open_expert: Callable[[], None],
         settings: ApplicationSettings,
         track_launch_monitor: calculation_flow.LaunchMonitorTracker,
+        project_repository=None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Guy4ASE - Workflow")
@@ -84,6 +85,7 @@ class WorkflowWindow(QMainWindow):
         self.settings = settings
         self._open_expert = open_expert
         self._track_launch_monitor = track_launch_monitor
+        self.project_repository = project_repository
         self._workflow_planner = WorkflowPlanner()
         self.controller.structureChanged.connect(self._on_structure_changed)
         self.controller.directoryChanged.connect(
@@ -416,6 +418,7 @@ class WorkflowWindow(QMainWindow):
             task,
             dataset_default_mode=self.settings.dataset_default_mode,
             track_launch_monitor=self._track_launch_monitor,
+            project_repository=self.project_repository,
         )
 
     def _update_empty_spheres(self) -> None:
