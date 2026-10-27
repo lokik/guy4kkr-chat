@@ -167,6 +167,13 @@ class WorkflowPlanner:
                 "load",
                 ActionIcon.RESULT,
             ),
+            _action(
+                Load(LoadKind.OUTPUT_DIRECTORY),
+                "Open SPR-KKR Output Directory",
+                "Import existing calculation outputs from a directory into Results",
+                "load",
+                ActionIcon.OPEN,
+            ),
         ]
         recent_presentation = (
             recent_launch_presentation(recent) if recent is not None else None

@@ -165,7 +165,20 @@ class WorkflowWindow(QMainWindow):
         result_actions_title.setFont(
             heading_font(result_actions_title.font(), "section")
         )
-        result_actions_layout.addWidget(result_actions_title)
+        result_header = QHBoxLayout()
+        result_header.addWidget(result_actions_title)
+        result_header.addStretch(1)
+        self._open_output_directory_button = QPushButton(
+            "Open directory…", self._result_actions
+        )
+        self._open_output_directory_button.setToolTip(
+            "Import SPR-KKR output files from a directory into Results"
+        )
+        self._open_output_directory_button.clicked.connect(
+            self._load_output_directory
+        )
+        result_header.addWidget(self._open_output_directory_button)
+        result_actions_layout.addLayout(result_header)
         self._result_actions_widget = ResultActionsWidget(
             lambda value, action: execute_value_action(value, action, self),
             show_values_without_actions=False,
@@ -257,6 +270,7 @@ class WorkflowWindow(QMainWindow):
                 LoadKind.ONLINE_STRUCTURE: self._download_structure,
                 LoadKind.STRUCTURE: self._load_structure,
                 LoadKind.OUTPUT: self._load_output,
+                LoadKind.OUTPUT_DIRECTORY: self._load_output_directory,
             }[command.kind]()
             return
         if isinstance(command, ContinueRecent):
@@ -302,6 +316,11 @@ class WorkflowWindow(QMainWindow):
 
     def _load_output(self) -> None:
         file_flows.choose_and_load_output(
+            self.controller, self.recent_history, self
+        )
+
+    def _load_output_directory(self) -> None:
+        file_flows.choose_and_load_output_directory(
             self.controller, self.recent_history, self
         )
 

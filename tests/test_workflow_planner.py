@@ -121,6 +121,7 @@ def test_initial_plan_uses_typed_commands_and_planned_recent_menu():
         Load(LoadKind.ONLINE_STRUCTURE),
         Load(LoadKind.STRUCTURE),
         Load(LoadKind.OUTPUT),
+        Load(LoadKind.OUTPUT_DIRECTORY),
         ContinueRecent("output", "/tmp/scf.out"),
     )
 
@@ -131,6 +132,12 @@ def test_initial_plan_uses_typed_commands_and_planned_recent_menu():
     )
     continue_action = load.actions[-1]
     assert output.icon is ActionIcon.RESULT
+    directory_action = next(
+        action for action in load.actions
+        if action.command == Load(LoadKind.OUTPUT_DIRECTORY)
+    )
+    assert directory_action.title == "Open SPR-KKR Output Directory"
+    assert directory_action.icon is ActionIcon.OPEN
     assert continue_action.description == ""
     assert continue_action.icon is ActionIcon.CONTINUE
     assert continue_action.tooltip == "/tmp/scf.out"

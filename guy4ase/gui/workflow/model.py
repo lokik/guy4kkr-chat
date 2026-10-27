@@ -24,6 +24,7 @@ class LoadKind(Enum):
     ONLINE_STRUCTURE = auto()
     STRUCTURE = auto()
     OUTPUT = auto()
+    OUTPUT_DIRECTORY = auto()
 
 
 class WorkflowSection(Enum):

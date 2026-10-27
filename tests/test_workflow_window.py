@@ -115,6 +115,9 @@ def test_typed_commands_are_dispatched_without_title_interpretation(
     monkeypatch.setattr(window, "_load_structure", lambda: events.append("load-structure"))
     monkeypatch.setattr(window, "_load_output", lambda: events.append("load-output"))
     monkeypatch.setattr(
+        window, "_load_output_directory", lambda: events.append("load-directory")
+    )
+    monkeypatch.setattr(
         window,
         "_continue_recent",
         lambda kind, path: events.append(("recent", kind, path)),
@@ -137,6 +140,7 @@ def test_typed_commands_are_dispatched_without_title_interpretation(
         Load(LoadKind.ONLINE_STRUCTURE),
         Load(LoadKind.STRUCTURE),
         Load(LoadKind.OUTPUT),
+        Load(LoadKind.OUTPUT_DIRECTORY),
         ContinueRecent("output", "/tmp/result.out"),
         VisualizeStructure(),
         UseForNewCalculation(),
@@ -157,6 +161,7 @@ def test_typed_commands_are_dispatched_without_title_interpretation(
         "download",
         "load-structure",
         "load-output",
+        "load-directory",
         ("recent", "output", "/tmp/result.out"),
         "view",
         "new-calculation",
@@ -252,4 +257,36 @@ def test_cancel_new_2d_prompts_to_keep_or_discard_3d(tmp_path, monkeypatch, keep
     assert window.controller.structure_generation == (
         original_generation.next() if keep_bulk else original_generation
     )
+    window.close()
+
+
+
+def test_workflow_open_output_directory_available_even_with_active_structure(
+    tmp_path, monkeypatch,
+):
+    _application = QApplication.instance() or QApplication([])
+    _gui, window = _workflow(tmp_path)
+    from guy4ase.gui.flows import files as file_flows
+
+    calls = []
+    monkeypatch.setattr(
+        file_flows,
+        "choose_and_load_output_directory",
+        lambda controller, history, parent: calls.append(
+            (controller, history, parent)
+        ),
+    )
+
+    button = window._open_output_directory_button
+    assert button.text() == "Open directory…"
+    assert button.isEnabled()
+    button.click()
+    assert calls == [(window.controller, window.recent_history, window)]
+
+    window.controller.replace_structure(Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True))
+    _application.processEvents()
+    assert button.isEnabled()
+    button.click()
+    assert calls[-1] == (window.controller, window.recent_history, window)
+    assert len(calls) == 2
     window.close()
