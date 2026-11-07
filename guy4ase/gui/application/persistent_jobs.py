@@ -1,15 +1,17 @@
 """Read and track ASE2SPRKKR persistent-run history behind a GUI-facing API."""
 from __future__ import annotations
 
+from ase2sprkkr.sprkkr.projects import default_project_repository, project_execution_manager
+
 import logging
 from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
-from kkrunner import ExecutionManager, ProjectRepository, RunStore
+from kkrunner import ExecutionManager, ProjectRepository
 
 from ase2sprkkr.outputs.project_results import (
-    application_metadata, attach_project_run, load_project_result,
+    application_metadata, attach_project_run, load_project_result, retry_project_postprocessing,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,10 +24,7 @@ _RECOVERING = object()
 
 
 def project_run_manager(projects: ProjectRepository) -> ExecutionManager:
-    return ExecutionManager(
-        store=RunStore(projects.directory.parent / "projects_runs"),
-        project_repository=projects,
-    )
+    return project_execution_manager(projects)
 
 
 def _value(value: Any) -> str:
@@ -91,6 +90,11 @@ class PersistentJob:
         """Whether an explicit retry of failed output transfer is meaningful."""
         return self.state == "failed" and self.failure_phase == "download" and self.return_code == 0
 
+    @property
+    def can_retry_postprocessing(self) -> bool:
+        return (self.state == "failed" and self.failure_phase == "postprocessing"
+                and self.return_code == 0)
+
     @classmethod
     def from_run_record(
         cls,
@@ -146,7 +150,7 @@ class PersistentJobSource:
         if manager is None:
             # The backend stores project runs globally, not in a legacy default
             # persistent-run manager. Browse that same authoritative store.
-            manager = project_run_manager(ProjectRepository())
+            manager = project_run_manager(default_project_repository())
             self._manager = manager
 
         try:
@@ -182,6 +186,10 @@ class PersistentJobSource:
     @property
     def supports_retry_download(self) -> bool:
         return self.supports_attach
+
+    @property
+    def supports_retry_postprocessing(self) -> bool:
+        return self.available and callable(getattr(self._manager, "retry_postprocessing", None))
 
     @property
     def supports_result_file_check(self) -> bool:
@@ -230,6 +238,7 @@ class PersistentJobSource:
         loaded = {
             str(record.id): PersistentJob.from_run_record(record)
             for record in records
+            if "ase2sprkkr" in record.metadata
         }
         with self._lock:
             previous = self._jobs
@@ -258,6 +267,12 @@ class PersistentJobSource:
                 self._notify(job_id)
             return None
 
+        if "ase2sprkkr" not in record.metadata:
+            with self._lock:
+                removed = self._jobs.pop(job_id, None)
+            if removed is not None:
+                self._notify(job_id)
+            return None
         job = PersistentJob.from_run_record(record)
         changed = self._replace_cached_job(job)
         if changed:
@@ -313,6 +328,15 @@ class PersistentJobSource:
             callback=callback,
             output_listener=output_listener,
         )
+
+    def retry_postprocessing(self, job_id: str) -> Any:
+        """Explicitly rebuild a failed application result from verified files."""
+        if not self.supports_retry_postprocessing:
+            raise NotImplementedError("This runner cannot retry postprocessing")
+        try:
+            return retry_project_postprocessing(self._manager, str(job_id))
+        finally:
+            self.job_changed(str(job_id))
 
     def load_result(self, job_id: str) -> Any:
         if not self.supports_results:

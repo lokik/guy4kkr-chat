@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ase2sprkkr.sprkkr.projects import default_project_repository
+
 import sys
 from pathlib import Path
 from typing import Any
@@ -63,7 +65,7 @@ class GuiApplication(QObject):
         self.projects = (
             project_repository
             if project_repository is not None
-            else ProjectRepository()
+            else default_project_repository()
         )
         self.execution_manager = project_run_manager(self.projects)
         self.persistent_jobs = (

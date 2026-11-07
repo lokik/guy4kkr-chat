@@ -80,3 +80,41 @@ def delegated_application_operations(monkeypatch):
                         lambda manager, *args, **kwargs: manager.attach(*args, **kwargs))
     monkeypatch.setattr(application_boundary, "load_project_result",
                         lambda manager, run: manager.retrieve_result_files(run))
+
+
+def test_foreign_namespace_does_not_break_history():
+    item = record()
+    item.metadata = {'other-app': {'label': 'valid generic run'}}
+    source = PersistentJobSource(SimpleNamespace(store=Store(item)))
+    assert source.jobs() == ()
+    assert source.job_changed(item.id) is None
+
+
+def test_invalid_owned_namespace_is_reported():
+    item = record()
+    item.metadata = {'ase2sprkkr': {}}
+    from ase2sprkkr.outputs.project_results import UnrecoverableProjectResultError
+    with pytest.raises(UnrecoverableProjectResultError):
+        PersistentJobSource(SimpleNamespace(store=Store(item)))
+
+
+def test_retry_postprocessing_updates_authoritative_history(monkeypatch):
+    item = record(RunState.FAILED, failure_phase=FailurePhase.POSTPROCESSING, return_code=0)
+    store = Store(item)
+    manager = SimpleNamespace(store=store, retry_postprocessing=lambda *args: None)
+    source = PersistentJobSource(manager)
+    calls = []
+    result = object()
+
+    def retry(actual_manager, job_id):
+        calls.append((actual_manager, job_id))
+        store.current = record(RunState.FINISHED, return_code=0)
+        return result
+
+    monkeypatch.setattr(module, 'retry_project_postprocessing', retry)
+    assert source.job(item.id).can_retry_postprocessing
+    assert source.supports_retry_postprocessing
+    assert source.retry_postprocessing(item.id) is result
+    assert source.job(item.id).is_final
+    assert not source.job(item.id).can_retry_postprocessing
+    assert calls == [(manager, item.id)]
