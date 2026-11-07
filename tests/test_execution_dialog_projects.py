@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PyQt6.QtWidgets import QApplication
-from ase2sprkkr.execution import ProjectRepository
+from kkrunner import ProjectRepository
 
 from guy4ase.gui.dialogs import profiles as profiles_module
 from guy4ase.gui.dialogs import project_edit as project_edit_module

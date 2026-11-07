@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ase2sprkkr.execution import FileState
+from kkrunner import FileState
 from guy4ase.gui.application.result_store import ResultRecord, ResultStore
 
 

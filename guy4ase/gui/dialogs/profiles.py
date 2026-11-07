@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
-from ase2sprkkr.execution import ProjectRepository, ProjectRepositoryError
+from kkrunner import ProjectRepository, ProjectRepositoryError
 
 from PyQt6.QtWidgets import (
     QComboBox,

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
-from ase2sprkkr.execution import ProjectRepository
+from kkrunner import ProjectRepository
 
 from guy4ase.gui.application.imported_project_results import assign, assignments
 from guy4ase.gui.application.recent_files import RecentFiles

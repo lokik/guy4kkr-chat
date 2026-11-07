@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from ase2sprkkr.execution import (
+from kkrunner import (
     Project,
     ProjectConflictError,
     ProjectRepository,

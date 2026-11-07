@@ -8,13 +8,14 @@ version = "0.1.0"
 description = "PyQt6 GUI for building/editing ASE structures and running SPR-KKR via ase2sprkkr."
 requires-python = ">=3.9"
 dependencies = [
+  "kkrunner>=0.1.0.dev0,<0.2",
   "PyQt6",
   "matplotlib",
   "numpy",
   "ase",
   "platformdirs",
   "pyxtal",
-  "ase2sprkkr>=3.6.0-beta1",
+  "ase2sprkkr>=4.0.0b1",
 ]
 
 [project.scripts]
@@ -35,3 +36,4 @@ guy4ase = [
 
 [tool.uv.sources]
 ase2sprkkr = { path = "../ase2sprkkr", editable = true }
+kkrunner = { path = "../kkrunner", editable = true }
