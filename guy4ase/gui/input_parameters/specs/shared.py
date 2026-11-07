@@ -282,7 +282,6 @@ def _output_page(*, include_hff: bool = True, scf: bool = False) -> PageSpec:
         ) + (() if scf else (field("CONTROL", "NOSYM", "Disable symmetry:", "boolean"),))),
         GroupSpec("Hyperfine field", hyperfine_fields, id="hff"),
     ) + ((GroupSpec("File names", (
-        field("CONTROL", "DATASET", "Dataset / output prefix:", "text"),
         field("CONTROL", "POTFIL", "Input potential file:", "text"),
     ), collapsed=True, note="Leave the potential file empty to let the calculator supply it."),) if scf else ()), OUTPUT_COLOR)
 
