@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from ase import Atoms
 from ase2sprkkr import InputParameters
 from ase2sprkkr.execution import ExecutionManager, ProjectRepository
+from ase2sprkkr.outputs.result_processing import SPRKKR_RESULT_PROCESSOR
 from ase2sprkkr.execution import (
     FileEntry,
     FileManifest,
@@ -46,10 +47,14 @@ def _finished_dos_run(tmp_path):
 
     projects = ProjectRepository(tmp_path / "projects")
     project = projects.create("Test")
-    manager = ExecutionManager(store=RunStore(tmp_path / "runs"), project_repository=projects, project=project)
+    manager = ExecutionManager(
+        store=RunStore(tmp_path / "runs"), project_repository=projects,
+        project=project, result_processors={"sprkkr": SPRKKR_RESULT_PROCESSOR},
+    )
     run = manager.new_record(
         task="DOS",
         input_definition="DOS",
+        result_processor="sprkkr",
         directory=tmp_path,
         files=FileManifest(
             inputs=(FileEntry(local_path=str(input_path)),),

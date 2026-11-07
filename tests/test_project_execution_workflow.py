@@ -55,7 +55,7 @@ def test_attach_and_result_loading_delegate_to_backend():
     result = SimpleNamespace(run_record=item)
     manager = SimpleNamespace(
         store=Store(),
-        attach_sprkkr=lambda ref, **kwargs: calls.append(("attach", ref)) or runner,
+        attach=lambda ref, **kwargs: calls.append(("attach", ref)) or runner,
         load_result=lambda ref: calls.append(("load", ref)) or result,
     )
     source = PersistentJobSource(manager)

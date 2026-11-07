@@ -83,7 +83,7 @@ def test_attach_and_load_delegate_to_backend_api():
     result = SimpleNamespace(run_record=item)
     manager = SimpleNamespace(
         store=store,
-        attach_sprkkr=lambda *args, **kwargs: calls.append("attach") or object(),
+        attach=lambda *args, **kwargs: calls.append("attach") or object(),
         load_result=lambda job_id: calls.append("load") or result,
     )
     source = PersistentJobSource(manager)
