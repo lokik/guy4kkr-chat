@@ -52,8 +52,8 @@ jobs:
       - name: Checkout ASE2SPRKKR persistent result API
         uses: actions/checkout@v7
         with:
-          repository: ase2sprkkr/ase2sprkkr
-          ref: develop
+          repository: lokik/ase2sprkkr-chat
+          ref: tmp-result-processors-ci-20261107
           path: .ci/ase2sprkkr
 
       - name: Install package and test dependencies
