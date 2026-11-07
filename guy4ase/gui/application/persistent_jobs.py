@@ -7,6 +7,7 @@ from threading import RLock
 from typing import Any, Callable
 
 from ase2sprkkr.execution import ExecutionManager, ProjectRepository, RunStore
+from ase2sprkkr.outputs.result_processing import SPRKKR_RESULT_PROCESSOR
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ def project_run_manager(projects: ProjectRepository) -> ExecutionManager:
     return ExecutionManager(
         store=RunStore(projects.directory.parent / "projects_runs"),
         project_repository=projects,
+        result_processors={"sprkkr": SPRKKR_RESULT_PROCESSOR},
     )
 
 
@@ -144,6 +146,9 @@ class PersistentJobSource:
             # persistent-run manager. Browse that same authoritative store.
             manager = project_run_manager(ProjectRepository())
             self._manager = manager
+        if isinstance(manager, ExecutionManager):
+            # Even injected project managers need the same domain processor.
+            manager.register_result_processor("sprkkr", SPRKKR_RESULT_PROCESSOR)
 
         try:
             store = manager.store
@@ -175,7 +180,7 @@ class PersistentJobSource:
 
     @property
     def supports_attach(self) -> bool:
-        return self.available and callable(getattr(self._manager, "attach_sprkkr", None))
+        return self.available and callable(getattr(self._manager, "attach", None))
 
     @property
     def supports_retry_download(self) -> bool:
@@ -307,7 +312,7 @@ class PersistentJobSource:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot retry a failed download."
             )
-        return self._manager.attach_sprkkr(str(job_id),
+        return self._manager.attach(str(job_id),
             callback=callback,
             output_listener=output_listener,
         )
