@@ -3,11 +3,16 @@ name: backend compatibility
 on:
   workflow_call:
     inputs:
+      guy4ase_repository:
+        description: Guy4ASE repository to test (owner/name)
+        required: false
+        type: string
+        default: ase2sprkkr/guy4kkr
       ase2sprkkr_ref:
         description: Exact ase2sprkkr ref to test against
         required: false
         type: string
-        default: workflow
+        default: develop
       guy4ase_ref:
         description: Exact Guy4ASE ref to test
         required: false
@@ -15,16 +20,21 @@ on:
         default: master
   workflow_dispatch:
     inputs:
+      guy4ase_repository:
+        description: Guy4ASE repository to test (owner/name); empty means this repository
+        required: false
+        type: string
+        default: ''
       ase2sprkkr_ref:
         description: ase2sprkkr branch, tag, or commit to test against
         required: false
         type: string
-        default: workflow
+        default: develop
       guy4ase_ref:
-        description: Guy4ASE branch, tag, or commit to test
+        description: Guy4ASE branch, tag, or commit to test; empty uses the selected workflow branch
         required: false
         type: string
-        default: master
+        default: ''
   schedule:
     - cron: '17 3 * * *'
 
@@ -45,15 +55,15 @@ jobs:
       - name: Checkout Guy4ASE
         uses: actions/checkout@v7
         with:
-          repository: ase2sprkkr/guy4kkr
-          ref: ${{ inputs.guy4ase_ref || 'master' }}
+          repository: ${{ inputs.guy4ase_repository || github.repository }}
+          ref: ${{ inputs.guy4ase_ref || (github.event_name == 'workflow_dispatch' && github.ref_name) || 'master' }}
           path: guy4ase
 
       - name: Checkout ASE2SPRKKR
         uses: actions/checkout@v7
         with:
           repository: ase2sprkkr/ase2sprkkr
-          ref: ${{ inputs.ase2sprkkr_ref || 'workflow' }}
+          ref: ${{ inputs.ase2sprkkr_ref || 'develop' }}
           path: ase2sprkkr
 
       - uses: actions/setup-python@v7

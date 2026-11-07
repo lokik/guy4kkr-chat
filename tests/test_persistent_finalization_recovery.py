@@ -1,6 +1,5 @@
 """Automatic recovery only for interrupted postprocessing and downloads."""
 from types import SimpleNamespace
-import guy4ase.gui.application.persistent_jobs as module
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 from ase2sprkkr.execution import RunState, Execution, ExecutorEndpoint, WorkingDirectory, FileManifest
 
@@ -39,7 +38,7 @@ def test_transient_recovery_failure_does_not_recurse(monkeypatch):
     def attach(*args, **kwargs):
         calls.append(1)
         raise OSError("connection lost")
-    monkeypatch.setattr(module, "attach_project_run", attach)
+    monkeypatch.setattr(manager, "attach_sprkkr", attach)
     source = PersistentJobSource(manager)
     assert calls == [1]
     assert source.active_recovery_ids == ()
@@ -52,10 +51,10 @@ def test_live_postprocessing_notification_does_not_create_second_runner(monkeypa
     calls = []
 
     def attach(*args, **kwargs):
-        calls.append(args[1])
+        calls.append(args[0])
         return object()
 
-    monkeypatch.setattr(module, "attach_project_run", attach)
+    monkeypatch.setattr(manager, "attach_sprkkr", attach)
     source = PersistentJobSource(manager)
     assert calls == []
 

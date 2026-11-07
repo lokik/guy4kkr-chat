@@ -95,7 +95,8 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
 
     assert len(resolved_tasks) == 1
     assert resolved_tasks[0].name == "SPLEED"
-    assert resolved_tasks[0].input_parameters_definition_name == "ARPES"
+    # Native task registry schema is SPLEED; the historical run stores ARPES separately.
+    assert resolved_tasks[0].input_parameters_definition_name == "SPLEED"
     assert loaded.task_name.upper() == "SPLEED"
     assert loaded.input_parameters.definition_name.upper() == "ARPES"
     assert loaded.input_parameters.task_name.upper() == "SPLEED"
