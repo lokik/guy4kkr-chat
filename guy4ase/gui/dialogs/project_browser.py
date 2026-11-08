@@ -20,12 +20,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from kkrunner import (
-    Project,
-    ProjectConflictError,
-    ProjectRepository,
-    ProjectRepositoryError,
-)
+from kkrunner.projects import Project, ProjectConflictError, ProjectRepository, ProjectRepositoryError
 
 from guy4ase.gui.application.window_geometry import manage_window_geometry
 from guy4ase.gui.application.imported_project_results import assignments

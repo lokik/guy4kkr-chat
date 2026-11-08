@@ -2,7 +2,10 @@
 from types import SimpleNamespace
 import guy4ase.gui.application.persistent_jobs as module
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
-from kkrunner import RunState, Execution, ExecutorEndpoint, WorkingDirectory, FileManifest
+from kkrunner import RunState
+from kkrunner.runs import Execution, WorkingDirectory
+from kkrunner.backends import ExecutorEndpoint
+from kkrunner.files import FileManifest
 
 def _record(state=RunState.POSTPROCESSING):
     return SimpleNamespace(id='run-1', state=state, created_at='2026-10-19T10:00:00+00:00', updated_at='2026-10-19T10:01:00+00:00', finished_at=None, return_code=0, message=None, failure_phase=None, files=FileManifest(), execution=Execution(ExecutorEndpoint(), WorkingDirectory('/tmp/calc'), 'pid-42'), metadata={'ase2sprkkr': {'task': 'DOS', 'dataset': None}})

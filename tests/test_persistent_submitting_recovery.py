@@ -1,6 +1,8 @@
 from __future__ import annotations
 from types import SimpleNamespace
-from kkrunner import Execution, ExecutorEndpoint, WorkingDirectory, FileManifest
+from kkrunner.runs import Execution, WorkingDirectory
+from kkrunner.backends import ExecutorEndpoint
+from kkrunner.files import FileManifest
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 
 def _record(state: str):

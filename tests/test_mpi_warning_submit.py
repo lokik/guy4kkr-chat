@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 
 from ase import Atoms
-from kkrunner import MpiNotFoundWarning
+from kkrunner.runs import MpiNotFoundWarning
 
 from guy4ase.gui.application import sprkkr_execution as execution_module
 from guy4ase.gui.application.sprkkr_execution import SprkkrExecution

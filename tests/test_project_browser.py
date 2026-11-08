@@ -6,7 +6,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QMessageBox, QTreeWidgetItem
-from kkrunner import ProjectRepository, ProjectRepositoryError
+from kkrunner.projects import ProjectRepository, ProjectRepositoryError
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController

@@ -3,8 +3,9 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from ase import Atoms
 from ase2sprkkr import InputParameters
-from kkrunner import ProjectExecutionManager, ProjectRepository
-from kkrunner import FileEntry, FileManifest, RunState, RunStore
+from kkrunner.projects import ProjectExecutionManager, ProjectRepository
+from kkrunner.files import FileEntry, FileManifest
+from kkrunner import RunState, RunStore
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QDialog, QWidget
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource

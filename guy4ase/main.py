@@ -8,7 +8,7 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
-from kkrunner import ProjectRepository
+from kkrunner.projects import ProjectRepository
 from guy4ase.gui.application.persistent_jobs import project_run_manager
 
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource

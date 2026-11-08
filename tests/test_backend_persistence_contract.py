@@ -2,8 +2,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from ase import Atoms
 from ase2sprkkr import InputParameters, TaskResult
-from kkrunner import ProjectExecutionManager, ProjectRepository
-from kkrunner import FileEntry, FileManifest, RunState, RunStore
+from kkrunner.projects import ProjectExecutionManager, ProjectRepository
+from kkrunner.files import FileEntry, FileManifest
+from kkrunner import RunState, RunStore
 from ase2sprkkr.outputs.reader_registry import reader_registry
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 from guy4ase.gui.application.result_store import ResultStore

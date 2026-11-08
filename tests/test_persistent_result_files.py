@@ -1,6 +1,7 @@
 """Result-file freshness checks for persistent calculation history."""
 from __future__ import annotations
-from kkrunner import Execution, ExecutorEndpoint, WorkingDirectory
+from kkrunner.runs import Execution, WorkingDirectory
+from kkrunner.backends import ExecutorEndpoint
 from types import SimpleNamespace
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 
@@ -54,7 +55,7 @@ def test_result_file_check_uses_persisted_store():
     assert source.check_result_files(record.id).result_files_verified
 
 def test_result_file_check_detects_changed_historical_output(tmp_path):
-    from kkrunner import FileEntry, FileManifest, FileVersion
+    from kkrunner.files import FileEntry, FileManifest, FileVersion
     output = tmp_path / 'result.out'
     output.write_text('before')
     record = _record(result_files=FileManifest(stdout=FileEntry(local_path=str(output)), output_versions=(FileVersion.capture(output, require_digest=True),), captured_at='2026-10-22T12:00:00+00:00'))

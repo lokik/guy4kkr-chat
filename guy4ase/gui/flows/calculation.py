@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
-from kkrunner import ProjectRepository
+from kkrunner.projects import ProjectRepository
 
 from guy4ase.gui.application.execution_profiles import profile_description
 from guy4ase.gui.application.potential_version import PotentialFileVersion

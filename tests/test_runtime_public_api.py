@@ -2,7 +2,7 @@
 
 
 def test_file_versions_use_backend_execution_contract():
-    from kkrunner import FileState, FileVersion, FileVersionCaptureError
+    from kkrunner.files import FileState, FileVersion, FileVersionCaptureError
     from guy4ase.gui.application import result_store, result_artifacts, potential_version
 
     assert result_store.FileState is FileState

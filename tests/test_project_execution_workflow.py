@@ -1,7 +1,10 @@
 """Regression for the ASE2SPRKKR project-run public contract."""
 from __future__ import annotations
 from types import SimpleNamespace
-from kkrunner import Execution, ExecutorEndpoint, WorkingDirectory, FileManifest, RunState, FailurePhase
+from kkrunner.runs import Execution, WorkingDirectory, FailurePhase
+from kkrunner.backends import ExecutorEndpoint
+from kkrunner.files import FileManifest
+from kkrunner import RunState
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 from guy4ase.gui.application import persistent_jobs as jobs_module
 

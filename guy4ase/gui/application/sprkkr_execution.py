@@ -7,7 +7,7 @@ from dataclasses import replace
 from typing import Any, Callable
 
 from ase2sprkkr import SPRKKR
-from kkrunner import MpiNotFoundWarning
+from kkrunner.runs import MpiNotFoundWarning
 
 from guy4ase.gui.application.execution_cancellation import (
     Cancellation,

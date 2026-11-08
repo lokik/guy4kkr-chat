@@ -2,7 +2,10 @@
 from __future__ import annotations
 from types import SimpleNamespace
 import pytest
-from kkrunner import RunState, FailurePhase, Execution, ExecutorEndpoint, WorkingDirectory, FileManifest
+from kkrunner import RunState
+from kkrunner.runs import FailurePhase, Execution, WorkingDirectory
+from kkrunner.backends import ExecutorEndpoint
+from kkrunner.files import FileManifest
 import guy4ase.gui.application.persistent_jobs as module
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 

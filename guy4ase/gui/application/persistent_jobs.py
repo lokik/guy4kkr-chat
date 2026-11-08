@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
-from kkrunner import ProjectExecutionManager, ProjectRepository
+from kkrunner.projects import ProjectExecutionManager, ProjectRepository
 
 from ase2sprkkr.outputs.project_results import (
     application_metadata, attach_project_run, load_project_result, retry_project_postprocessing,
