@@ -2,7 +2,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from ase import Atoms
 from ase2sprkkr import InputParameters, TaskResult
-from kkrunner import ExecutionManager, ProjectRepository
+from kkrunner import ProjectExecutionManager, ProjectRepository
 from kkrunner import FileEntry, FileManifest, RunState, RunStore
 from ase2sprkkr.outputs.reader_registry import reader_registry
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
@@ -23,7 +23,7 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(monkeypatch
     output_path.write_text('synthetic persistent output\n')
     projects = ProjectRepository(tmp_path / 'projects')
     project = projects.create('Test')
-    manager = ExecutionManager(store=RunStore(tmp_path / 'runs'), project_repository=projects, project=project)
+    manager = ProjectExecutionManager(store=RunStore(tmp_path / 'runs'), project_repository=projects, project=project)
     run = manager.new_record(directory=tmp_path, files=FileManifest(inputs=(FileEntry(local_path=str(input_path)),), stdout=FileEntry(local_path=str(output_path))), metadata={'ase2sprkkr': {'task': str('SPLEED').upper(), 'input_definition': str('ARPES').upper()}}, processing_required=True)
     manager.store.save(run)
     run = manager.complete(run, state=RunState.FINISHED, return_code=0, artifacts_available=True)
