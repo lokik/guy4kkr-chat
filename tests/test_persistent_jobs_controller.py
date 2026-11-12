@@ -46,6 +46,7 @@ class _Source:
     supports_results = False
     supports_attach = True
     supports_retry_download = True
+    supports_retry_postprocessing = False
     supports_result_file_check = False
 
     def __init__(self, jobs: tuple[PersistentJob, ...]) -> None:
@@ -463,3 +464,33 @@ def test_untracked_launch_without_id_does_not_break_monitoring_other_run(monkeyp
     assert len(created) == 1
     assert controller._monitor_windows[job.id] is created[0]
     assert untracked in controller._pending_monitor_windows
+
+
+def test_postprocessing_retry_button_runs_worker_and_adopts_result(monkeypatch):
+    from dataclasses import replace
+    _application = QApplication.instance() or QApplication([])
+    job = replace(_job('retry', state='failed'), failure_phase='postprocessing')
+    source = _Source((job,))
+    source.supports_retry_postprocessing = True
+    result = object()
+    calls = []
+
+    def retry(job_id):
+        calls.append(job_id)
+        source.publish(replace(job, state='finished', failure_phase=None))
+        return result
+
+    source.retry_postprocessing = retry
+    adopted = []
+    controller = PersistentJobsController(source, result_adopter=lambda *args: adopted.append(args))
+    view = _view()
+    controller.bind_view(view)
+    monkeypatch.setattr(controller_module, 'run_modal_task', lambda parent, operation, **kwargs: operation())
+    view.show()
+    view.tree.setCurrentItem(view.tree.topLevelItem(0).child(0))
+    assert view.retry_postprocessing_button.isVisible()
+    view.retry_postprocessing_button.click()
+    assert calls == [job.id]
+    assert adopted == [(job.id, result, False)]
+    assert not view.retry_postprocessing_button.isVisible()
+    view.close()

@@ -8,7 +8,11 @@ from typing import Any, Callable
 
 from kkrunner.backends.contracts import BackendCapability
 from kkrunner.projects import ProjectRepository, ProjectRunManager
-from ase2sprkkr.outputs.project_results import attach_project_run, load_project_result
+from ase2sprkkr.outputs.project_results import (
+    attach_project_run,
+    load_project_result,
+    retry_project_postprocessing,
+)
 from ase2sprkkr.sprkkr.projects import (
     default_project_repository,
     project_execution_manager,
@@ -89,6 +93,15 @@ class PersistentJob:
     def can_retry_download(self) -> bool:
         """Whether an explicit retry of failed output transfer is meaningful."""
         return self.state == "failed" and self.failure_phase == "download" and self.return_code == 0
+
+    @property
+    def can_retry_postprocessing(self) -> bool:
+        """Whether failed result processing can be retried without execution."""
+        return (
+            self.state == "failed"
+            and self.failure_phase == "postprocessing"
+            and self.return_code == 0
+        )
 
     @classmethod
     def from_run_record(
@@ -184,6 +197,10 @@ class PersistentJobSource:
         return self.supports_attach
 
     @property
+    def supports_retry_postprocessing(self) -> bool:
+        return self.available and callable(getattr(self._manager, "retry_postprocessing", None))
+
+    @property
     def supports_result_file_check(self) -> bool:
         return self.available
 
@@ -230,6 +247,7 @@ class PersistentJobSource:
         loaded = {
             str(record.id): PersistentJob.from_run_record(record)
             for record in records
+            if "ase2sprkkr" in record.metadata
         }
         with self._lock:
             previous = self._jobs
@@ -252,6 +270,13 @@ class PersistentJobSource:
         try:
             record = self._manager.store.get(job_id)
         except FileNotFoundError:
+            with self._lock:
+                existed = self._jobs.pop(job_id, None) is not None
+            if existed:
+                self._notify(job_id)
+            return None
+
+        if "ase2sprkkr" not in record.metadata:
             with self._lock:
                 existed = self._jobs.pop(job_id, None) is not None
             if existed:
@@ -315,6 +340,15 @@ class PersistentJobSource:
             callback=callback,
             output_listener=output_listener,
         )
+
+    def retry_postprocessing(self, job_id: str) -> Any:
+        """Reprocess persisted output files without executing the run again."""
+        if not self.supports_retry_postprocessing:
+            raise NotImplementedError("This runner cannot retry postprocessing")
+        try:
+            return retry_project_postprocessing(self._manager, str(job_id))
+        finally:
+            self.job_changed(str(job_id))
 
     def load_result(self, job_id: str) -> Any:
         if not self.supports_results:

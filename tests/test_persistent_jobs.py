@@ -97,3 +97,40 @@ def test_attach_and_load_delegate_to_backend_api(monkeypatch):
     source.attach(item.id)
     assert source.load_result(item.id) is result
     assert calls == ["attach", "load"]
+
+def test_postprocessing_retry_requires_successful_execution():
+    ready = PersistentJob.from_run_record(
+        record(RunState.FAILED, failure_phase=FailurePhase.POSTPROCESSING, return_code=0)
+    )
+    assert ready.can_retry_postprocessing
+    assert not PersistentJob.from_run_record(
+        record(RunState.FAILED, failure_phase=FailurePhase.EXECUTION, return_code=1)
+    ).can_retry_postprocessing
+    assert not PersistentJob.from_run_record(record(RunState.FINISHED)).can_retry_postprocessing
+
+
+def test_history_excludes_records_from_other_applications():
+    foreign = record(RunState.FINISHED)
+    foreign.metadata = {"other_application": {"task": "DOS"}}
+    source = PersistentJobSource(SimpleNamespace(store=Store(foreign)))
+    assert source.jobs() == ()
+    assert source.job_changed(foreign.id) is None
+
+
+def test_explicit_postprocessing_retry_delegates_to_application(monkeypatch):
+    item = record(RunState.FAILED, failure_phase=FailurePhase.POSTPROCESSING, return_code=0)
+    store = Store(item)
+    manager = SimpleNamespace(store=store, retry_postprocessing=lambda *_args: None)
+    calls = []
+    expected = object()
+
+    def retry(received_manager, run_id):
+        calls.append((received_manager, run_id))
+        return expected
+
+    monkeypatch.setattr(module, "retry_project_postprocessing", retry)
+    source = PersistentJobSource(manager)
+    assert source.supports_retry_postprocessing
+    assert source.retry_postprocessing(item.id) is expected
+    assert calls == [(manager, item.id)]
+    assert store.calls == [item.id]
