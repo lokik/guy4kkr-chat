@@ -20,6 +20,9 @@ dependencies = [
 [project.scripts]
 guy4ase = "guy4ase.main:main"
 
+[project.entry-points."ase2sprkkr"]
+cli = "guy4ase.cli"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["guy4ase*"]
