@@ -1,7 +1,8 @@
 """Result-file freshness checks for persistent calculation history."""
 from __future__ import annotations
 
-from ase2sprkkr.execution import Execution, ExecutorEndpoint, WorkingDirectory
+from kkrunner.runs import Execution, WorkingDirectory
+from kkrunner.client import LocalTransport
 from types import SimpleNamespace
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
@@ -14,9 +15,8 @@ def _record(*, result_files=None):
         created_at="2026-10-13T06:00:00+00:00",
         updated_at="2026-10-13T06:30:00+00:00",
         finished_at="2026-10-13T06:20:00+00:00",
-        task="dos",
-        execution=Execution(ExecutorEndpoint(), WorkingDirectory("/tmp/calc")),
-        dataset="Fe-DOS",
+        metadata={"ase2sprkkr": {"task": "DOS", "dataset": "Fe-DOS"}},
+        execution=Execution(LocalTransport(), WorkingDirectory("/tmp/calc")),
         failure_phase=None,
         return_code=0,
         message=None,
@@ -86,7 +86,7 @@ def test_result_file_check_uses_persisted_store():
     assert source.check_result_files(record.id).result_files_verified
 
 def test_result_file_check_detects_changed_historical_output(tmp_path):
-    from ase2sprkkr.execution import FileEntry, FileManifest, FileVersion
+    from kkrunner.files import FileEntry, FileManifest, FileVersion
 
     output = tmp_path / "result.out"
     output.write_text("before")

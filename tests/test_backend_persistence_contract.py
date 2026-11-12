@@ -4,13 +4,11 @@ from types import SimpleNamespace
 
 from ase import Atoms
 from ase2sprkkr import InputParameters, TaskResult
-from ase2sprkkr.execution import ExecutionManager, ProjectRepository
-from ase2sprkkr.execution import (
-    FileEntry,
-    FileManifest,
-    RunState,
-    RunStore,
-)
+from kkrunner.projects import ProjectRunManager, ProjectRepository
+from kkrunner.runs import RunState, RunStore
+from kkrunner.files import FileEntry, FileManifest
+from kkrunner.client import LocalTransport
+from kkrunner.backends import BackendConfig
 from ase2sprkkr.outputs.reader_registry import reader_registry
 
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
@@ -37,11 +35,16 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
 
     projects = ProjectRepository(tmp_path / "projects")
     project = projects.create("Test")
-    manager = ExecutionManager(store=RunStore(tmp_path / "runs"), project_repository=projects, project=project)
+    manager = ProjectRunManager(store=RunStore(tmp_path / "runs"), project_repository=projects, project=project)
     run = manager.new_record(
-        task="SPLEED",
-        input_definition="ARPES",
         directory=tmp_path,
+        transport=LocalTransport(),
+        backend=BackendConfig("process"),
+        metadata={"ase2sprkkr": {
+            "task": "SPLEED",
+            "input_definition": "ARPES",
+            "dataset": "contract",
+        }},
         files=FileManifest(
             inputs=(FileEntry(local_path=str(input_path)),),
             stdout=FileEntry(local_path=str(output_path)),
@@ -100,8 +103,8 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
     assert loaded.task_name.upper() == "SPLEED"
     assert loaded.input_parameters.definition_name.upper() == "ARPES"
     assert loaded.input_parameters.task_name.upper() == "SPLEED"
-    assert loaded.run_record.task == "SPLEED"
-    assert loaded.run_record.input_definition == "ARPES"
+    assert loaded.run_record.metadata["ase2sprkkr"]["task"] == "SPLEED"
+    assert loaded.run_record.metadata["ase2sprkkr"]["input_definition"] == "ARPES"
 
     history = ResultStore()
     record = history.add_external_result(

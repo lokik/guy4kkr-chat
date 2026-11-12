@@ -6,8 +6,8 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
-from ase2sprkkr.execution import ProjectRepository
-from guy4ase.gui.application.persistent_jobs import project_run_manager
+from kkrunner.projects import ProjectRepository
+from guy4ase.gui.application.persistent_jobs import default_project_repository, project_run_manager
 
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 from guy4ase.gui.application.potential_version import PotentialFileVersion
@@ -63,7 +63,7 @@ class GuiApplication(QObject):
         self.projects = (
             project_repository
             if project_repository is not None
-            else ProjectRepository()
+            else default_project_repository()
         )
         self.execution_manager = project_run_manager(self.projects)
         self.persistent_jobs = (

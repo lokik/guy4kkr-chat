@@ -6,7 +6,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, QRegularExpression
 from PyQt6.QtGui import QRegularExpressionValidator
-from ase2sprkkr.execution import ProjectRepository, ProjectRepositoryError
+from kkrunner.projects import ProjectRepository, ProjectRepositoryError
+from guy4ase.gui.application.persistent_jobs import default_project_repository
 
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -227,7 +228,7 @@ class ProfileSelectionDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._require_directory = require_directory
-        self._projects = project_repository if project_repository is not None else ProjectRepository()
+        self._projects = project_repository if project_repository is not None else default_project_repository()
         self._store = store or ExecutionProfileStore()
         self.setWindowTitle("Run SPR-KKR Calculation")
         self.resize(650, 480)
