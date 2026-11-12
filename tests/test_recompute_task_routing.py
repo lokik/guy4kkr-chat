@@ -64,12 +64,14 @@ def test_non_guided_result_recompute_uses_expert_editor(monkeypatch):
     monkeypatch.setattr(calculation_flow, "run_calculation", run)
     parent = object()
     recent_files = object()
+    project_repository = object()
 
     result = calculation_flow.recompute_result(
         controller,
         recent_files,
         parent,
         17,
+        project_repository=project_repository,
     )
 
     assert result is launched
@@ -90,7 +92,11 @@ def test_non_guided_result_recompute_uses_expert_editor(monkeypatch):
         controller,
         recent_files,
         parent,
-        {"position_like_window": "expert-input", "track_launch_monitor": None},
+        {
+            "position_like_window": "expert-input",
+            "track_launch_monitor": None,
+            "project_repository": project_repository,
+        },
     )]
 
 
@@ -162,5 +168,9 @@ def test_recompute_routes_editor_by_effective_task(monkeypatch):
         controller,
         recent_files,
         parent,
-        {"position_like_window": "expert-input", "track_launch_monitor": None},
+        {
+            "position_like_window": "expert-input",
+            "track_launch_monitor": None,
+            "project_repository": None,
+        },
     )]
