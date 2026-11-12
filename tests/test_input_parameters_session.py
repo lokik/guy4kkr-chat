@@ -537,7 +537,7 @@ def test_requested_task_provenance_does_not_force_single_site_contour(monkeypatc
     parameters.ENERGY.NE.set([32, 87])
     monkeypatch.setattr(
         InputParameters,
-        "task_name",
+        "requested_task_name",
         property(lambda _parameters: "COMPTON"),
     )
     session = InputParametersSession(

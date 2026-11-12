@@ -98,7 +98,9 @@ def test_use_for_new_calculation_does_not_disable_expert_task():
 
     assert controller.can_calculate()
 
-    controller.use_for_new_calculation(expected_generation=controller.generation)
+    controller.use_for_new_calculation(
+        expected_structure_generation=controller.structure_generation
+    )
 
     assert controller.scf_status() == "START"
     assert controller.can_calculate()

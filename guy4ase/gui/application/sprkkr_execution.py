@@ -80,13 +80,12 @@ class SprkkrExecution:
     def _calculator(self) -> SPRKKR:
         return SPRKKR() if self.profile_name is None else SPRKKR(profile=self.profile_name)
 
-    def _persistent_context(self):
-        manager = self.execution_manager
-        if manager is None:
-            return True
+    def _project_context(self):
         if self.project_id is None:
-            return manager
-        return manager.for_project(self.project_id)
+            return None
+        if self.execution_manager is None:
+            return self.project_id
+        return self.execution_manager.for_project(self.project_id)
 
     def _create_runner(self, calculator: SPRKKR):
         input_file, potential_file, output_file = self.file_names()
@@ -101,14 +100,14 @@ class SprkkrExecution:
                 empty_spheres=False,
                 read_callback=self._output,
                 print_output=False,
-                persistent=self._persistent_context(),
+                project=self._project_context(),
                 restart_scf=self.request.restart_scf,
             )
         )
 
     def _notify_persistent_job_changed(self, runner: Any) -> None:
         callback = self._persistent_job_changed
-        if callback is None:
+        if callback is None or self.project_id is None:
             return
         try:
             callback(str(runner.id))
@@ -131,28 +130,28 @@ class SprkkrExecution:
         return runner
 
     def run(self) -> LoadedResult:
-        """Execute the request and return its loaded persistent result."""
+        """Execute the request and return its loaded result."""
         self._status("Preparing calculation…")
         runner = self._submit(self._calculator())
 
-        reference = runner.reference
-        if reference is not None:
-            target = reference.computer or reference.executor
-            self._status(f"Running on {target}…")
+        record = runner.record if self.project_id is not None else None
+        if record is not None and record.execution.endpoint.executor != "local":
+            endpoint = record.execution.endpoint
+            self._status(f"Running on {endpoint.host or endpoint.executor}…")
         else:
             self._status("Running…")
 
         try:
             result = wait_for_runner(self.cancellation, runner)
         finally:
-            # PersistentRunner.wait() finalizes its RunRecord in a finally block.
+            # A project runner persists its terminal record while waiting.
             self._notify_persistent_job_changed(runner)
 
         self._status("Loading result…")
         loaded = load_result(
             result,
             fallback_directory=self.request.directory,
-            persistent_ref=runner.id,
+            persistent_ref=(runner.id if self.project_id is not None else None),
         )
         self._status("Finished")
         return loaded

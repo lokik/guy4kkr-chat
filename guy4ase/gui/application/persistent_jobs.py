@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
-from ase2sprkkr.outputs import attach_persistent_run, load_persistent_result
+from ase2sprkkr.execution import ExecutionManager, RunStore, default_projects_directory
+from ase2sprkkr.outputs import attach_project_run, load_project_result
 
 logger = logging.getLogger(__name__)
 
 _FINAL_STATES = frozenset(
-    {"finished", "execution_failed", "finalization_failed", "cancelled"}
+    {"finished", "failed", "cancelled"}
 )
 JobChangedListener = Callable[[str], None]
 _RECOVERING = object()
@@ -23,43 +24,27 @@ def _value(value: Any) -> str:
 
 
 def _execution_target(record: Any) -> str:
-    endpoint = getattr(record, "endpoint", None)
-    if endpoint is not None:
-        executor = _value(getattr(endpoint, "executor", "local")) or "local"
-        host = _value(getattr(endpoint, "host", None))
-        psij_backend = _value(getattr(endpoint, "psij_backend", None))
-        if executor == "local":
-            return "Local"
-        if executor == "psij":
-            return "PSI/J" + (f" · {psij_backend}" if psij_backend else "")
-        label = executor.upper() if executor == "ssh" else executor
-        if host:
-            label = f"{label} · {host}"
-        if psij_backend:
-            label = f"{label} · PSI/J {psij_backend}"
-        return label
-
-    reference = getattr(record, "reference", None)
-    if reference is not None:
-        executor = _value(getattr(reference, "executor", None)) or "Remote"
-        computer = _value(getattr(reference, "computer", None))
-        return f"{executor} · {computer}" if computer else executor
-    return "Unknown"
+    endpoint = record.execution.endpoint
+    executor = _value(endpoint.executor) or "local"
+    host = _value(endpoint.host)
+    psij_backend = _value(endpoint.psij_backend)
+    if executor == "local":
+        return "Local"
+    if executor == "psij":
+        return "PSI/J" + (f" · {psij_backend}" if psij_backend else "")
+    label = executor.upper() if executor == "ssh" else executor
+    if host:
+        label = f"{label} · {host}"
+    if psij_backend:
+        label = f"{label} · PSI/J {psij_backend}"
+    return label
 
 
 def _is_attachable(record: Any, state: str) -> bool:
-    if state in _FINAL_STATES:
-        return False
-    if getattr(record, "endpoint", None) is None:
-        return False
-    reference = getattr(record, "reference", None)
-    if reference is None:
-        return False
-    executor = _value(getattr(reference, "executor", None))
-    native_id = _value(getattr(reference, "native_id", None))
-    if executor == "local" and native_id != str(record.id):
-        return False
-    return True
+    return (
+        state not in _FINAL_STATES
+        and record.execution.backend_id is not None
+    )
 
 
 @dataclass(frozen=True)
@@ -80,6 +65,8 @@ class PersistentJob:
     finished_at: str | None = None
     attachable: bool = False
     result_files_verified: bool = False
+    failure_phase: str | None = None
+    project_id: str | None = None
 
     @property
     def started_at(self) -> str:
@@ -90,9 +77,9 @@ class PersistentJob:
         return self.state in _FINAL_STATES
 
     @property
-    def can_retry_finalization(self) -> bool:
-        """Whether an explicit retry-finalization action is meaningful."""
-        return self.state == "finalization_failed"
+    def can_retry_download(self) -> bool:
+        """Whether an explicit retry of failed output transfer is meaningful."""
+        return self.state == "failed" and self.failure_phase == "download" and self.return_code == 0
 
     @classmethod
     def from_run_record(
@@ -102,12 +89,8 @@ class PersistentJob:
         result_files_verified: bool = False,
     ) -> "PersistentJob":
         state = _value(record.state)
-        result_files = record.result_files
-        result_files_state = (
-            None
-            if state == "finalization_failed" or result_files is None
-            else _value(getattr(result_files, "state", None))
-        )
+        result_files = record.files
+        result_files_state = None if result_files is None else _value(result_files.state)
         finished_at = getattr(record, "finished_at", None)
         return cls(
             id=str(record.id),
@@ -115,7 +98,7 @@ class PersistentJob:
             created_at=str(record.created_at),
             updated_at=str(record.updated_at),
             task=str(record.task).upper(),
-            directory=str(record.directory),
+            directory=str(record.execution.directory.local),
             dataset=(None if record.dataset is None else str(record.dataset)),
             target=_execution_target(record),
             return_code=getattr(record, "return_code", None),
@@ -124,6 +107,8 @@ class PersistentJob:
             finished_at=None if finished_at is None else str(finished_at),
             attachable=_is_attachable(record, state),
             result_files_verified=result_files_verified,
+            failure_phase=(None if record.failure_phase is None else _value(record.failure_phase)),
+            project_id=getattr(record, "project_id", None),
         )
 
 
@@ -134,10 +119,10 @@ class PersistentJobSource:
     receives only a stable run id and reloads the record from the persistent
     store instead of accepting a parallel copy of lifecycle state.
 
-    Recovery of persisted ``finalizing`` jobs is an implementation detail of
+    Recovery of interrupted ``downloading`` and ``postprocessing`` jobs is an implementation detail of
     this source. Presentation code never owns or classifies recovery failures.
-    A ``finalization_failed`` run is terminal until the user explicitly retries
-    it; the backend then owns the transition back through ``finalizing``.
+    A failed download is terminal until the user explicitly retries it;
+    the backend then owns the transfer and postprocessing transitions.
     """
 
     def __init__(self, manager: Any | None = None) -> None:
@@ -149,15 +134,11 @@ class PersistentJobSource:
         self._recovery_runners: dict[str, Any] = {}
 
         if manager is None:
-            try:
-                from ase2sprkkr.execution import ExecutionManager
-            except ImportError:
-                self.unavailable_reason = (
-                    "Persistent calculation history is not available in this "
-                    "ASE2SPRKKR version yet."
-                )
-                return
-            manager = ExecutionManager()
+            # The backend stores project runs globally, not in a legacy default
+            # persistent-run manager. Browse that same authoritative store.
+            manager = ExecutionManager(
+                RunStore(default_projects_directory().parent / "projects_runs")
+            )
             self._manager = manager
 
         try:
@@ -196,10 +177,8 @@ class PersistentJobSource:
         return self.available and callable(getattr(self._manager, "attach", None))
 
     @property
-    def supports_retry_finalization(self) -> bool:
-        return self.supports_attach and callable(
-            getattr(self._manager, "retry_finalization", None)
-        )
+    def supports_retry_download(self) -> bool:
+        return self.supports_attach
 
     @property
     def supports_result_file_check(self) -> bool:
@@ -243,7 +222,7 @@ class PersistentJobSource:
             return self._jobs.get(str(job_id))
 
     def reload(self, *, notify: bool = True) -> tuple[PersistentJob, ...]:
-        """Reload persisted metadata and recover interrupted finalization."""
+        """Reload metadata and resume interrupted transfer/postprocessing."""
         if self._manager is None:
             return ()
         records = self._manager.store.runs()
@@ -259,7 +238,7 @@ class PersistentJobSource:
             for job_id in set(previous) | set(loaded)
             if previous.get(job_id) != loaded.get(job_id)
         )
-        self._recover_finalizing(tuple(loaded.values()))
+        self._recover_incomplete(tuple(loaded.values()))
         if notify:
             for job_id in changed:
                 self._notify(job_id)
@@ -281,15 +260,20 @@ class PersistentJobSource:
 
         job = PersistentJob.from_run_record(record)
         changed = self._replace_cached_job(job)
-        self._recover_finalizing((job,))
+        self._recover_incomplete((job,))
         if changed:
             self._notify(job_id)
         return job
 
     def refresh(self) -> tuple[PersistentJob, ...]:
-        """Refresh backend state and then reload persisted metadata."""
+        """Recover interrupted submissions, refresh backend state, and reload."""
         if self._manager is None:
             return ()
+        recover_submitting = getattr(self._manager, "recover_submitting", None)
+        if callable(recover_submitting):
+            for record in self._manager.store.runs():
+                if _value(record.state) == "submitting":
+                    recover_submitting(record)
         if self.supports_refresh:
             self._manager.refresh()
         return self.reload()
@@ -312,7 +296,7 @@ class PersistentJobSource:
         callback=None,
         output_listener=None,
     ) -> Any:
-        """Attach to an active run or explicitly retry failed finalization."""
+        """Attach to an active run or explicitly retry a failed download."""
         if not self.supports_attach:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot attach to persistent calculations."
@@ -320,13 +304,13 @@ class PersistentJobSource:
         job = self.job(str(job_id))
         if (
             job is not None
-            and job.can_retry_finalization
-            and not self.supports_retry_finalization
+            and job.can_retry_download
+            and not self.supports_retry_download
         ):
             raise NotImplementedError(
-                "This ASE2SPRKKR version cannot retry persistent finalization."
+                "This ASE2SPRKKR version cannot retry a failed download."
             )
-        return attach_persistent_run(
+        return attach_project_run(
             self._manager,
             job_id,
             callback=callback,
@@ -338,7 +322,7 @@ class PersistentJobSource:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot load persistent historical results."
             )
-        result = load_persistent_result(self._manager, job_id)
+        result = load_project_result(self._manager, job_id)
         record = getattr(result, "run_record", None)
         if record is not None:
             job = PersistentJob.from_run_record(record, result_files_verified=True)
@@ -365,11 +349,11 @@ class PersistentJobSource:
         if self._replace_cached_job(job):
             self._notify(job.id)
 
-    def _recover_finalizing(self, jobs: tuple[PersistentJob, ...]) -> None:
+    def _recover_incomplete(self, jobs: tuple[PersistentJob, ...]) -> None:
         if not self.supports_attach:
             return
         for job in jobs:
-            if job.state != "finalizing" or not job.attachable:
+            if job.state not in ("downloading", "postprocessing") or not job.attachable:
                 continue
             try:
                 self._recover(job.id)

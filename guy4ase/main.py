@@ -8,6 +8,7 @@ from PyQt6.QtCore import QObject, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 from ase2sprkkr.execution import (
     ExecutionManager,
+    RunStore,
     ProjectRepository,
 )
 
@@ -67,7 +68,10 @@ class GuiApplication(QObject):
             if project_repository is not None
             else ProjectRepository()
         )
-        self.execution_manager = ExecutionManager(project_repository=self.projects)
+        self.execution_manager = ExecutionManager(
+            store=RunStore(self.projects.directory.parent / "projects_runs"),
+            project_repository=self.projects,
+        )
         self.persistent_jobs = (
             persistent_jobs
             if persistent_jobs is not None
@@ -211,7 +215,7 @@ class GuiApplication(QObject):
         """Select the project that receives subsequently created persistent runs."""
         self.controller.set_active_project(
             project_id,
-            expected_generation=self.controller.generation,
+            expected_active_project_generation=self.controller.active_project_generation,
         )
 
     def _active_project_changed(self, project_id: str | None) -> None:

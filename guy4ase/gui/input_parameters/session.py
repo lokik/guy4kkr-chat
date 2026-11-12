@@ -42,7 +42,7 @@ class _SessionSnapshot:
 
 def _parameters_equal(left: InputParameters, right: InputParameters) -> bool:
     """Compare effective editable values, excluding derived/generated options."""
-    if left.task_name.upper() != right.task_name.upper():
+    if left.task_name != right.task_name:
         return False
     # Generated getters are deliberately excluded.  The non-generated effective
     # values are the editable state; generated values are reconstructed by
@@ -312,18 +312,22 @@ class InputParametersSession(QObject):
         text: str = "Replace input parameters",
         source_page: str | None = None,
     ) -> bool:
-        """Install same-task serialized input as one undoable full replacement.
+        """Install same-schema serialized input as one undoable full replacement.
 
-        Dormant values are session-only editing state and therefore do not belong
-        to a newly loaded/reparsed ``InputParameters`` object. A full replacement
-        starts with empty dormant state; undo still restores the complete previous
-        snapshot. Use :meth:`replace_from_session` when importing another editing
-        session whose dormant state is intentionally part of the transfer.
+        The effective task may change when one schema represents a task family
+        (currently BSFEK/BSFKK). Dormant values are session-only editing state and
+        therefore do not belong to a newly loaded/reparsed ``InputParameters``
+        object. A full replacement starts with empty dormant state; undo still
+        restores the complete previous snapshot. Use :meth:`replace_from_session`
+        when importing another editing session whose dormant state is intentionally
+        part of the transfer.
         """
-        if parameters.task_name.upper() != self.task_name.upper():
+        expected = self._working.definition_name
+        actual = parameters.definition_name
+        if actual.casefold() != expected.casefold():
             raise ValueError(
-                f"Expected {self.task_name.upper()} input parameters, "
-                f"got {parameters.task_name.upper()}."
+                f"Expected {expected.upper()} input-parameter schema, "
+                f"got {actual.upper()}."
             )
         candidate = parameters.copy(copy_values=True)
         return self._push(
@@ -345,13 +349,16 @@ class InputParametersSession(QObject):
 
         The source session has already applied its transaction plugins. Its
         dormant state is therefore installed together with its parameters
-        without applying the plugins a second time.
+        without applying the plugins a second time. The two sessions must share
+        one input-parameter schema, while their effective tasks may differ.
         """
         parameters = session.result()
-        if parameters.task_name.upper() != self.task_name.upper():
+        expected = self._working.definition_name
+        actual = parameters.definition_name
+        if actual.casefold() != expected.casefold():
             raise ValueError(
-                f"Expected {self.task_name.upper()} input parameters, "
-                f"got {parameters.task_name.upper()}."
+                f"Expected {expected.upper()} input-parameter schema, "
+                f"got {actual.upper()}."
             )
         return self._push_snapshot(
             parameters,

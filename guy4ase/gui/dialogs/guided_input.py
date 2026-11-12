@@ -90,10 +90,10 @@ class GuidedInputParametersDialog(QDialog):
         self.spec: TaskDialogSpec = definition.build_spec(
             is_2d=detect_structure_kind(atoms) == "2d",
         )
-        expected_task = InputParameters.is_it_an_input_parameters_name(
+        expected_task = InputParameters.is_task_name(
             definition.backend_task
         )
-        actual_task = InputParameters.is_it_an_input_parameters_name(
+        actual_task = InputParameters.is_task_name(
             parameters.task_name
         )
         if (
@@ -416,7 +416,7 @@ def select_guided_input_parameters(
     dataset_default_mode: str,
 ) -> InputParameters | None:
     definition = guided_task_definition(task)
-    if not InputParameters.is_it_an_input_parameters_name(definition.backend_task):
+    if not InputParameters.is_task_name(definition.backend_task):
         raise GuidedTaskUnavailable(
             f"The {task.upper()} backend task is not available."
         )

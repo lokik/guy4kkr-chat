@@ -201,7 +201,10 @@ def test_result_parse_failure_has_no_workspace_side_effects(tmp_path, monkeypatc
         potential_path="Cu.pot",
     )
     controller = WorkspaceController(workspace)
-    generation = controller.generation
+    structure_generation = controller.structure_generation
+    input_generation = controller.input_parameters_generation
+    directory_generation = controller.directory_generation
+    project_generation = controller.active_project_generation
     monkeypatch.setattr(
         result_loading_module.TaskResult,
         "from_file",
@@ -211,7 +214,10 @@ def test_result_parse_failure_has_no_workspace_side_effects(tmp_path, monkeypatc
     with pytest.raises(ValueError, match="broken output"):
         load_result_file(tmp_path / "broken.out")
 
-    assert controller.generation == generation
+    assert controller.structure_generation == structure_generation
+    assert controller.input_parameters_generation == input_generation
+    assert controller.directory_generation == directory_generation
+    assert controller.active_project_generation == project_generation
     assert controller.atoms is atoms
     assert controller.directory == "original"
     assert controller.potential_path == "Cu.pot"

@@ -44,32 +44,43 @@ def test_result_store_ignores_output_atoms_for_non_potential_result():
     assert store.results_for_state(state_id) == (record,)
 
 
-def test_controller_does_not_fast_forward_non_potential_result_with_atoms():
+def test_controller_delegates_non_potential_state_semantics_to_store(monkeypatch):
     original_atoms = Atoms("Fe")
     controller = WorkspaceController(WorkspaceState(atoms=original_atoms))
     request = CalculationRequest(
         atoms=original_atoms,
         input_parameters=object(),
         directory="run",
-        generation=controller.generation,
         structure_id=controller.structure_id,
         state_id=controller.state_id,
     )
     original_state_id = controller.state_id
-
+    unexpected_atoms = Atoms("Cu")
     unexpected_potential = Path("unexpected.pot")
+
+    captured = {}
+    add_result = controller.result_store.add_result
+
+    def capture_add_result(*args, **kwargs):
+        captured.update(kwargs)
+        return add_result(*args, **kwargs)
+
+    monkeypatch.setattr(controller.result_store, "add_result", capture_add_result)
+
     adoption = controller.adopt_calculation_result(
         LoadedResult(
             result=_result(produces_potential=False),
             output_path=None,
             potential_path=unexpected_potential,
-            atoms=Atoms("Cu"),
+            atoms=unexpected_atoms,
             potential_error=None,
             directory="run",
         ),
         request=request,
     )
 
+    assert captured["output_atoms"] is unexpected_atoms
+    assert captured["output_potential_path"] == str(unexpected_potential)
     assert adoption.record.output_state_id is None
     assert adoption.record.potential_path == unexpected_potential
     assert not adoption.workspace_updated
@@ -84,7 +95,6 @@ def test_controller_fast_forwards_potential_producing_result_with_atoms():
         atoms=original_atoms,
         input_parameters=object(),
         directory="run",
-        generation=controller.generation,
         structure_id=controller.structure_id,
         state_id=controller.state_id,
     )

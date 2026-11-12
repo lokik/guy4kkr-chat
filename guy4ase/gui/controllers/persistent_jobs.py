@@ -82,7 +82,7 @@ class PersistentJobsController(QObject):
             lambda bound_view=view: self._refresh_requested(bound_view)
         )
         view.monitorRequested.connect(self.open_monitor_window)
-        view.retryFinalizationRequested.connect(self.retry_finalization)
+        view.retryDownloadRequested.connect(self.retry_download)
         view.loadResultRequested.connect(
             lambda job_id, bound_view=view: self._load_result_requested(
                 bound_view, job_id
@@ -107,7 +107,7 @@ class PersistentJobsController(QObject):
             supports_refresh=self._source.supports_refresh,
             supports_results=self._source.supports_results,
             supports_attach=self._source.supports_attach,
-            supports_retry_finalization=self._source.supports_retry_finalization,
+            supports_retry_download=self._source.supports_retry_download,
         )
 
     def refresh_views(self) -> None:
@@ -119,9 +119,9 @@ class PersistentJobsController(QObject):
         """Load a persisted result and publish it through the application bridge."""
         job_id = str(job_id)
         job = self._source.job(job_id)
-        if job is not None and job.can_retry_finalization:
+        if job is not None and job.can_retry_download:
             raise RuntimeError(
-                f"Persistent job {job_id} requires finalization retry before loading"
+                f"Persistent job {job_id} requires download retry before loading"
             )
         result = self._source.load_result(job_id)
         self._publish_result(job_id, result, select_result=select_result)
@@ -240,7 +240,7 @@ class PersistentJobsController(QObject):
         if (
             job is None
             or not job.is_final
-            or job.can_retry_finalization
+            or job.can_retry_download
             or job.result_files_verified
         ):
             return
@@ -314,8 +314,8 @@ class PersistentJobsController(QObject):
         self._create_attached_monitor(job)
 
     @pyqtSlot(str)
-    def retry_finalization(self, job_id: str) -> None:
-        """Explicitly retry a terminal finalization failure through the backend."""
+    def retry_download(self, job_id: str) -> None:
+        """Explicitly retry a terminal download failure through the backend."""
         job_id = str(job_id)
         monitor_window = self._monitor_windows.get(job_id)
         if monitor_window is not None:
@@ -325,8 +325,8 @@ class PersistentJobsController(QObject):
         job = self._source.job(job_id)
         if (
             job is None
-            or not job.can_retry_finalization
-            or not self._source.supports_retry_finalization
+            or not job.can_retry_download
+            or not self._source.supports_retry_download
         ):
             return
         self._create_attached_monitor(job)
@@ -355,16 +355,20 @@ class PersistentJobsController(QObject):
         if (
             job is None
             or not job.is_final
-            or job.can_retry_finalization
+            or job.can_retry_download
             or not self._source.supports_results
         ):
             return
         try:
-            run_modal_task(
+            # Backend/file I/O belongs in the worker. Result adoption modifies
+            # WorkspaceController and Qt widgets, so publish only on the GUI thread
+            # after the modal worker has returned its value.
+            result = run_modal_task(
                 view,
-                lambda: self.load_result(job_id, select_result=True),
+                lambda: self._source.load_result(job_id),
                 title="Loading Calculation Result",
                 label="Loading result files…",
             )
+            self._publish_result(job_id, result, select_result=True)
         except Exception as exc:  # noqa: BLE001 - persisted/backend data boundary
             QMessageBox.warning(view, "Result Load Failed", str(exc))

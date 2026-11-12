@@ -55,7 +55,7 @@ def edit_current_structure(
     error_title: str,
 ) -> bool:
     """Edit a detached copy of the current structure and publish on success."""
-    generation = controller.generation
+    generation = controller.structure_generation
     if controller.atoms is None:
         QMessageBox.information(
             parent, "No Structure", "Load or create a structure first."
@@ -64,7 +64,7 @@ def edit_current_structure(
 
     change = controller.apply_structure_edit(
         lambda candidate: editor(candidate, parent=parent),
-        expected_generation=generation,
+        expected_structure_generation=generation,
     )
     if change is None:
         return False
@@ -76,7 +76,7 @@ def edit_site_elements(
     parent: QWidget,
 ) -> bool:
     """Edit site occupations and commit the accepted draft transactionally."""
-    generation = controller.generation
+    generation = controller.structure_generation
     atoms = controller.atoms
     if atoms is None:
         QMessageBox.information(
@@ -91,7 +91,7 @@ def edit_site_elements(
 
     change = controller.apply_structure_edit(
         lambda candidate: result.apply(candidate),
-        expected_generation=generation,
+        expected_structure_generation=generation,
     )
     if change is None:
         return False
@@ -101,7 +101,7 @@ def edit_site_elements(
 def create_structure(
     controller: WorkspaceController, parent: QWidget
 ) -> Any | None:
-    generation = controller.generation
+    generation = controller.structure_generation
     candidate = create_structure_candidate(
         parent,
         chain=chain_dialogs,
@@ -113,7 +113,7 @@ def create_structure(
     atoms = candidate.atoms
     change = controller.replace_structure(
         atoms,
-        expected_generation=generation,
+        expected_structure_generation=generation,
     )
     if not document_change_applied(parent, change):
         return None
@@ -123,7 +123,7 @@ def create_structure(
 def create_structure_from_database(
     controller: WorkspaceController, parent: QWidget
 ) -> Any | None:
-    generation = controller.generation
+    generation = controller.structure_generation
     candidate = create_structure_from_database_candidate(
         parent,
         chain=chain_dialogs,
@@ -136,7 +136,7 @@ def create_structure_from_database(
     atoms = candidate.atoms
     change = controller.replace_structure(
         atoms,
-        expected_generation=generation,
+        expected_structure_generation=generation,
     )
     if not document_change_applied(parent, change):
         return None
@@ -147,7 +147,7 @@ def create_structure_from_database(
 def download_structure(
     controller: WorkspaceController, parent: QWidget
 ) -> Any | None:
-    generation = controller.generation
+    generation = controller.structure_generation
     candidate = download_structure_candidate(
         parent,
         selector=select_online_structure,
@@ -157,12 +157,60 @@ def download_structure(
     atoms = candidate.atoms
     change = controller.replace_structure(
         atoms,
-        expected_generation=generation,
+        expected_structure_generation=generation,
     )
     if not document_change_applied(parent, change):
         return None
     warn_if_structure_kind_is_unknown(atoms, parent)
     return atoms
+
+
+
+def create_2d_from_new_structure(
+    controller: WorkspaceController,
+    recent_files: RecentFiles,
+    parent: QWidget,
+    *,
+    surface_mode: bool = False,
+) -> Any | None:
+    """Create a detached 3D candidate, then publish exactly one chosen result."""
+    generation = controller.structure_generation
+    candidate = create_structure_candidate(
+        parent,
+        chain=chain_dialogs,
+        spacegroup_selector=select_spacegroup,
+        site_selector=select_site_elements,
+    )
+    if candidate is None:
+        return None
+
+    bulk = candidate.atoms
+    result = select_build_2d_structure(
+        bulk.copy(),
+        parent=parent,
+        recent_files=recent_files,
+        surface_mode=surface_mode,
+    )
+    if result is None:
+        answer = QMessageBox.question(
+            parent,
+            "Keep 3D Structure?",
+            "The 2D structure was not created. Keep the newly created "
+            "3D structure instead? Choose No to discard it.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return None
+        result = bulk
+
+    change = controller.replace_structure(
+        result,
+        expected_structure_generation=generation,
+    )
+    if not document_change_applied(parent, change):
+        return None
+    return result
 
 
 def build_2d_structure(
@@ -172,7 +220,7 @@ def build_2d_structure(
     *,
     surface_mode: bool = False,
 ) -> Any | None:
-    generation = controller.generation
+    generation = controller.structure_generation
     if controller.atoms is None:
         QMessageBox.information(
             parent, "No Structure", "Load or create a structure first."
@@ -196,7 +244,7 @@ def build_2d_structure(
 
     change = controller.apply_structure_edit(
         lambda candidate: edit(candidate, parent=parent),
-        expected_generation=generation,
+        expected_structure_generation=generation,
     )
     if change is None:
         return None
@@ -217,7 +265,7 @@ def update_empty_spheres(
         )
         return False
 
-    generation = controller.generation
+    generation = controller.structure_generation
     previous_state = controller.empty_spheres
     recalculate = previous_state is not None
     initial_parameters = (
@@ -275,7 +323,7 @@ def update_empty_spheres(
     try:
         change = controller.update_empty_spheres(
             edit,
-            expected_generation=generation,
+            expected_structure_generation=generation,
             parameters=parameters,
         )
     except _EmptySpheresBackendError as exc:

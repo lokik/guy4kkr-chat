@@ -10,7 +10,7 @@ def test_failed_structure_edit_does_not_mutate_workspace():
     controller = WorkspaceController(
         WorkspaceState(atoms=atoms, potential_path="Fe.pot")
     )
-    generation = controller.generation
+    generation = controller.structure_generation
     state_id = controller.state_id
 
     def fail(candidate):
@@ -19,7 +19,10 @@ def test_failed_structure_edit_does_not_mutate_workspace():
         raise RuntimeError("edit failed")
 
     with pytest.raises(RuntimeError, match="edit failed"):
-        controller.apply_structure_edit(fail, expected_generation=generation)
+        controller.apply_structure_edit(
+            fail,
+            expected_structure_generation=generation,
+        )
 
     assert controller.atoms is atoms
     assert atoms.get_chemical_symbols() == ["Fe"]
@@ -27,4 +30,4 @@ def test_failed_structure_edit_does_not_mutate_workspace():
     assert controller.potential_path == "Fe.pot"
     assert controller.state_id == state_id
     assert controller.result_store.results == ()
-    assert controller.generation == generation
+    assert controller.structure_generation == generation

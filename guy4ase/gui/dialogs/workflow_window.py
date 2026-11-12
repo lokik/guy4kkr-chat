@@ -370,14 +370,14 @@ class WorkflowWindow(QMainWindow):
         structure_flows.download_structure(self.controller, self)
 
     def _create_surface(self) -> None:
-        atoms = structure_flows.create_structure(self.controller, self)
-        if atoms is not None:
-            self._build_2d(surface_mode=True)
+        structure_flows.create_2d_from_new_structure(
+            self.controller, self.recent_history, self, surface_mode=True
+        )
 
     def _create_transition(self) -> None:
-        atoms = structure_flows.create_structure(self.controller, self)
-        if atoms is not None:
-            self._build_2d(surface_mode=False)
+        structure_flows.create_2d_from_new_structure(
+            self.controller, self.recent_history, self, surface_mode=False
+        )
 
     def _load_structure(self) -> None:
         file_flows.choose_and_load_structure(

@@ -109,23 +109,39 @@ def test_apply_callback_error_propagates_without_becoming_input_error(applicatio
     assert not editor.editor.extraSelections()
 
 
-def test_parameter_copy_error_propagates_without_becoming_input_error(application, monkeypatch):
+def test_text_editor_uses_from_file_without_copying_original(application, monkeypatch):
     parameters = InputParameters.create("scf")
-    error = RuntimeError("broken parameter copy")
 
     def broken_copy(self, *, copy_values):
-        assert self is parameters
-        assert copy_values
-        raise error
+        raise AssertionError("text parsing must not copy the original model")
 
     monkeypatch.setattr(type(parameters), "copy", broken_copy)
     editor = InputFileEditor(parameters)
+    editor.accept()
 
-    with pytest.raises(RuntimeError, match="broken parameter copy") as raised:
-        editor.accept()
+    assert editor.parameters is not None
+    assert editor.parameters is not parameters
+    assert editor.parameters.task_name == "SCF"
 
-    assert raised.value is error
-    assert editor.parameters is None
-    assert editor.error_line is None
-    assert not editor.error_label.text()
-    assert not editor.editor.extraSelections()
+
+def test_same_input_schema_can_change_effective_task(application):
+    original = InputParameters.create("bsfek")
+    plane = InputParameters.create("bsfkk")
+    plane.CONTROL.POTFIL.set("Fe.pot")
+    plane.set({
+        "ENERGY": {"NE": [1]},
+        "TASK": {
+            "KA": [[0.0, 0.0, 0.0]],
+            "K1": [1.0, 0.0, 0.0],
+            "K2": [0.0, 1.0, 0.0],
+            "NK1": 45,
+            "NK2": 55,
+        },
+    })
+    editor = InputFileEditor(original)
+    editor.editor.setPlainText(plane.to_string(validate=False))
+    editor.accept()
+
+    assert editor.parameters is not None
+    assert editor.parameters.definition_name.lower() == "bsf"
+    assert editor.parameters.task_name.lower() == "bsfkk"

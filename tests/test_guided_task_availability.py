@@ -24,7 +24,7 @@ def test_missing_backend_task_becomes_unavailable_before_materialization(monkeyp
     created = []
     monkeypatch.setattr(
         guided_input_module.InputParameters,
-        "is_it_an_input_parameters_name",
+        "is_task_name",
         lambda _task: False,
     )
     monkeypatch.setattr(
@@ -46,7 +46,7 @@ def test_backend_task_import_error_becomes_unavailable(monkeypatch):
     error = ImportError("missing backend module")
     monkeypatch.setattr(
         guided_input_module.InputParameters,
-        "is_it_an_input_parameters_name",
+        "is_task_name",
         lambda _task: "SCF",
     )
 
@@ -71,7 +71,7 @@ def test_backend_task_import_error_becomes_unavailable(monkeypatch):
 def test_backend_task_programming_errors_propagate(monkeypatch, error):
     monkeypatch.setattr(
         guided_input_module.InputParameters,
-        "is_it_an_input_parameters_name",
+        "is_task_name",
         lambda _task: "SCF",
     )
 

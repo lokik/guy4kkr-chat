@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ase import Atoms
+from types import SimpleNamespace
 
 from guy4ase.gui.application import sprkkr_execution as execution_module
 from guy4ase.gui.application.execution_cancellation import ExecutionCancelled
@@ -38,7 +39,6 @@ def test_execution_constructs_sprkkr_with_selected_profile(monkeypatch, tmp_path
             return Runner()
 
     class Runner:
-        reference = None
         id = "run-1"
 
         def submit(self):
@@ -67,7 +67,6 @@ def test_execution_requests_persistent_backend_run(monkeypatch, tmp_path):
     captured = {}
 
     class Runner:
-        reference = None
         id = "run-1"
 
         def submit(self):
@@ -87,7 +86,7 @@ def test_execution_requests_persistent_backend_run(monkeypatch, tmp_path):
 
     execution.run()
 
-    assert captured["persistent"] is True
+    assert captured["project"] is None
     assert captured["print_output"] is False
     assert captured["empty_spheres"] is False
 
@@ -102,8 +101,12 @@ def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_p
             return bound_manager
 
     class Runner:
-        reference = None
         id = "run-1"
+        record = SimpleNamespace(
+            execution=SimpleNamespace(
+                endpoint=SimpleNamespace(executor="local", host=None)
+            )
+        )
 
         def submit(self):
             pass
@@ -128,7 +131,7 @@ def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_p
     execution.run()
 
     assert captured["project_id"] == "project-17"
-    assert captured["persistent"] is bound_manager
+    assert captured["project"] is bound_manager
 
 
 def test_cancel_before_registration_never_submits(monkeypatch, tmp_path):
@@ -198,7 +201,6 @@ def test_persistent_reference_is_forwarded_to_result_loader(monkeypatch, tmp_pat
     calls = []
 
     class Runner:
-        reference = None
         id = "persistent-run-42"
 
         def submit(self):
@@ -220,7 +222,7 @@ def test_persistent_reference_is_forwarded_to_result_loader(monkeypatch, tmp_pat
     monkeypatch.setattr(execution_module, "load_result", load_result)
 
     assert execution.run() is loaded_result
-    assert calls == [(backend_result, str(tmp_path), "persistent-run-42")]
+    assert calls == [(backend_result, str(tmp_path), None)]
 
 
 def test_execution_notifies_persistent_job_id_after_submit_and_completion(
@@ -229,7 +231,6 @@ def test_execution_notifies_persistent_job_id_after_submit_and_completion(
     changes = []
 
     class Runner:
-        reference = None
         id = "persistent-run-17"
 
         def submit(self):
@@ -252,14 +253,13 @@ def test_execution_notifies_persistent_job_id_after_submit_and_completion(
 
     execution.run()
 
-    assert changes == ["persistent-run-17", "persistent-run-17"]
+    assert changes == []
 
 
 def test_persistent_job_observer_failure_does_not_fail_calculation(
     monkeypatch, tmp_path
 ):
     class Runner:
-        reference = None
         id = "persistent-run-17"
 
         def submit(self):

@@ -16,7 +16,7 @@ from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
 def _job() -> PersistentJob:
     return PersistentJob(
         id="failed-finalization",
-        state="finalization_failed",
+        state="failed",
         created_at="2026-10-15T12:00:00+00:00",
         updated_at="2026-10-15T12:05:00+00:00",
         finished_at="2026-10-15T12:05:00+00:00",
@@ -25,6 +25,7 @@ def _job() -> PersistentJob:
         dataset="case",
         target="Local",
         return_code=0,
+        failure_phase="download",
         message="result download failed",
         attachable=False,
     )
@@ -36,7 +37,7 @@ class _Source:
     supports_refresh = False
     supports_results = True
     supports_attach = True
-    supports_retry_finalization = True
+    supports_retry_download = True
     supports_result_file_check = False
 
     def __init__(self, job):
@@ -64,10 +65,10 @@ def test_finalization_failure_offers_retry_instead_of_load_result():
         supports_refresh=False,
         supports_results=True,
         supports_attach=True,
-        supports_retry_finalization=True,
+        supports_retry_download=True,
     )
 
-    assert not view.retry_finalization_button.isHidden()
+    assert not view.retry_download_button.isHidden()
     assert view.load_result_button.isHidden()
     assert view.monitor_button.isHidden()
 

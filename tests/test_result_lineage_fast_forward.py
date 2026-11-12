@@ -21,13 +21,12 @@ def test_scf_does_not_fast_forward_across_use_for_new_calculation():
         atoms=controller.atoms,
         input_parameters=object(),
         directory="run",
-        generation=controller.generation,
         structure_id=controller.structure_id,
         state_id=controller.state_id,
     )
 
     controller.use_for_new_calculation(
-        expected_generation=controller.generation,
+        expected_structure_generation=controller.structure_generation,
     )
     restart_state = controller.state_id
     assert restart_state != request.state_id

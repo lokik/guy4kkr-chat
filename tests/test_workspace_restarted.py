@@ -5,7 +5,7 @@ from ase import Atoms
 from ase2sprkkr import SPRKKRAtoms
 
 from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.workspace import WorkspaceState
+from guy4ase.gui.application.workspace import StructureState, WorkspaceState
 from guy4ase.gui.application.workspace_controller import (
     DocumentChange,
     WorkspaceController,
@@ -57,15 +57,14 @@ def _controller(*, restarted=True):
 
 def test_restarted_overrides_atoms_convergence_but_keeps_auto_detection_default():
     atoms = _scf_atoms()
-    workspace = WorkspaceState(atoms=atoms)
 
-    assert workspace.scf_status() == "CONVERGED"
-    assert workspace.is_scf_converged()
+    state = StructureState(atoms=atoms)
+    assert state.scf_status() == "CONVERGED"
+    assert state.is_scf_converged()
 
-    workspace.restarted = True
-
-    assert workspace.scf_status() == "START"
-    assert not workspace.is_scf_converged()
+    restarted = StructureState(atoms=atoms, restarted=True)
+    assert restarted.scf_status() == "START"
+    assert not restarted.is_scf_converged()
 
 
 def test_confirmed_structure_edit_marks_workspace_restarted():
@@ -74,7 +73,7 @@ def test_confirmed_structure_edit_marks_workspace_restarted():
 
     change = controller.apply_structure_edit(
         lambda current: current,
-        expected_generation=controller.generation,
+        expected_structure_generation=controller.structure_generation,
     )
 
     assert change is DocumentChange.APPLIED
@@ -88,7 +87,7 @@ def test_use_for_new_calculation_marks_restart_without_touching_atoms():
     previous_state_id = controller.state_id
 
     change = controller.use_for_new_calculation(
-        expected_generation=controller.generation
+        expected_structure_generation=controller.structure_generation
     )
 
     assert change is DocumentChange.APPLIED

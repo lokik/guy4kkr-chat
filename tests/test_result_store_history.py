@@ -165,7 +165,9 @@ def test_use_for_new_calculation_is_a_new_branch_and_write_barrier(tmp_path):
     old_state = controller.state_id
     old_branch = controller.result_store.state(old_state).branch_id
 
-    controller.use_for_new_calculation(expected_generation=controller.generation)
+    controller.use_for_new_calculation(
+        expected_structure_generation=controller.structure_generation
+    )
     restart_state = controller.state_id
     restart_branch = controller.result_store.state(restart_state).branch_id
     assert restart_branch != old_branch
@@ -230,7 +232,7 @@ def test_empty_spheres_is_result_transition_within_same_structure(tmp_path):
 
     controller.update_empty_spheres(
         add_one,
-        expected_generation=controller.generation,
+        expected_structure_generation=controller.structure_generation,
         parameters={"radius": 1.25},
     )
 
@@ -249,12 +251,12 @@ def test_empty_spheres_is_result_transition_within_same_structure(tmp_path):
 def test_empty_spheres_without_structure_change_creates_restorable_state(tmp_path):
     controller = _controller(tmp_path, potential_path="Fe.pot")
     input_state_id = controller.state_id
-    generation = controller.generation
+    generation = controller.structure_generation
     atoms = controller.atoms
 
     controller.update_empty_spheres(
         lambda candidate, _previous: (candidate, 0, False),
-        expected_generation=generation,
+        expected_structure_generation=generation,
         parameters={"method": "probe"},
     )
 
@@ -268,7 +270,7 @@ def test_empty_spheres_without_structure_change_creates_restorable_state(tmp_pat
     assert state.structure_snapshot is not None
     assert controller.potential_path == "Fe.pot"
     assert state.potential_path == "Fe.pot"
-    assert controller.generation != generation
+    assert controller.structure_generation != generation
     assert state.empty_spheres == controller.empty_spheres
     assert dict(state.empty_spheres.parameters) == {"method": "probe"}
 
@@ -278,7 +280,7 @@ def test_use_result_state_restores_empty_sphere_provenance(tmp_path):
 
     controller.update_empty_spheres(
         lambda candidate, _previous: (candidate, 0, False),
-        expected_generation=controller.generation,
+        expected_structure_generation=controller.structure_generation,
         parameters={"radius": 1.5, "grid": 24},
     )
     empty_spheres_record = controller.result_store.results[0]

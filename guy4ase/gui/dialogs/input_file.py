@@ -60,11 +60,20 @@ class InputFileEditor(QDialog):
     def accept(self):
         """Parse a candidate, then publish it through the application callback."""
         self._clear_error()
-        candidate = self._parameters.copy(copy_values=True)
         try:
-            # The instance reader uses the current task's grammar and already
-            # exposes pyparsing exceptions, including line/column information.
-            candidate.read_from_file(StringIO(self.editor.toPlainText()))
+            # Autodetect only the IPD selected by the native TASK declaration.
+            # Parsing through the old instance could silently accept another
+            # task's text as the current task.
+            candidate = type(self._parameters).from_file(
+                StringIO(self.editor.toPlainText())
+            )
+            expected = self._parameters.definition_name
+            actual = candidate.definition_name
+            if actual.casefold() != expected.casefold():
+                raise ValueError(
+                    f"Expected {expected.upper()} input-parameter schema, "
+                    f"got {actual.upper()}."
+                )
         except Exception as error:
             self._show_error(error)
             return

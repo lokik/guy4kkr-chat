@@ -18,7 +18,7 @@ class _JobSource:
     supports_refresh = False
     supports_results = False
     supports_attach = False
-    supports_retry_finalization = False
+    supports_retry_download = False
     supports_result_file_check = False
 
     def __init__(self) -> None:

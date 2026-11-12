@@ -64,8 +64,8 @@ def test_load_input_parameters_accepts_parsed_compatible_task_family(tmp_path):
     plane.save_to_file(path)
 
     detected = InputParameters.from_file(path)
-    assert detected.task_name is None
-    assert detected.task_definition.name.lower() == "bsfkk"
+    assert detected.task_name.lower() == "bsfkk"
+    assert detected.definition_name.lower() == "bsf"
 
     assert input_parameter_flows.load_input_parameters(
         session,
@@ -73,12 +73,12 @@ def test_load_input_parameters_accepts_parsed_compatible_task_family(tmp_path):
         None,
         compatible_tasks=("bsfek", "bsfkk"),
     )
-    assert session.task_name.lower() == "bsfek"
-    assert session.working_parameters.task_definition.name.lower() == "bsfkk"
+    assert session.task_name.lower() == "bsfkk"
+    assert session.working_parameters.definition_name.lower() == "bsf"
 
     session.undo_stack.undo()
     assert session.task_name.lower() == "bsfek"
-    assert session.working_parameters.task_definition.name.lower() == "bsfek"
+    assert session.working_parameters.definition_name.lower() == "bsf"
 
 
 def test_text_editor_applies_through_the_same_session_flow(monkeypatch):

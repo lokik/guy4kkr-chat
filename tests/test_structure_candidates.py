@@ -19,6 +19,7 @@ def test_structure_candidate_load_has_no_workspace_side_effects(tmp_path):
         atoms=workspace_atoms,
         potential_path="Cu.pot",
     )
+    generation = workspace.structure.generation
 
     candidate = candidate_flows.load_structure_candidate(
         path,
@@ -27,8 +28,9 @@ def test_structure_candidate_load_has_no_workspace_side_effects(tmp_path):
     )
 
     assert candidate == StructureCandidate(loaded, path.resolve())
-    assert workspace.atoms is workspace_atoms
-    assert workspace.potential_path == "Cu.pot"
+    assert workspace.structure.value.atoms is workspace_atoms
+    assert workspace.structure.value.potential_path == "Cu.pot"
+    assert workspace.structure.generation == generation
 
 
 def test_build_2d_replacement_uses_shared_structure_source(monkeypatch):

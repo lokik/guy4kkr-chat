@@ -57,11 +57,13 @@ def test_continue_output_activates_state_and_reuses_same_result(tmp_path, monkey
     assert controller.atoms is not None
     assert controller.directory == str(tmp_path)
 
-    generation = controller.generation
+    structure_generation = controller.structure_generation
+    directory_generation = controller.directory_generation
     assert file_flows.continue_output(controller, recent, output, None)
     assert len(controller.result_store.results) == 1
     assert controller.state_id == record.output_state_id
-    assert controller.generation == generation
+    assert controller.structure_generation == structure_generation
+    assert controller.directory_generation == directory_generation
 
 
 def test_restart_after_continue_resets_effective_scf_status(tmp_path, monkeypatch):
@@ -74,7 +76,9 @@ def test_restart_after_continue_resets_effective_scf_status(tmp_path, monkeypatc
     recent = RecentFiles(tmp_path / "recent.json")
     assert file_flows.continue_output(controller, recent, output, None)
 
-    controller.use_for_new_calculation(expected_generation=controller.generation)
+    controller.use_for_new_calculation(
+        expected_structure_generation=controller.structure_generation
+    )
 
     assert controller.restarted
     assert controller.scf_status() == "START"
@@ -101,7 +105,7 @@ def test_workflow_keeps_semantic_scf_action_after_continue_and_restart(
     assert scf_command in _commands(window)
 
     gui.controller.use_for_new_calculation(
-        expected_generation=gui.controller.generation,
+        expected_structure_generation=gui.controller.structure_generation,
     )
     application.processEvents()
     assert scf_command in _commands(window)

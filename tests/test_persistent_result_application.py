@@ -6,9 +6,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from ase import Atoms
 from ase2sprkkr import InputParameters
+from ase2sprkkr.execution.manager import ExecutionManager
 from ase2sprkkr.execution import (
-    ExecutionManager,
-    ResultFilesRecord,
+    FileEntry,
+    FileManifest,
     RunState,
     RunStore,
 )
@@ -47,17 +48,15 @@ def _finished_dos_run(tmp_path):
     run = manager.new_record(
         task="DOS",
         input_definition="DOS",
-        requested_task="DOS",
         directory=tmp_path,
-        result_files=ResultFilesRecord(
-            input_file=str(input_path),
-            output_file=str(output_path),
-            input_files=(str(input_path),),
-            output_files=(str(output_path), str(dos_path)),
+        files=FileManifest(
+            inputs=(FileEntry(local_path=str(input_path)),),
+            stdout=FileEntry(local_path=str(output_path)),
+            outputs=(FileEntry(local_path=str(dos_path)),),
         ),
     )
     manager.store.save(run)
-    run = manager.finalize(run, state=RunState.FINISHED, return_code=0)
+    run = manager.complete(run, state=RunState.FINISHED, return_code=0, artifacts_available=True)
     return PersistentJobSource(manager), run
 
 

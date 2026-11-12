@@ -40,7 +40,7 @@ class _RepositorySignals(QObject):
 
 
 class ProjectBrowserDialog(QDialog):
-    """Browse and edit project-owned persistent-run references."""
+    """Browse projects and their immutable project-owned run history."""
 
     activeProjectRequested = pyqtSignal(object)
 
@@ -125,15 +125,6 @@ class ProjectBrowserDialog(QDialog):
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.project_tree.currentItemChanged.connect(self._project_selection_changed)
         project_layout.addWidget(self.project_tree, 1)
-
-        membership_buttons = QHBoxLayout()
-        self.add_run_button = QPushButton("Add selected run…", project_panel)
-        self.add_run_button.clicked.connect(self._add_selected_run)
-        membership_buttons.addWidget(self.add_run_button)
-        self.remove_run_button = QPushButton("Remove run", project_panel)
-        self.remove_run_button.clicked.connect(self._remove_selected_run)
-        membership_buttons.addWidget(self.remove_run_button)
-        project_layout.addLayout(membership_buttons)
 
         self.refresh_projects_button = QPushButton("Refresh projects", project_panel)
         self.refresh_projects_button.clicked.connect(self._refresh_projects)
@@ -222,10 +213,10 @@ class ProjectBrowserDialog(QDialog):
         for siblings in children.values():
             siblings.sort(key=lambda project: project.name.casefold())
 
-        claimed_refs = {
-            ref for project in self._projects for ref in project.persistent_refs
+        unassigned_refs = {
+            job.id for job in self.jobs.all_jobs
+            if job.project_id not in self._projects_by_id
         }
-        unassigned_refs = available_refs - claimed_refs
 
         self.project_tree.blockSignals(True)
         try:
@@ -234,18 +225,12 @@ class ProjectBrowserDialog(QDialog):
 
             def add_project(project: Project, parent: QTreeWidgetItem | None) -> None:
                 nonlocal selected_item
-                total = len(project.persistent_refs)
-                available = sum(ref in available_refs for ref in project.persistent_refs)
-                count = str(total) if available == total else f"{available}/{total}"
-                item = QTreeWidgetItem([project.name, count])
+                total = sum(
+                    job.project_id == project.id for job in self.jobs.all_jobs
+                )
+                item = QTreeWidgetItem([project.name, str(total)])
                 item.setData(0, _PROJECT_ID_ROLE, project.id)
                 item.setToolTip(0, project.id)
-                if available != total:
-                    item.setToolTip(
-                        1,
-                        f"{total - available} persistent run reference(s) "
-                        "are currently unavailable.",
-                    )
                 if parent is None:
                     self.project_tree.addTopLevelItem(item)
                 else:
@@ -297,27 +282,21 @@ class ProjectBrowserDialog(QDialog):
             return
 
         if project_id == _UNASSIGNED:
-            claimed = {
-                ref for project in self._projects for ref in project.persistent_refs
-            }
-            self.jobs.set_visible_refs(available_refs - claimed)
+            self.jobs.set_visible_refs(
+                job.id for job in self.jobs.all_jobs
+                if job.project_id not in self._projects_by_id
+            )
             self.project_notice.hide()
             return
 
         project = self._projects_by_id.get(project_id)
-        if project is None:
-            self.jobs.set_visible_refs(())
-            return
-        self.jobs.set_visible_refs(project.persistent_refs)
-        missing = [ref for ref in project.persistent_refs if ref not in available_refs]
-        if missing:
-            self.project_notice.setText(
-                f"{len(missing)} persistent run reference(s) in {project.name!r} "
-                "are not currently available in the ASE2SPRKKR run history."
+        self.jobs.set_visible_refs(
+            () if project is None else (
+                job.id for job in self.jobs.all_jobs
+                if job.project_id == project.id
             )
-            self.project_notice.show()
-        else:
-            self.project_notice.hide()
+        )
+        self.project_notice.hide()
 
     def _selected_project(self) -> Project | None:
         project_id = self._selected_project_id
@@ -339,10 +318,6 @@ class ProjectBrowserDialog(QDialog):
             project is not None and project.id != self._active_project_id
         )
         self.clear_active_project_button.setEnabled(self._active_project_id is not None)
-        selected_run = self.jobs.selected_persistent_ref
-        self.add_run_button.setEnabled(selected_run is not None and bool(self._projects))
-        self.remove_run_button.setEnabled(project is not None and selected_run is not None)
-
     def _create_project(self) -> None:
         name, accepted = QInputDialog.getText(self, "New Project", "Project name:")
         if not accepted:
@@ -428,39 +403,6 @@ class ProjectBrowserDialog(QDialog):
             self.activeProjectRequested.emit(None)
         self._selected_project_id = project.parent_id
         self.reload_projects()
-
-    def _add_selected_run(self) -> None:
-        persistent_ref = self.jobs.selected_persistent_ref
-        if persistent_ref is None or not self._projects:
-            return
-        candidates = sorted(self._projects, key=lambda item: item.name.casefold())
-        labels = [f"{item.name} [{item.id[:8]}]" for item in candidates]
-        label, accepted = QInputDialog.getItem(
-            self,
-            "Add Run to Project",
-            "Project:",
-            labels,
-            editable=False,
-        )
-        if not accepted:
-            return
-        project = candidates[labels.index(label)]
-        self._save_project_change(
-            project,
-            lambda current: current.add_run(persistent_ref),
-            "Add Run to Project",
-        )
-
-    def _remove_selected_run(self) -> None:
-        project = self._selected_project()
-        persistent_ref = self.jobs.selected_persistent_ref
-        if project is None or persistent_ref is None:
-            return
-        self._save_project_change(
-            project,
-            lambda current: current.remove_run(persistent_ref),
-            "Remove Run from Project",
-        )
 
     def _save_project_change(
         self,

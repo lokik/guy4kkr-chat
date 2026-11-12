@@ -62,29 +62,19 @@ def load_input_parameters(
 
     expected_task = session.task_name.lower()
     allowed = {expected_task, *(str(task).lower() for task in compatible_tasks)}
-    effective_task = parameters.task_definition
-    actual_task = (
-        effective_task.name.lower()
-        if effective_task is not None
-        else parameters.task_name.lower()
-    )
+    actual_task_name = parameters.task_name
+    if actual_task_name is None:
+        return _load_error(
+            parent,
+            "The input file does not resolve to a known SPR-KKR task.",
+        )
+    actual_task = actual_task_name.lower()
     if actual_task not in allowed:
         expected = "/".join(sorted(task.upper() for task in allowed))
         return _load_error(
             parent,
             f"Expected {expected} input parameters, got {actual_task.upper()}.",
         )
-
-    # A Guided family may expose multiple concrete backend tasks backed by one
-    # schema (currently BSFEK/BSFKK).  Keep the session's originally selected
-    # task view, exactly as an in-dialog mode switch does; ASE2SPRKKR derives the
-    # effective TaskDefinition from the loaded values.
-    if actual_task != expected_task:
-        try:
-            parameters = InputParameters.create(session.task_name)
-            parameters.read_from_file(path)
-        except Exception as exc:  # noqa: BLE001 - parser errors are heterogeneous.
-            return _load_error(parent, exc)
 
     session.replace_parameters(
         parameters,

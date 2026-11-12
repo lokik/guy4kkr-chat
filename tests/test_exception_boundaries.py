@@ -123,7 +123,8 @@ def test_workspace_structure_load_does_not_hide_controller_error(
     monkeypatch, tmp_path, application
 ):
     class Controller:
-        generation = 1
+        structure_generation = object()
+        directory_generation = object()
 
         def replace_structure(self, *_args, **_kwargs):
             raise RuntimeError("controller invariant")
@@ -149,7 +150,8 @@ def test_workspace_input_load_does_not_hide_controller_error(
     parameters = object()
 
     class Controller:
-        generation = 1
+        input_parameters_generation = object()
+        directory_generation = object()
 
         def replace_input_parameters(self, *_args, **_kwargs):
             raise RuntimeError("controller invariant")
@@ -231,7 +233,11 @@ def test_workspace_structure_save_does_not_hide_controller_error(
 def test_workspace_file_loads_still_report_backend_errors(
     monkeypatch, tmp_path, application
 ):
-    controller = type("Controller", (), {"generation": 1})()
+    controller = type("Controller", (), {
+        "structure_generation": object(),
+        "input_parameters_generation": object(),
+        "directory_generation": object(),
+    })()
     messages = []
     monkeypatch.setattr(
         workspace_file_flows.QMessageBox,

@@ -13,7 +13,7 @@ from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.project_browser import ProjectBrowserDialog
 
 
-def _job(job_id: str, *, dataset: str) -> PersistentJob:
+def _job(job_id: str, *, dataset: str, project_id=None) -> PersistentJob:
     return PersistentJob(
         id=job_id,
         state="finished",
@@ -27,6 +27,7 @@ def _job(job_id: str, *, dataset: str) -> PersistentJob:
         return_code=0,
         message=None,
         result_files_state="current",
+        project_id=project_id,
     )
 
 
@@ -36,7 +37,7 @@ class _JobSource:
     supports_refresh = False
     supports_results = False
     supports_attach = False
-    supports_retry_finalization = False
+    supports_retry_download = False
     supports_result_file_check = False
 
     def __init__(self, jobs):
@@ -88,17 +89,11 @@ def test_project_browser_uses_parent_hierarchy_and_direct_run_membership(tmp_pat
     _application = QApplication.instance() or QApplication([])
     repository = ProjectRepository(tmp_path / "projects")
     root = repository.create("Root")
-    root = repository.save(
-        root.add_run("parent-run"), expected_generation=root.generation
-    )
     child = repository.create("Child", parent_id=root.id)
-    repository.save(
-        child.add_run("child-run"), expected_generation=child.generation
-    )
     source = _JobSource(
         (
-            _job("parent-run", dataset="Parent"),
-            _job("child-run", dataset="Child"),
+            _job("parent-run", dataset="Parent", project_id=root.id),
+            _job("child-run", dataset="Child", project_id=child.id),
         )
     )
 
@@ -114,27 +109,18 @@ def test_project_browser_uses_parent_hierarchy_and_direct_run_membership(tmp_pat
     dialog.close()
 
 
-def test_unassigned_and_missing_references_are_explicit(tmp_path):
+def test_unassigned_runs_are_identified_from_authoritative_run_project(tmp_path):
     _application = QApplication.instance() or QApplication([])
     repository = ProjectRepository(tmp_path / "projects")
     project = repository.create("Project")
-    repository.save(
-        project.add_run("owned").add_run("missing"),
-        expected_generation=project.generation,
-    )
-    source = _JobSource(
-        (
-            _job("owned", dataset="Owned"),
-            _job("free", dataset="Free"),
-        )
-    )
+    source = _JobSource((
+        _job("owned", dataset="Owned", project_id=project.id),
+        _job("free", dataset="Free"),
+    ))
     dialog = _dialog(repository, source)
-
-    project_item = _find_project_item(dialog, "Project")
-    assert project_item.text(1) == "1/2"
-    assert not dialog.project_notice.isHidden()
-    assert "1 persistent run reference" in dialog.project_notice.text()
-
+    item = _find_project_item(dialog, "Project")
+    assert item.text(1) == "1"
+    assert [job.id for job in dialog.jobs.visible_jobs] == ["owned"]
     unassigned = _find_project_item(dialog, "Unassigned")
     assert unassigned.text(1) == "1"
     dialog.project_tree.setCurrentItem(unassigned)
@@ -196,7 +182,7 @@ def test_conflict_replays_only_requested_project_change(tmp_path, monkeypatch):
     external = ProjectRepository(directory)
     current = external.project(project.id)
     external.save(
-        current.add_run("external-run"),
+        current.rename("Externally renamed"),
         expected_generation=current.generation,
     )
 
@@ -215,7 +201,6 @@ def test_conflict_replays_only_requested_project_change(tmp_path, monkeypatch):
     assert saved is not None
     persisted = repository.project(project.id)
     assert persisted.name == "Local rename"
-    assert persisted.persistent_refs == ("external-run",)
     assert persisted.generation == 3
     dialog.close()
 
@@ -254,14 +239,14 @@ def test_failed_conflict_retry_reloads_external_project_state(tmp_path, monkeypa
 
     saved = dialog._save_project_change(
         project,
-        lambda current: current.add_run("local-run"),
-        "Add Run to Project",
+        lambda current: current.rename("Locally renamed"),
+        "Rename Project",
     )
 
     assert saved is None
     assert save_calls == 2
     persisted = repository.project(project.id)
     assert persisted.name == "Changed elsewhere"
-    assert persisted.persistent_refs == ()
+
     assert _find_project_item(dialog, "Changed elsewhere").text(0) == "Changed elsewhere"
     dialog.close()

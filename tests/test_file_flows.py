@@ -47,7 +47,7 @@ def test_loading_nonpotential_structure_drops_old_potential_source(tmp_path, mon
     assert controller.potential_path is None
 
 
-def test_input_flow_rejects_parameters_parsed_for_a_stale_document(tmp_path, monkeypatch):
+def test_input_flow_keeps_independent_structure_change(tmp_path, monkeypatch):
     path = tmp_path / "Fe.inp"
     original_parameters = object()
     parsed_parameters = object()
@@ -72,11 +72,11 @@ def test_input_flow_rejects_parameters_parsed_for_a_stale_document(tmp_path, mon
         lambda _parent, change: change is DocumentChange.APPLIED,
     )
 
-    assert not file_flows.load_input_parameters(controller, history, path, object())
+    assert file_flows.load_input_parameters(controller, history, path, object())
     assert controller.atoms is replacement_atoms
-    assert controller.input_parameters is original_parameters
-    assert controller.directory == "original"
-    assert history.paths("input") == ()
+    assert controller.input_parameters is parsed_parameters
+    assert controller.directory == str(tmp_path.resolve())
+    assert history.paths("input") == (str(path),)
 
 
 def test_structure_save_uses_published_atoms_and_updates_history(tmp_path, monkeypatch):

@@ -1,31 +1,26 @@
 """Result-file freshness checks for persistent calculation history."""
 from __future__ import annotations
 
-from enum import Enum
+from ase2sprkkr.execution import Execution, ExecutorEndpoint, WorkingDirectory
 from types import SimpleNamespace
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 
 
-class _State(str, Enum):
-    FINISHED = "finished"
-
-
 def _record(*, result_files=None):
     return SimpleNamespace(
         id="1234567890abcdef",
-        state=_State.FINISHED,
+        state="finished",
         created_at="2026-10-13T06:00:00+00:00",
         updated_at="2026-10-13T06:30:00+00:00",
         finished_at="2026-10-13T06:20:00+00:00",
         task="dos",
-        directory="/tmp/calc",
+        execution=Execution(ExecutorEndpoint(), WorkingDirectory("/tmp/calc")),
         dataset="Fe-DOS",
-        endpoint=None,
-        reference=None,
+        failure_phase=None,
         return_code=0,
         message=None,
-        result_files=result_files,
+        files=result_files,
     )
 
 

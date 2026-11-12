@@ -114,20 +114,20 @@ def test_continue_current_version_reuses_scf2_state(tmp_path, monkeypatch):
     )
 
     structures_before = store.structures
-    generation_before = controller.generation
+    generation_before = controller.structure_generation
     controller.use_result_state(scf1.id, version2)
 
     assert controller.state_id == scf2.output_state_id
     assert controller.structure_id == scf2_state.structure_id
     assert controller.atoms is loaded_atoms
     assert store.structures == structures_before
-    assert controller.generation != generation_before
+    assert controller.structure_generation != generation_before
     assert store.potential_source_result(controller.state_id) is scf2
 
-    generation_after = controller.generation
+    generation_after = controller.structure_generation
     controller.use_result_state(scf1.id, version2)
     assert controller.state_id == scf2.output_state_id
-    assert controller.generation == generation_after
+    assert controller.structure_generation == generation_after
     assert store.structures == structures_before
 
     dos = store.add_result(

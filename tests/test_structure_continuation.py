@@ -167,17 +167,17 @@ def test_historical_continuation_is_one_observable_controller_transition():
     historical_state_id = controller.state_id
     record = _record_current_result(controller)
     controller.replace_structure(Atoms("Cu"))
-    generation = controller.generation
+    generation = controller.structure_generation
     changes = []
     controller.structureChanged.connect(changes.append)
 
     change = controller.use_for_new_calculation(
         result_id=record.id,
-        expected_generation=generation,
+        expected_structure_generation=generation,
     )
 
     assert change is DocumentChange.APPLIED
-    assert controller.generation == generation.next()
+    assert controller.structure_generation == generation.next()
     assert len(changes) == 1
     assert changes[0] is controller.atoms
     assert controller.structure_id == historical_structure_id
@@ -192,17 +192,19 @@ def test_current_continuation_creates_one_new_branch_transition():
     controller = WorkspaceController(WorkspaceState(atoms=Atoms("Fe")))
     parent_state_id = controller.state_id
     parent_branch_id = controller.result_store.state(parent_state_id).branch_id
-    generation = controller.generation
+    generation = controller.structure_generation
     changes = []
     controller.structureChanged.connect(changes.append)
 
-    change = controller.use_for_new_calculation(expected_generation=generation)
+    change = controller.use_for_new_calculation(
+        expected_structure_generation=generation
+    )
 
     assert change is DocumentChange.APPLIED
     state = controller.result_store.state(controller.state_id)
     assert state.parent_id == parent_state_id
     assert state.branch_id != parent_branch_id
-    assert controller.generation == generation.next()
+    assert controller.structure_generation == generation.next()
     assert len(changes) == 1
     assert controller.restarted
 
@@ -213,7 +215,7 @@ def test_confirmed_flow_uses_atomic_historical_transition(monkeypatch):
     historical_state_id = controller.state_id
     record = _record_current_result(controller)
     controller.replace_structure(Atoms("Cu"))
-    generation = controller.generation
+    generation = controller.structure_generation
     changes = []
     controller.structureChanged.connect(changes.append)
 
@@ -228,7 +230,7 @@ def test_confirmed_flow_uses_atomic_historical_transition(monkeypatch):
         None,
         result_id=record.id,
     )
-    assert controller.generation == generation.next()
+    assert controller.structure_generation == generation.next()
     state = controller.result_store.state(controller.state_id)
     assert state.parent_id == historical_state_id
     assert len(changes) == 1
@@ -239,7 +241,7 @@ def test_cancelled_flow_keeps_workspace_unchanged(monkeypatch):
     controller = WorkspaceController(WorkspaceState(atoms=Atoms("Fe")))
     record = _record_current_result(controller)
     state_id = controller.state_id
-    generation = controller.generation
+    generation = controller.structure_generation
 
     monkeypatch.setattr(
         QMessageBox,
@@ -253,7 +255,7 @@ def test_cancelled_flow_keeps_workspace_unchanged(monkeypatch):
         result_id=record.id,
     )
     assert controller.state_id == state_id
-    assert controller.generation == generation
+    assert controller.structure_generation == generation
 
 
 def test_flow_rejects_workspace_change_while_confirmation_is_open(monkeypatch):

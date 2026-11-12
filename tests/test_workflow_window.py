@@ -57,8 +57,8 @@ def test_workflow_and_expert_share_one_workspace(tmp_path):
     )
     application.processEvents()
 
-    assert workspace.atoms is not None
-    assert expert.controller.atoms is workspace.atoms
+    assert workspace.structure.value.atoms is not None
+    assert expert.controller.atoms is workspace.structure.value.atoms
     assert RunTask("scf") in _commands(window)
     expert.close()
     window.close()
@@ -165,27 +165,91 @@ def test_typed_commands_are_dispatched_without_title_interpretation(
     window.close()
 
 
-def test_cancelled_surface_creation_does_not_reuse_previous_structure(
-    tmp_path, monkeypatch
-):
-    workspace = WorkspaceState(
-        atoms=Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True)
-    )
-    _gui, window = _workflow(tmp_path, workspace=workspace)
-    builds = []
+def test_cancelled_first_stage_preserves_existing_structure(tmp_path, monkeypatch):
+    _gui, window = _workflow(tmp_path)
+    existing = Atoms("Cu", cell=(2.8, 2.8, 2.8), pbc=True)
+    window.controller.replace_structure(existing)
+    calls = []
     monkeypatch.setattr(
-        workflow_module.structure_flows,
-        "create_structure",
-        lambda _controller, _parent: None,
+        workflow_module.structure_flows, "create_structure_candidate",
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        workflow_module.structure_flows,
-        "build_2d_structure",
-        lambda *args, **kwargs: builds.append((args, kwargs)),
+        workflow_module.structure_flows, "select_build_2d_structure",
+        lambda *args, **kwargs: calls.append(True),
     )
 
     window._create_surface()
 
-    assert builds == []
-    assert workspace.atoms is not None
+    assert calls == []
+    assert window.controller.atoms is existing
+    window.close()
+
+
+def test_new_2d_flow_only_publishes_final_structure(tmp_path, monkeypatch):
+    from guy4ase.gui.flows.structure_candidates import StructureCandidate
+
+    _gui, window = _workflow(tmp_path)
+    bulk = Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True)
+    layer = Atoms("Ni", cell=(3, 3, 9), pbc=(True, True, False))
+    original_generation = window.controller.structure_generation
+    original_atoms = window.controller.atoms
+    monkeypatch.setattr(
+        workflow_module.structure_flows, "create_structure_candidate",
+        lambda *args, **kwargs: StructureCandidate(bulk),
+    )
+
+    def select(candidate, **kwargs):
+        assert candidate is not bulk
+        assert window.controller.atoms is original_atoms
+        assert window.controller.structure_generation == original_generation
+        assert kwargs["surface_mode"] is True
+        return layer
+
+    monkeypatch.setattr(
+        workflow_module.structure_flows, "select_build_2d_structure", select,
+    )
+    window._create_surface()
+
+    assert window.controller.atoms is layer
+    assert window.controller.structure_generation == original_generation.next()
+    window.close()
+
+
+import pytest
+
+
+@pytest.mark.parametrize("keep_bulk", [False, True])
+def test_cancel_new_2d_prompts_to_keep_or_discard_3d(tmp_path, monkeypatch, keep_bulk):
+    from PyQt6.QtWidgets import QMessageBox
+    from guy4ase.gui.flows.structure_candidates import StructureCandidate
+
+    _gui, window = _workflow(tmp_path)
+    original = Atoms("Cu", cell=(2.8, 2.8, 2.8), pbc=True)
+    window.controller.replace_structure(original)
+    original_generation = window.controller.structure_generation
+    bulk = Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True)
+    prompts = []
+    monkeypatch.setattr(
+        workflow_module.structure_flows, "create_structure_candidate",
+        lambda *args, **kwargs: StructureCandidate(bulk),
+    )
+    monkeypatch.setattr(
+        workflow_module.structure_flows, "select_build_2d_structure",
+        lambda *args, **kwargs: None,
+    )
+
+    def ask(*args, **kwargs):
+        prompts.append(args)
+        assert window.controller.atoms is original
+        return QMessageBox.StandardButton.Yes if keep_bulk else QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(workflow_module.structure_flows.QMessageBox, "question", ask)
+    window._create_transition()
+
+    assert len(prompts) == 1
+    assert window.controller.atoms is (bulk if keep_bulk else original)
+    assert window.controller.structure_generation == (
+        original_generation.next() if keep_bulk else original_generation
+    )
     window.close()
