@@ -82,6 +82,7 @@ class PersistentJobsWidget(QWidget):
     refreshRequested = pyqtSignal()
     monitorRequested = pyqtSignal(str)
     retryDownloadRequested = pyqtSignal(str)
+    retryPostprocessingRequested = pyqtSignal(str)
     loadResultRequested = pyqtSignal(str)
 
     def __init__(
@@ -98,6 +99,7 @@ class PersistentJobsWidget(QWidget):
         self._supports_results = False
         self._supports_attach = False
         self._supports_retry_download = False
+        self._supports_retry_postprocessing = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -185,6 +187,10 @@ class PersistentJobsWidget(QWidget):
         self.monitor_button.hide()
         details_layout.addWidget(self.monitor_button)
 
+        self.retry_postprocessing_button = QPushButton("Retry postprocessing", details)
+        self.retry_postprocessing_button.clicked.connect(self._request_retry_postprocessing)
+        self.retry_postprocessing_button.hide()
+        details_layout.addWidget(self.retry_postprocessing_button)
         self.retry_download_button = QPushButton("Retry download", details)
         self.retry_download_button.clicked.connect(self._request_retry_download)
         self.retry_download_button.hide()
@@ -230,6 +236,7 @@ class PersistentJobsWidget(QWidget):
         supports_results: bool,
         supports_attach: bool,
         supports_retry_download: bool,
+        supports_retry_postprocessing: bool = False,
     ) -> None:
         """Render a complete source snapshot while preserving view selection."""
         self._all_jobs = tuple(
@@ -239,6 +246,7 @@ class PersistentJobsWidget(QWidget):
         self._supports_results = supports_results
         self._supports_attach = supports_attach
         self._supports_retry_download = supports_retry_download
+        self._supports_retry_postprocessing = supports_retry_postprocessing
         self.refresh_button.setEnabled(supports_refresh)
 
         if not available:
@@ -391,6 +399,7 @@ class PersistentJobsWidget(QWidget):
             self.message_value.hide()
             self.monitor_button.hide()
             self.retry_download_button.hide()
+            self.retry_postprocessing_button.hide()
             self.load_result_button.hide()
             if selection_changed:
                 self.jobSelected.emit(None)
@@ -423,6 +432,9 @@ class PersistentJobsWidget(QWidget):
         self.retry_download_button.setVisible(
             job.can_retry_download and self._supports_retry_download
         )
+        self.retry_postprocessing_button.setVisible(
+            job.can_retry_postprocessing and self._supports_retry_postprocessing
+        )
         self.load_result_button.setVisible(
             job.is_final
             and not job.can_retry_download
@@ -435,6 +447,10 @@ class PersistentJobsWidget(QWidget):
         job_id = self._selected_job_id
         if job_id is not None:
             self.monitorRequested.emit(job_id)
+
+    def _request_retry_postprocessing(self) -> None:
+        if self._selected_job_id is not None:
+            self.retryPostprocessingRequested.emit(self._selected_job_id)
 
     def _request_retry_download(self) -> None:
         job_id = self._selected_job_id
@@ -452,6 +468,8 @@ class PersistentJobsWidget(QWidget):
             return
         if job.can_retry_download and self._supports_retry_download:
             self.retryDownloadRequested.emit(job.id)
+        elif job.can_retry_postprocessing and self._supports_retry_postprocessing:
+            self.retryPostprocessingRequested.emit(job.id)
         elif job.is_final and self._supports_results:
             self.loadResultRequested.emit(job.id)
         elif job.attachable and self._supports_attach:

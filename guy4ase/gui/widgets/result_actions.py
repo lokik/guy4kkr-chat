@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QAbstractItemView,
     QSizePolicy,
     QStyle,
     QToolButton,
@@ -112,6 +113,7 @@ class ResultActionsWidget(QWidget):
     selectionRequested = pyqtSignal(int)
     newCalculationRequested = pyqtSignal(int)
     historyRequested = pyqtSignal()
+    assignToProjectRequested = pyqtSignal(object)
 
     def __init__(
         self,
@@ -142,11 +144,24 @@ class ResultActionsWidget(QWidget):
 
         self._selector = _ResultTreeWidget(self)
         self._selector.setHeaderHidden(True)
-        self._selector.setToolTip("Select a result")
+        self._selector.setToolTip("Select results (Ctrl/Shift for multiple selection)")
+        self._selector.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._selector.currentItemChanged.connect(self._select_result)
         self._selector.structureDoubleClicked.connect(self.newCalculationRequested)
+        self._selector.itemSelectionChanged.connect(self._update_assignment_controls)
         self._selector.hide()
         layout.addWidget(self._selector)
+        assignment_row = QHBoxLayout()
+        self.select_all_button = QPushButton("Select all", self)
+        self.select_all_button.clicked.connect(self._select_all_results)
+        assignment_row.addWidget(self.select_all_button)
+        self.assign_project_button = QPushButton("Assign to project…", self)
+        self.assign_project_button.clicked.connect(self._request_project_assignment)
+        assignment_row.addWidget(self.assign_project_button)
+        assignment_row.addStretch(1)
+        layout.addLayout(assignment_row)
+        self._assignment_controls = (self.select_all_button, self.assign_project_button)
+        self._update_assignment_controls()
 
         self._record_actions = QWidget(self)
         record_actions_layout = QHBoxLayout(self._record_actions)
@@ -196,16 +211,38 @@ class ResultActionsWidget(QWidget):
         value = item.data(0, _RESULT_ID_ROLE)
         return int(value) if value is not None else None
 
+    @property
+    def selected_result_ids(self) -> tuple[int, ...]:
+        """Selected results only, excluding grouping headers."""
+        return tuple(sorted({int(value) for item in self._selector.selectedItems()
+                            if (value := item.data(0, _RESULT_ID_ROLE)) is not None}))
+
+    def _select_all_results(self) -> None:
+        self._selector.selectAll()
+        self._update_assignment_controls()
+
+    def _request_project_assignment(self) -> None:
+        selected = self.selected_result_ids
+        if selected:
+            self.assignToProjectRequested.emit(selected)
+
+    def _update_assignment_controls(self) -> None:
+        has_results = bool(self._selector.topLevelItemCount())
+        self.select_all_button.setEnabled(has_results)
+        self.assign_project_button.setEnabled(bool(self.selected_result_ids))
+
     def select_result(self, result_id: int) -> bool:
         """Select a result by provenance id if it is present in this projection."""
         item = self._find_result_item(result_id)
         if item is None:
             return False
         self._selector.setCurrentItem(item)
+        self._update_assignment_controls()
         return True
 
     def set_model(self, model: ResultTreeModel) -> None:
         """Render a complete application-provided result selector model."""
+        selected_ids = set(self.selected_result_ids)
         self._selector.blockSignals(True)
         try:
             self._selector.clear()
@@ -215,10 +252,15 @@ class ResultActionsWidget(QWidget):
             target = self._find_result_item(model.selected_result_id)
             if target is not None:
                 self._selector.setCurrentItem(target)
+            for result_id in selected_ids:
+                item = self._find_result_item(result_id)
+                if item is not None:
+                    item.setSelected(True)
         finally:
             self._selector.blockSignals(False)
 
         self._selector.setVisible(bool(model.roots))
+        self._update_assignment_controls()
         self.set_result(model.selected)
 
     def set_result(self, presentation: ResultPresentation | Any | None) -> None:

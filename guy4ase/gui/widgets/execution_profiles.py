@@ -220,7 +220,7 @@ class ProfileForm(QWidget):
         self.ssh_options.setPlaceholderText("e.g. -p 2222")
         ssh_form.addRow("SSH options:", self.ssh_options)
         self.remote_command = QLineEdit(self.ssh_box)
-        self.remote_command.setPlaceholderText("ase2sprkkr remote")
+        self.remote_command.setPlaceholderText("kkrunner remote")
         ssh_form.addRow("Remote command:", self.remote_command)
         self.input_sync = QComboBox(self.ssh_box)
         self.output_sync = QComboBox(self.ssh_box)

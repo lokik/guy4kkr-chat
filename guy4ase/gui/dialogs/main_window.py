@@ -89,7 +89,6 @@ class MainWindow(QMainWindow):
         self._refresh_recent_menus()
         self._workspace_structure_changed(self.controller.atoms)
         self._workspace_input_parameters_changed(self.controller.input_parameters)
-        self._workspace_directory_changed()
 
     @property
     def result_actions_widget(self) -> ResultActionsWidget:
@@ -107,7 +106,7 @@ class MainWindow(QMainWindow):
             self._workspace_input_parameters_changed
         )
         self.controller.directoryChanged.connect(
-            lambda _directory: self._workspace_directory_changed()
+            lambda _directory: self._refresh_action_availability()
         )
 
     def _workspace_structure_changed(self, atoms: Any) -> None:
@@ -129,10 +128,6 @@ class MainWindow(QMainWindow):
             preview,
             input_available=parameters is not None,
         )
-
-    def _workspace_directory_changed(self) -> None:
-        self._calculation_setup.set_directory(self.controller.directory)
-        self._refresh_action_availability()
 
     def _refresh_action_availability(self) -> None:
         has_structure = self.controller.atoms is not None
@@ -248,7 +243,6 @@ class MainWindow(QMainWindow):
             edit_input=self._on_edit_sprkkr_input,
             load_input=self._on_load_sprkkr_input,
             save_input=self._on_save_sprkkr_input,
-            choose_directory=self._choose_working_directory,
             run_calculation_action=self.run_calculation_action,
             load_output=self.load_sprkkr_output,
             value_action=lambda value, action: execute_value_action(value, action, self),
@@ -301,6 +295,9 @@ class MainWindow(QMainWindow):
         load_output_action = QAction("&Load Output File...", self)
         load_output_action.triggered.connect(self.load_sprkkr_output)
         output_menu.addAction(load_output_action)
+        open_directory_action = QAction("Open Output &Directory...", self)
+        open_directory_action.triggered.connect(self.load_sprkkr_output_directory)
+        output_menu.addAction(open_directory_action)
         self._recent_menus["output"] = output_menu.addMenu("Open &Recent")
 
         run_menu = menubar.addMenu("&Run")
@@ -412,15 +409,13 @@ class MainWindow(QMainWindow):
             self.controller, self.recent_history, self
         )
 
+    def load_sprkkr_output_directory(self) -> None:
+        file_flows.choose_and_load_output_directory(
+            self.controller, self.recent_history, self
+        )
+
     def _on_save_sprkkr_input(self) -> None:
         file_flows.save_input_parameters(self.controller, self.recent_history, self)
-
-    def _choose_working_directory(self) -> None:
-        calculation_flow.choose_working_directory(
-            self.controller,
-            self,
-            title="Select Directory",
-        )
 
     def _on_run_sprkkr_calculation(self) -> None:
         calculation_flow.run_calculation(

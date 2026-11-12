@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ase2sprkkr.sprkkr.projects import default_project_repository
+
 import sys
 from pathlib import Path
 from typing import Any
@@ -7,7 +9,7 @@ from typing import Any
 from PyQt6.QtCore import QObject, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 from kkrunner.projects import ProjectRepository
-from guy4ase.gui.application.persistent_jobs import default_project_repository, project_run_manager
+from guy4ase.gui.application.persistent_jobs import project_run_manager
 
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 from guy4ase.gui.application.potential_version import PotentialFileVersion
@@ -172,10 +174,21 @@ class GuiApplication(QObject):
                 result_id=source.result_id,
             )
         )
+        widget.assignToProjectRequested.connect(
+            lambda result_ids, target=window: self._assign_results_to_project(
+                result_ids, target
+            )
+        )
         presenter.newCalculationUnavailable.connect(
             lambda target=window: calculation_flow.show_new_calculation_source_required(
                 target
             )
+        )
+
+    def _assign_results_to_project(self, result_ids, parent: QWidget) -> None:
+        from guy4ase.gui.dialogs.assign_results import assign_results_to_project
+        assign_results_to_project(
+            self.projects, self.controller.result_store, result_ids, parent
         )
 
     def _adopt_persistent_result(

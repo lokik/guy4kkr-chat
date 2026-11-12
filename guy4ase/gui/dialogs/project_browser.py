@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from pathlib import Path
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
@@ -19,17 +20,13 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from kkrunner.projects import (
-    Project,
-    ProjectConflictError,
-    ProjectDeleteError,
-    ProjectRepository,
-    ProjectRepositoryError,
-)
+from kkrunner.projects import Project, ProjectConflictError, ProjectDeleteError, ProjectRepository, ProjectRepositoryError
 
 from guy4ase.gui.application.window_geometry import manage_window_geometry
+from guy4ase.gui.application.imported_project_results import assignments
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.object_view import execute_value_action
+from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
 from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
 
 _PROJECT_ID_ROLE = int(Qt.ItemDataRole.UserRole)
@@ -105,9 +102,9 @@ class ProjectBrowserDialog(QDialog):
         self.new_project_button = QPushButton("New", project_panel)
         self.new_project_button.clicked.connect(self._create_project)
         project_buttons.addWidget(self.new_project_button)
-        self.rename_project_button = QPushButton("Rename", project_panel)
-        self.rename_project_button.clicked.connect(self._rename_project)
-        project_buttons.addWidget(self.rename_project_button)
+        self.edit_project_button = QPushButton("Edit", project_panel)
+        self.edit_project_button.clicked.connect(self._edit_project)
+        project_buttons.addWidget(self.edit_project_button)
         self.move_project_button = QPushButton("Move", project_panel)
         self.move_project_button.clicked.connect(self._move_project)
         project_buttons.addWidget(self.move_project_button)
@@ -138,6 +135,14 @@ class ProjectBrowserDialog(QDialog):
         self._persistent_jobs_controller.bind_view(self.jobs)
         self.jobs.jobsChanged.connect(self._refresh_project_projection)
 
+        self.imported_group = QWidget(project_panel)
+        imported_layout = QVBoxLayout(self.imported_group)
+        imported_layout.setContentsMargins(0, 6, 0, 0)
+        imported_layout.addWidget(QLabel("Imported results", self.imported_group))
+        self.imported_results = QTreeWidget(self.imported_group)
+        self.imported_results.setHeaderHidden(True)
+        imported_layout.addWidget(self.imported_results)
+        project_layout.addWidget(self.imported_group)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([300, 1100])
@@ -276,6 +281,7 @@ class ProjectBrowserDialog(QDialog):
 
     def _apply_project_selection(self) -> None:
         project_id = self._selected_project_id
+        self._show_imported_results(project_id)
         available_refs = {job.id for job in self.jobs.all_jobs}
         if project_id is None:
             self.jobs.set_visible_refs(())
@@ -299,6 +305,27 @@ class ProjectBrowserDialog(QDialog):
         )
         self.project_notice.hide()
 
+    def _show_imported_results(self, project_id: str | None) -> None:
+        """Display historical output references without calling them tracked jobs."""
+        self.imported_results.clear()
+        if project_id is None:
+            return
+        try:
+            mapping = assignments(self._repository)
+        except (OSError, ValueError) as exc:
+            self.project_notice.setText(f"Imported-result associations unavailable: {exc}")
+            self.project_notice.show()
+            return
+        for key, assigned_id in sorted(mapping.items()):
+            if assigned_id != project_id and not (
+                project_id == _UNASSIGNED and assigned_id not in self._projects_by_id
+            ):
+                continue
+            path = key.split("::", 1)[0]
+            item = QTreeWidgetItem([Path(path).name])
+            item.setToolTip(0, path)
+            self.imported_results.addTopLevelItem(item)
+
     def _selected_project(self) -> Project | None:
         project_id = self._selected_project_id
         if project_id in (None, _UNASSIGNED):
@@ -312,7 +339,7 @@ class ProjectBrowserDialog(QDialog):
 
     def _refresh_action_availability(self) -> None:
         project = self._selected_project()
-        self.rename_project_button.setEnabled(project is not None)
+        self.edit_project_button.setEnabled(project is not None)
         self.move_project_button.setEnabled(project is not None)
         self.delete_project_button.setEnabled(project is not None and project.parent_id is not None)
         self.set_active_project_button.setEnabled(
@@ -335,22 +362,23 @@ class ProjectBrowserDialog(QDialog):
         self._selected_project_id = created.id
         self.reload_projects()
 
-    def _rename_project(self) -> None:
+    def _edit_project(self) -> None:
         project = self._selected_project()
         if project is None:
             return
-        name, accepted = QInputDialog.getText(
-            self,
-            "Rename Project",
-            "Project name:",
-            text=project.name,
+        dialog = ProjectEditDialog(
+            self, name=project.name, directory=project.directory,
+            title="Edit Project",
         )
-        if not accepted:
+        if dialog.exec() != dialog.DialogCode.Accepted:
             return
         self._save_project_change(
             project,
-            lambda current: current.modify(name=name),
-            "Rename Project",
+            lambda current: current.modify(
+                name=dialog.project_name(),
+                directory=dialog.project_directory(),
+            ),
+            "Edit Project",
         )
 
     def _move_project(self) -> None:

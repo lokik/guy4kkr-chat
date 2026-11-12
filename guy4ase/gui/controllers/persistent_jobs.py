@@ -83,6 +83,9 @@ class PersistentJobsController(QObject):
         )
         view.monitorRequested.connect(self.open_monitor_window)
         view.retryDownloadRequested.connect(self.retry_download)
+        view.retryPostprocessingRequested.connect(
+            lambda job_id, bound_view=view: self._retry_postprocessing_requested(bound_view, job_id)
+        )
         view.loadResultRequested.connect(
             lambda job_id, bound_view=view: self._load_result_requested(
                 bound_view, job_id
@@ -108,6 +111,7 @@ class PersistentJobsController(QObject):
             supports_results=self._source.supports_results,
             supports_attach=self._source.supports_attach,
             supports_retry_download=self._source.supports_retry_download,
+            supports_retry_postprocessing=getattr(self._source, "supports_retry_postprocessing", False),
         )
 
     def refresh_views(self) -> None:
@@ -330,6 +334,22 @@ class PersistentJobsController(QObject):
         ):
             return
         self._create_attached_monitor(job)
+
+    def _retry_postprocessing_requested(self, view: PersistentJobsWidget, job_id: str) -> None:
+        job = self._source.job(str(job_id))
+        if job is None or not job.can_retry_postprocessing or not self._source.supports_retry_postprocessing:
+            return
+        try:
+            result = run_modal_task(
+                view, lambda: self._source.retry_postprocessing(job.id),
+                title="Retrying Postprocessing", label="Reading preserved calculation results…",
+            )
+        except Exception as exc:  # noqa: BLE001 - application result boundary
+            self._reload_job(job.id)
+            QMessageBox.warning(view, "Postprocessing Failed", str(exc))
+            return
+        self._reload_job(job.id)
+        self._publish_result(job.id, result, select_result=False)
 
     def _publish_result(
         self,
