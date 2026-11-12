@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from ase import Atoms
 from PyQt6.QtWidgets import QApplication, QToolButton
 
-from guy4ase.gui.application.file_version import FileState
+from ase2sprkkr.execution import FileState
 from guy4ase.gui.application.result_presentation import (
     present_result_record,
     present_result_tree,

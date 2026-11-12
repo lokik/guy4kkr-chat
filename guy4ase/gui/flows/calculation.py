@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
+from ase2sprkkr.execution import ProjectRepository
 
 from guy4ase.gui.application.execution_profiles import profile_description
 from guy4ase.gui.application.potential_version import PotentialFileVersion
@@ -21,8 +22,9 @@ from guy4ase.gui.dialogs.guided_input import (
     GuidedTaskUnavailable,
     select_guided_input_parameters,
 )
-from guy4ase.gui.dialogs.profiles import ProfileSelectionDialog
+from guy4ase.gui.dialogs.profiles import ProfileSelectionDialog, RunIdentification
 from guy4ase.gui.dialogs.run_calculation import SprkkrRunWindow
+from guy4ase.gui.input_parameters.dataset import dataset_value
 from guy4ase.gui.input_parameters.tasks import is_guided_task
 from guy4ase.gui.misc.structure_wait import document_change_applied
 
@@ -69,14 +71,38 @@ def _position_like_window(window: QWidget, window_id: str | None) -> None:
 def _select_profile(
     parent: QWidget,
     *,
+    input_parameters,
+    directory: str | None = None,
+    project_repository: ProjectRepository | None = None,
+    active_project_id: str | None = None,
     position_like_window: str | None = None,
-) -> tuple[bool, str | None]:
-    """Run the post-parameter execution step and preserve automatic profiles."""
-    dialog = ProfileSelectionDialog(parent)
+) -> tuple[bool, str | None, RunIdentification | None, str | None, str | None]:
+    """Choose execution, run identifiers, working directory and project."""
+    dialog = ProfileSelectionDialog(
+        parent,
+        input_parameters=input_parameters,
+        directory=directory,
+        project_repository=project_repository,
+        active_project_id=active_project_id,
+    )
     _position_like_window(dialog, position_like_window)
     if dialog.exec() != dialog.DialogCode.Accepted:
-        return False, None
-    return True, dialog.profile_name()
+        return False, None, None, None, None
+    return (
+        True, dialog.profile_name(), dialog.identification(),
+        dialog.directory_name(), dialog.project_id(),
+    )
+
+
+def _apply_run_identification(parameters, identification: RunIdentification | None) -> None:
+    """Apply run-only overrides to the request's isolated parameter snapshot."""
+    if identification is None:
+        return
+    if dataset_value(parameters) != identification.dataset:
+        parameters.CONTROL.DATASET.set(identification.dataset)
+    current_adsi = parameters.CONTROL.ADSI()
+    if ("" if current_adsi is None else str(current_adsi)) != identification.adsi:
+        parameters.CONTROL.ADSI.set(identification.adsi)
 
 
 def run_calculation(
@@ -88,6 +114,7 @@ def run_calculation(
     profile_name: str | None = None,
     position_like_window: str | None = None,
     track_launch_monitor: LaunchMonitorTracker | None = None,
+    project_repository: ProjectRepository | None = None,
 ) -> SprkkrRunWindow | None:
     """Choose execution, run a task and record its immutable provenance.
 
@@ -97,18 +124,42 @@ def run_calculation(
     worker starts; standalone callers that omit it retain ordinary parent
     ownership.
     """
+    identification = None
+    project_id = controller.active_project_id
+    if select_profile:
+        # Resolve the directory only after input-parameter editing. Cancelling
+        # execution setup must not change the workspace.
+        if (
+            controller.atoms is None
+            or controller.input_parameters is None
+            or controller.structure_id is None
+            or controller.state_id is None
+        ):
+            return None
+        directory_generation = controller.directory_generation
+        accepted, profile_name, identification, directory, project_id = _select_profile(
+            parent,
+            input_parameters=controller.input_parameters,
+            directory=controller.directory,
+            project_repository=project_repository,
+            active_project_id=project_id,
+            position_like_window=position_like_window,
+        )
+        if not accepted or not directory:
+            return None
+        if not document_change_applied(
+            parent,
+            controller.change_directory(
+                directory, expected_directory_generation=directory_generation
+            ),
+        ):
+            return None
+
     try:
         request = controller.create_calculation_request()
     except CalculationNotReady:
         return None
-
-    if select_profile:
-        accepted, profile_name = _select_profile(
-            parent,
-            position_like_window=position_like_window,
-        )
-        if not accepted:
-            return None
+    _apply_run_identification(request.input_parameters, identification)
 
     def adoption_completed(adoption) -> None:
         if adoption.output_path is not None:
@@ -137,6 +188,7 @@ def run_calculation(
         request=request,
         profile_name=profile_name,
         profile_description=description,
+        project_id=project_id,
         parent=None if track_launch_monitor is not None else parent,
         on_finished=finished,
     )
@@ -160,18 +212,9 @@ def configure_and_run_task(
     *,
     dataset_default_mode: str,
     track_launch_monitor: LaunchMonitorTracker | None = None,
+    project_repository: ProjectRepository | None = None,
 ) -> SprkkrRunWindow | None:
     """Configure one Guided task, commit it, choose execution, and run it."""
-    if (
-        not controller.directory
-        and not choose_working_directory(
-            controller,
-            parent,
-            title="Choose the directory for this calculation",
-        )
-    ):
-        return None
-
     structure_generation = controller.structure_generation
     input_generation = controller.input_parameters_generation
     atoms = controller.atoms
@@ -215,6 +258,7 @@ def configure_and_run_task(
         parent,
         position_like_window="guided-input",
         track_launch_monitor=track_launch_monitor,
+        project_repository=project_repository,
     )
 
 
@@ -272,6 +316,7 @@ def recompute_result(
     result_id: int,
     *,
     track_launch_monitor: LaunchMonitorTracker | None = None,
+    project_repository: ProjectRepository | None = None,
 ) -> SprkkrRunWindow | None:
     """Re-run historical settings on the state active in the workspace.
 
@@ -281,13 +326,6 @@ def recompute_result(
     """
     record = controller.result_store.result(result_id)
     if record.input_parameters is None:
-        return None
-
-    if not controller.directory and not choose_working_directory(
-        controller,
-        parent,
-        title="Choose the directory for this calculation",
-    ):
         return None
 
     structure_generation = controller.structure_generation
@@ -336,4 +374,5 @@ def recompute_result(
         parent,
         position_like_window=position_like_window,
         track_launch_monitor=track_launch_monitor,
+        project_repository=project_repository,
     )

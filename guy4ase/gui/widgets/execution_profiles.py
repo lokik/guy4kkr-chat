@@ -143,6 +143,20 @@ class ProfileForm(QWidget):
         self.title.setFont(title_font)
         root.addWidget(self.title)
 
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Settings:", self))
+        self.mode = QComboBox(self)
+        self.mode.addItem("Simple", "simple")
+        self.mode.addItem("Expert", "expert")
+        self.mode.setToolTip(
+            "Simple shows common settings; Expert also shows commands, "
+            "synchronization policies and other advanced options."
+        )
+        self.mode.currentIndexChanged.connect(self._update_visibility)
+        mode_row.addWidget(self.mode)
+        mode_row.addStretch(1)
+        root.addLayout(mode_row)
+
         self.read_only_note = QLabel(
             "This profile is provided by another configuration source and is read-only.",
             self,
@@ -189,6 +203,7 @@ class ProfileForm(QWidget):
         self.executable_suffix = QLineEdit(executable_box)
         self.executable_suffix.setPlaceholderText("e.g. _v8")
         executable_form.addRow("Suffix:", self.executable_suffix)
+        self._executable_form = executable_form
         form_root.addWidget(executable_box)
 
         self.ssh_box = QGroupBox("SSH connection and workspace", self.form_widget)
@@ -214,6 +229,7 @@ class ProfileForm(QWidget):
             self.output_sync.addItem(policy)
         ssh_form.addRow("Input sync:", self.input_sync)
         ssh_form.addRow("Output sync:", self.output_sync)
+        self._ssh_form = ssh_form
         form_root.addWidget(self.ssh_box)
 
         self.psij_box = QGroupBox("Workload manager (PSI/J)", self.form_widget)
@@ -225,35 +241,50 @@ class ProfileForm(QWidget):
         self.psij_url = QLineEdit(self.psij_box)
         self.psij_url.setPlaceholderText("Optional executor URL")
         psij_form.addRow("URL:", self.psij_url)
+        self._psij_form = psij_form
         form_root.addWidget(self.psij_box)
 
         root.addWidget(self.form_widget)
         root.addStretch(1)
         self._update_visibility()
 
+    @staticmethod
+    def _set_row_visible(layout: QFormLayout, field: QWidget, visible: bool) -> None:
+        """Hide both the editor and its label (not just the editor)."""
+        field.setVisible(visible)
+        label = layout.labelForField(field)
+        if label is not None:
+            label.setVisible(visible)
+
     def _update_mpi_warning_visibility(self) -> None:
-        self.mpi_warning.setVisible(self.mpi.mode.currentData() == "auto")
+        self.mpi_warning.setVisible(
+            self.mode.currentData() == "expert"
+            and self.mpi.mode.currentData() == "auto"
+        )
 
     def _update_visibility(self) -> None:
         kind = str(self.kind.currentData())
         ssh = kind in {"ssh", "ssh-psij"}
         psij = kind in {"psij", "ssh-psij"}
+        expert = self.mode.currentData() == "expert"
+
         self.run_target_description.setText(RUN_TARGET_DESCRIPTIONS.get(kind, ""))
         self.ssh_box.setVisible(ssh)
         self.psij_box.setVisible(psij)
         self._update_mpi_warning_visibility()
-        for widget in (
-            self.host,
-            self.local_root,
-            self.remote_root,
+
+        self._set_row_visible(self._executable_form, self.executable_suffix, expert)
+        for field in (self.host, self.local_root, self.remote_root):
+            self._set_row_visible(self._ssh_form, field, ssh)
+        for field in (
             self.ssh_options,
             self.remote_command,
             self.input_sync,
             self.output_sync,
         ):
-            widget.setVisible(ssh)
-        self.psij_backend.setVisible(psij)
-        self.psij_url.setVisible(psij)
+            self._set_row_visible(self._ssh_form, field, ssh and expert)
+        self._set_row_visible(self._psij_form, self.psij_backend, psij)
+        self._set_row_visible(self._psij_form, self.psij_url, psij and expert)
 
     def load(self, draft: ProfileDraft) -> None:
         values = draft.values

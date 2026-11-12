@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from guy4ase.gui.application.file_version import FileState, FileVersion
+from ase2sprkkr.execution import FileState, FileVersion
 
 
 def test_file_version_ignores_metadata_only_changes_when_digest_matches(tmp_path):

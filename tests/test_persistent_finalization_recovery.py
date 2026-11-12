@@ -22,19 +22,19 @@ class Store:
 
 def test_recovery_failure_updates_terminal_metadata(monkeypatch):
     store = Store(_record())
-    manager = SimpleNamespace(store=store, attach=lambda *args, **kw: None)
+    manager = SimpleNamespace(store=store, attach_sprkkr=lambda *args, **kw: None)
     def attach(*args, **kwargs):
         store.record = _record(RunState.FAILED)
         store.record.message = "cannot reconstruct historical result"
         raise RuntimeError(store.record.message)
-    monkeypatch.setattr(module, "attach_project_run", attach)
+    monkeypatch.setattr(manager, "attach_sprkkr", attach)
     source = PersistentJobSource(manager)
     assert source.active_recovery_ids == ()
     assert source.job("run-1").state == "failed"
     assert source.job("run-1").message == "cannot reconstruct historical result"
 
 def test_transient_recovery_failure_does_not_recurse(monkeypatch):
-    manager = SimpleNamespace(store=Store(_record()), attach=lambda *args, **kw: None)
+    manager = SimpleNamespace(store=Store(_record()), attach_sprkkr=lambda *args, **kw: None)
     calls = []
     def attach(*args, **kwargs):
         calls.append(1)
@@ -43,4 +43,27 @@ def test_transient_recovery_failure_does_not_recurse(monkeypatch):
     source = PersistentJobSource(manager)
     assert calls == [1]
     assert source.active_recovery_ids == ()
+    assert source.job("run-1").state == "postprocessing"
+
+
+def test_live_postprocessing_notification_does_not_create_second_runner(monkeypatch):
+    store = Store(_record(RunState.RUNNING))
+    manager = SimpleNamespace(store=store, attach_sprkkr=lambda *args, **kwargs: None)
+    calls = []
+
+    def attach(*args, **kwargs):
+        calls.append(args[1])
+        return object()
+
+    monkeypatch.setattr(module, "attach_project_run", attach)
+    source = PersistentJobSource(manager)
+    assert calls == []
+
+    store.record = _record(RunState.POSTPROCESSING)
+    source.job_changed("run-1")
+    source.reload()
+
+    # The original live launch still owns postprocessing; neither its state
+    # notification nor refreshing history may create a second task processor.
+    assert calls == []
     assert source.job("run-1").state == "postprocessing"

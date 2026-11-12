@@ -440,3 +440,26 @@ def test_modal_result_loading_publishes_only_on_gui_thread(monkeypatch):
     assert load_threads[0] != gui_thread
     assert published == [(gui_thread, "completed", result, True)]
     view.close()
+
+
+def test_untracked_launch_without_id_does_not_break_monitoring_other_run(monkeypatch):
+    _application = QApplication.instance() or QApplication([])
+    job = _job("project-run")
+    controller = PersistentJobsController(_Source((job,)))
+    untracked = _LaunchWindow(SimpleNamespace())
+    controller.track_launch_window(untracked)
+    created = []
+
+    def create_monitor(*args, **kwargs):
+        window = _MonitorWindow()
+        created.append(window)
+        return window
+
+    monkeypatch.setattr(
+        controller_module, "create_attached_run_monitor_window", create_monitor
+    )
+    controller.open_monitor_window(job.id)
+
+    assert len(created) == 1
+    assert controller._monitor_windows[job.id] is created[0]
+    assert untracked in controller._pending_monitor_windows

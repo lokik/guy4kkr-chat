@@ -76,19 +76,19 @@ def test_source_tracks_authoritative_changes():
     assert source.jobs()[0].state == "finished"
 
 
-def test_attach_and_load_delegate_to_backend_api(monkeypatch):
+def test_attach_and_load_delegate_to_backend_api():
     item = record(RunState.FINISHED)
     store = Store(item)
-    manager = SimpleNamespace(
-        store=store, attach=lambda *args, **kwargs: None,
-        retrieve_result_files=lambda x: x, check_result_files=lambda x: x,
-        input_file_is_current=lambda x: True, output_file_is_current=lambda x: True,
-    )
     calls = []
     result = SimpleNamespace(run_record=item)
-    monkeypatch.setattr(module, "attach_project_run", lambda *args, **kwargs: calls.append("attach") or object())
-    monkeypatch.setattr(module, "load_project_result", lambda *args, **kwargs: calls.append("load") or result)
+    manager = SimpleNamespace(
+        store=store,
+        attach_sprkkr=lambda *args, **kwargs: calls.append("attach") or object(),
+        load_result=lambda job_id: calls.append("load") or result,
+    )
     source = PersistentJobSource(manager)
+    assert source.supports_results
+    assert source.supports_result_file_check
     source.attach(item.id)
     assert source.load_result(item.id) is result
     assert calls == ["attach", "load"]

@@ -71,6 +71,7 @@ class SprkkrRunWindow(RunMonitorWindow):
         *,
         profile_name: str | None = None,
         profile_description: str | None = None,
+        project_id: str | None = None,
         on_finished=None,
     ) -> None:
         header = f"Directory: {request.directory}"
@@ -79,7 +80,8 @@ class SprkkrRunWindow(RunMonitorWindow):
 
         self._request = request
         self._execution_manager = None
-        self._project_id: str | None = None
+        self.launch_project_id = project_id
+        self._project_id: str | None = project_id
 
         def worker_factory(cancellation: RunCancellation) -> _SprkkrRunWorker:
             worker = _SprkkrRunWorker(

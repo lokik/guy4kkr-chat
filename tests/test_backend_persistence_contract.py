@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from ase import Atoms
 from ase2sprkkr import InputParameters, TaskResult
-from ase2sprkkr.execution.manager import ExecutionManager
+from ase2sprkkr.execution import ExecutionManager, ProjectRepository
 from ase2sprkkr.execution import (
     FileEntry,
     FileManifest,
@@ -35,7 +35,9 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
         parameters.save_to_file(stream, validate=False)
     output_path.write_text("synthetic persistent output\n")
 
-    manager = ExecutionManager(RunStore(tmp_path / "runs"))
+    projects = ProjectRepository(tmp_path / "projects")
+    project = projects.create("Test")
+    manager = ExecutionManager(store=RunStore(tmp_path / "runs"), project_repository=projects, project=project)
     run = manager.new_record(
         task="SPLEED",
         input_definition="ARPES",
@@ -87,7 +89,7 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
         resolved_tasks.append(task)
         return Reader
 
-    monkeypatch.setattr(reader_registry, "class_for_task", reader_class_for_task)
+    monkeypatch.setattr(reader_registry, "class_for_task_name", lambda name: reader_class_for_task(InputParameters.task_registry[name]))
 
     loaded = PersistentJobSource(manager).load_result(run.id)
 

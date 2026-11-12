@@ -73,7 +73,7 @@ def _bsf_pages(is_2d: bool) -> tuple[PageSpec, PageSpec]:
 
 
 def _bsf_output_page() -> PageSpec:
-    """Keep common diagnostics while moving BSF's file names to this page."""
+    """Keep common diagnostics and the input potential control."""
     output = _output_page()
     groups = tuple(
         replace(group,
@@ -83,8 +83,7 @@ def _bsf_output_page() -> PageSpec:
                 collapsed=group.id == "hff")
         for group in output.groups
     )
-    files = GroupSpec("File names", (
-        field("CONTROL", "DATASET", "Dataset / output prefix:", "text"),
+    files = GroupSpec("Input files", (
         field("CONTROL", "POTFIL", "Input potential file:", "text"),
     ), collapsed=True, note="Leave the potential file empty to let the calculator supply it.", id="files")
     return replace(output, title="Output & advanced", groups=(*groups, files))

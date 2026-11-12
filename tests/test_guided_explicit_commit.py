@@ -9,7 +9,6 @@ from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
 from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
-from guy4ase.gui.widgets.input_parameters.dataset import DATASET_PATH
 
 
 @pytest.fixture
@@ -43,12 +42,9 @@ def test_commit_pending_does_not_materialize_implicit_defaults(application):
     dialog.close()
 
 
-def test_commit_pending_applies_dataset_without_focus_change(application):
+def test_guided_dialog_leaves_run_identifiers_to_the_launch_dialog(application):
     dialog = GuidedInputParametersDialog("scf", InputParameters.create("scf"))
-    dialog.dataset_editor.edit.setText("parallel_run")
-    assert not dialog.session.option(DATASET_PATH).is_set()
-
-    assert dialog._commit_pending()
-
-    assert dialog.session.value(DATASET_PATH) == "parallel_run"
+    assert not hasattr(dialog, "dataset_editor")
+    assert not dialog.editors_for(("CONTROL", "DATASET"))
+    assert not dialog.editors_for(("CONTROL", "ADSI"))
     dialog.close()

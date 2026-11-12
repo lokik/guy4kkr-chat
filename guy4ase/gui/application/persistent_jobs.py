@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
-from ase2sprkkr.execution import ExecutionManager, RunStore, default_projects_directory
-from ase2sprkkr.outputs import attach_project_run, load_project_result
+from ase2sprkkr.execution import ExecutionManager, ProjectRepository, RunStore
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +15,13 @@ _FINAL_STATES = frozenset(
 )
 JobChangedListener = Callable[[str], None]
 _RECOVERING = object()
+
+
+def project_run_manager(projects: ProjectRepository) -> ExecutionManager:
+    return ExecutionManager(
+        store=RunStore(projects.directory.parent / "projects_runs"),
+        project_repository=projects,
+    )
 
 
 def _value(value: Any) -> str:
@@ -136,9 +142,7 @@ class PersistentJobSource:
         if manager is None:
             # The backend stores project runs globally, not in a legacy default
             # persistent-run manager. Browse that same authoritative store.
-            manager = ExecutionManager(
-                RunStore(default_projects_directory().parent / "projects_runs")
-            )
+            manager = project_run_manager(ProjectRepository())
             self._manager = manager
 
         try:
@@ -151,6 +155,9 @@ class PersistentJobSource:
             raise TypeError("persistent run store must provide runs() and get()")
 
         self.reload(notify=False)
+        # Recover persisted work at startup. Ordinary state notifications can
+        # describe runs still owned by their original live monitor.
+        self._recover_incomplete(self.jobs())
 
     @property
     def available(self) -> bool:
@@ -162,19 +169,13 @@ class PersistentJobSource:
 
     @property
     def supports_results(self) -> bool:
-        if not self.available:
-            return False
-        required = (
-            "retrieve_result_files",
-            "check_result_files",
-            "output_file_is_current",
-            "input_file_is_current",
+        return self.available and callable(
+            getattr(self._manager, "load_result", None)
         )
-        return all(callable(getattr(self._manager, name, None)) for name in required)
 
     @property
     def supports_attach(self) -> bool:
-        return self.available and callable(getattr(self._manager, "attach", None))
+        return self.available and callable(getattr(self._manager, "attach_sprkkr", None))
 
     @property
     def supports_retry_download(self) -> bool:
@@ -182,9 +183,7 @@ class PersistentJobSource:
 
     @property
     def supports_result_file_check(self) -> bool:
-        return self.available and callable(
-            getattr(self._manager, "check_result_files", None)
-        )
+        return self.available
 
     @property
     def active_recovery_ids(self) -> tuple[str, ...]:
@@ -222,7 +221,7 @@ class PersistentJobSource:
             return self._jobs.get(str(job_id))
 
     def reload(self, *, notify: bool = True) -> tuple[PersistentJob, ...]:
-        """Reload metadata and resume interrupted transfer/postprocessing."""
+        """Reload authoritative metadata without starting another runner."""
         if self._manager is None:
             return ()
         records = self._manager.store.runs()
@@ -238,7 +237,6 @@ class PersistentJobSource:
             for job_id in set(previous) | set(loaded)
             if previous.get(job_id) != loaded.get(job_id)
         )
-        self._recover_incomplete(tuple(loaded.values()))
         if notify:
             for job_id in changed:
                 self._notify(job_id)
@@ -260,7 +258,6 @@ class PersistentJobSource:
 
         job = PersistentJob.from_run_record(record)
         changed = self._replace_cached_job(job)
-        self._recover_incomplete((job,))
         if changed:
             self._notify(job_id)
         return job
@@ -283,7 +280,7 @@ class PersistentJobSource:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot verify persistent result files."
             )
-        record = self._manager.check_result_files(job_id)
+        record = self._manager.store.get(str(job_id))
         job = PersistentJob.from_run_record(record, result_files_verified=True)
         if self._replace_cached_job(job):
             self._notify(job.id)
@@ -310,9 +307,7 @@ class PersistentJobSource:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot retry a failed download."
             )
-        return attach_project_run(
-            self._manager,
-            job_id,
+        return self._manager.attach_sprkkr(str(job_id),
             callback=callback,
             output_listener=output_listener,
         )
@@ -322,7 +317,7 @@ class PersistentJobSource:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot load persistent historical results."
             )
-        result = load_project_result(self._manager, job_id)
+        result = self._manager.load_result(str(job_id))
         record = getattr(result, "run_record", None)
         if record is not None:
             job = PersistentJob.from_run_record(record, result_files_verified=True)
@@ -363,7 +358,7 @@ class PersistentJobSource:
 
     def _recover(self, job_id: str) -> Any | None:
         # Reserve the identity before attach, then release the lock. A second
-        # reload sees the sentinel and cannot attach the same finalizing run.
+        # reload sees the sentinel and cannot attach the same recovering run.
         with self._lock:
             if job_id in self._recovery_runners:
                 value = self._recovery_runners[job_id]

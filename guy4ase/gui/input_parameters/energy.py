@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ase2sprkkr.common.grammar_types import Energy
-from ase2sprkkr.input_parameters.definitions.sections import relative_energy_supported
+from ase2sprkkr.input_parameters.definitions._sections import relative_energy_supported
 
 
 def convert_energy(value, source, target):

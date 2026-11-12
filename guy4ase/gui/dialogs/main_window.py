@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
         settings: ApplicationSettings,
         *,
         track_launch_monitor: calculation_flow.LaunchMonitorTracker,
+        project_repository=None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Guy4ASE - Structure Manager")
@@ -73,6 +74,7 @@ class MainWindow(QMainWindow):
         self.recent_history = recent_files
         self.settings = settings
         self._track_launch_monitor = track_launch_monitor
+        self.project_repository = project_repository
         self._recent_menus: Dict[str, Optional[QMenu]] = {
             "structure": None,
             "input": None,
@@ -426,6 +428,7 @@ class MainWindow(QMainWindow):
             self.recent_history,
             self,
             track_launch_monitor=self._track_launch_monitor,
+            project_repository=self.project_repository,
         )
 
     def _on_about(self) -> None:

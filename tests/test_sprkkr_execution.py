@@ -93,12 +93,7 @@ def test_execution_requests_persistent_backend_run(monkeypatch, tmp_path):
 
 def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_path):
     captured = {}
-    bound_manager = object()
-
-    class Manager:
-        def for_project(self, project_id):
-            captured["project_id"] = project_id
-            return bound_manager
+    manager = object()
 
     class Runner:
         id = "run-1"
@@ -122,7 +117,7 @@ def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_p
     execution = SprkkrExecution(
         _request(tmp_path),
         _Cancellation(),
-        execution_manager=Manager(),
+        execution_manager=manager,
         project_id="project-17",
     )
     monkeypatch.setattr(execution, "_calculator", lambda: Calculator())
@@ -130,8 +125,7 @@ def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_p
 
     execution.run()
 
-    assert captured["project_id"] == "project-17"
-    assert captured["project"] is bound_manager
+    assert captured["project"] == (manager, "project-17")
 
 
 def test_cancel_before_registration_never_submits(monkeypatch, tmp_path):

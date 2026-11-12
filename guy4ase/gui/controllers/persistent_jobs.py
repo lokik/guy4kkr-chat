@@ -168,7 +168,7 @@ class PersistentJobsController(QObject):
         """Find a pending launch whose already-created runner owns ``job_id``."""
         for monitor_window in tuple(self._pending_monitor_windows):
             runner = monitor_window.runner
-            if runner is not None and str(runner.id) == job_id:
+            if runner is not None and str(getattr(runner, "id", "")) == job_id:
                 return monitor_window
         return None
 

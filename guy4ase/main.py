@@ -6,11 +6,8 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
-from ase2sprkkr.execution import (
-    ExecutionManager,
-    RunStore,
-    ProjectRepository,
-)
+from ase2sprkkr.execution import ProjectRepository
+from guy4ase.gui.application.persistent_jobs import project_run_manager
 
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 from guy4ase.gui.application.potential_version import PotentialFileVersion
@@ -68,10 +65,7 @@ class GuiApplication(QObject):
             if project_repository is not None
             else ProjectRepository()
         )
-        self.execution_manager = ExecutionManager(
-            store=RunStore(self.projects.directory.parent / "projects_runs"),
-            project_repository=self.projects,
-        )
+        self.execution_manager = project_run_manager(self.projects)
         self.persistent_jobs = (
             persistent_jobs
             if persistent_jobs is not None
@@ -118,6 +112,7 @@ class GuiApplication(QObject):
                 open_expert=self.show_main_window,
                 settings=self.settings,
                 track_launch_monitor=self._track_launch_monitor,
+                project_repository=self.projects,
             )
             self._wire_window(self._workflow_window)
         return self._workflow_window
@@ -130,6 +125,7 @@ class GuiApplication(QObject):
                 self.recent_files,
                 self.settings,
                 track_launch_monitor=self._track_launch_monitor,
+                project_repository=self.projects,
             )
             self._wire_window(self._main_window)
         return self._main_window
@@ -166,6 +162,7 @@ class GuiApplication(QObject):
                 target,
                 result_id,
                 track_launch_monitor=self._track_launch_monitor,
+                project_repository=self.projects,
             )
         )
         presenter.newCalculationRequested.connect(
@@ -226,7 +223,9 @@ class GuiApplication(QObject):
         """Capture execution/project context before the monitor starts its worker."""
         monitor_window.set_execution_context(
             self.execution_manager,
-            project_id=self.controller.active_project_id,
+            project_id=getattr(
+                monitor_window, "launch_project_id", self.controller.active_project_id
+            ),
         )
         self.persistent_jobs_controller.track_launch_window(monitor_window)
 

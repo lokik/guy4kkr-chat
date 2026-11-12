@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.15']
 
     env:
       QT_QPA_PLATFORM: offscreen
@@ -48,11 +48,12 @@ jobs:
       - name: Check Python 3.9 source compatibility
         run: python tests/test_python39_compat.py
 
-      - name: Checkout Guy4ase-compatible ase2sprkkr
+      # The frontend tests target the new historical-result API.
+      - name: Checkout ASE2SPRKKR persistent result API
         uses: actions/checkout@v7
         with:
           repository: ase2sprkkr/ase2sprkkr
-          ref: workflow
+          ref: develop
           path: .ci/ase2sprkkr
 
       - name: Install package and test dependencies
