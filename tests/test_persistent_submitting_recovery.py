@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from ase2sprkkr.execution import Execution, ExecutorEndpoint, WorkingDirectory, FileManifest
+from kkrunner.runs import Execution, WorkingDirectory
+from kkrunner.client import LocalTransport
+from kkrunner.backends import BackendConfig
+from kkrunner.files import FileManifest
 
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 
@@ -13,8 +16,8 @@ def _record(state: str):
         created_at="2026-10-17T08:00:00+00:00",
         updated_at="2026-10-17T08:00:00+00:00",
         finished_at=None,
-        task="SCF",
-        execution=Execution(ExecutorEndpoint(), WorkingDirectory("/tmp/calc")),
+        metadata={"ase2sprkkr": {"task": "SCF"}},
+        execution=Execution(LocalTransport(), WorkingDirectory("/tmp/calc"), backend=BackendConfig("process")),
         files=FileManifest(), failure_phase=None,
         dataset=None,
 
@@ -46,7 +49,7 @@ def test_refresh_recovers_submitting_before_backend_refresh():
         def recover_submitting(self, record):
             calls.append(("recover", record.state.value))
             recovered = _record("running")
-            recovered.execution = Execution(ExecutorEndpoint(), WorkingDirectory("/tmp/calc"), "pid-42")
+            recovered.execution = Execution(LocalTransport(), WorkingDirectory("/tmp/calc"), "pid-42", backend=BackendConfig("process"))
             self.store.record = recovered
             return recovered
 

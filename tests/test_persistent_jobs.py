@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import pytest
-from ase2sprkkr.execution import (
-    RunState, FailurePhase, Execution, ExecutorEndpoint, WorkingDirectory, FileManifest
-)
+from kkrunner.runs import RunState, FailurePhase, Execution, WorkingDirectory
+from kkrunner.client import SshTransport
+from kkrunner.backends import BackendConfig
+from kkrunner.files import FileManifest
 import guy4ase.gui.application.persistent_jobs as module
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 
@@ -15,12 +16,14 @@ def record(state=RunState.RUNNING, *, backend_id="pid-42", failure_phase=None, r
         id="run-1", state=state,
         created_at="2026-10-19T10:00:00+00:00",
         updated_at="2026-10-19T11:00:00+00:00", finished_at=None,
-        task="DOS", dataset="Fe-DOS", return_code=return_code,
+        metadata={"ase2sprkkr": {"task": "DOS", "dataset": "Fe-DOS"}},
+        return_code=return_code,
         message=None, failure_phase=failure_phase,
         files=FileManifest(),
         execution=Execution(
-            ExecutorEndpoint(executor="ssh", host="cluster", psij_backend="slurm"),
+            SshTransport(host="cluster"),
             WorkingDirectory("/tmp/calc", "/remote/calc"), backend_id=backend_id,
+            backend=BackendConfig(name="psij", options={"executor_name": "slurm"}),
         ),
     )
 
@@ -76,16 +79,18 @@ def test_source_tracks_authoritative_changes():
     assert source.jobs()[0].state == "finished"
 
 
-def test_attach_and_load_delegate_to_backend_api():
+def test_attach_and_load_delegate_to_backend_api(monkeypatch):
     item = record(RunState.FINISHED)
     store = Store(item)
     calls = []
     result = SimpleNamespace(run_record=item)
     manager = SimpleNamespace(
         store=store,
-        attach_sprkkr=lambda *args, **kwargs: calls.append("attach") or object(),
-        load_result=lambda job_id: calls.append("load") or result,
+        attach=lambda *args, **kwargs: None,
+        retrieve_result_files=lambda *_args: None,
     )
+    monkeypatch.setattr(module, "attach_project_run", lambda _manager, ref, **kwargs: calls.append("attach") or object())
+    monkeypatch.setattr(module, "load_project_result", lambda _manager, ref: calls.append("load") or result)
     source = PersistentJobSource(manager)
     assert source.supports_results
     assert source.supports_result_file_check

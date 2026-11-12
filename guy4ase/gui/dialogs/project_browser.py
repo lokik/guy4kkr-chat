@@ -19,9 +19,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from ase2sprkkr.execution import (
+from kkrunner.projects import (
     Project,
     ProjectConflictError,
+    ProjectDeleteError,
     ProjectRepository,
     ProjectRepositoryError,
 )
@@ -313,7 +314,7 @@ class ProjectBrowserDialog(QDialog):
         project = self._selected_project()
         self.rename_project_button.setEnabled(project is not None)
         self.move_project_button.setEnabled(project is not None)
-        self.delete_project_button.setEnabled(project is not None)
+        self.delete_project_button.setEnabled(project is not None and project.parent_id is not None)
         self.set_active_project_button.setEnabled(
             project is not None and project.id != self._active_project_id
         )
@@ -348,7 +349,7 @@ class ProjectBrowserDialog(QDialog):
             return
         self._save_project_change(
             project,
-            lambda current: current.rename(name),
+            lambda current: current.modify(name=name),
             "Rename Project",
         )
 
@@ -374,7 +375,7 @@ class ProjectBrowserDialog(QDialog):
             parent_id = candidates[labels.index(label) - 1].id
         self._save_project_change(
             project,
-            lambda current: current.move_to(parent_id),
+            lambda current: current.modify(parent_id=parent_id),
             "Move Project",
         )
 
@@ -385,7 +386,8 @@ class ProjectBrowserDialog(QDialog):
         answer = QMessageBox.question(
             self,
             "Delete Project?",
-            f"Delete project {project.name!r}? Persistent calculation runs are not deleted.",
+            f"Delete project {project.name!r} and its completed run history? "
+            "Root projects and projects with active runs cannot be deleted.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -396,7 +398,7 @@ class ProjectBrowserDialog(QDialog):
                 project.id,
                 expected_generation=project.generation,
             )
-        except (ProjectRepositoryError, KeyError) as exc:
+        except (ProjectRepositoryError, ProjectDeleteError, KeyError) as exc:
             QMessageBox.warning(self, "Delete Project Failed", str(exc))
             return
         if project.id == self._active_project_id:

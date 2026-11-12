@@ -6,7 +6,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QMessageBox, QTreeWidgetItem
-from ase2sprkkr.execution import ProjectRepository, ProjectRepositoryError
+from kkrunner.projects import ProjectRepository, ProjectRepositoryError
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
@@ -161,7 +161,7 @@ def test_repository_refresh_updates_open_project_browser(tmp_path):
     second = ProjectRepository(directory)
     snapshot = second.project(project.id)
     second.save(
-        snapshot.rename("Changed elsewhere"),
+        snapshot.modify(name="Changed elsewhere"),
         expected_generation=snapshot.generation,
     )
 
@@ -182,7 +182,7 @@ def test_conflict_replays_only_requested_project_change(tmp_path, monkeypatch):
     external = ProjectRepository(directory)
     current = external.project(project.id)
     external.save(
-        current.rename("Externally renamed"),
+        current.modify(name="Externally renamed"),
         expected_generation=current.generation,
     )
 
@@ -194,7 +194,7 @@ def test_conflict_replays_only_requested_project_change(tmp_path, monkeypatch):
 
     saved = dialog._save_project_change(
         project,
-        lambda current: current.rename("Local rename"),
+        lambda current: current.modify(name="Local rename"),
         "Rename Project",
     )
 
@@ -215,7 +215,7 @@ def test_failed_conflict_retry_reloads_external_project_state(tmp_path, monkeypa
     external = ProjectRepository(directory)
     current = external.project(project.id)
     external.save(
-        current.rename("Changed elsewhere"),
+        current.modify(name="Changed elsewhere"),
         expected_generation=current.generation,
     )
 
@@ -239,7 +239,7 @@ def test_failed_conflict_retry_reloads_external_project_state(tmp_path, monkeypa
 
     saved = dialog._save_project_change(
         project,
-        lambda current: current.rename("Locally renamed"),
+        lambda current: current.modify(name="Locally renamed"),
         "Rename Project",
     )
 
