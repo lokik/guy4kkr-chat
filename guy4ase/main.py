@@ -261,8 +261,8 @@ class GuiApplication(QObject):
         window.activateWindow()
 
 
-def main() -> int:
-    app = QApplication(sys.argv)
+def main(argv: list[str] | None = None) -> int:
+    app = QApplication(sys.argv if argv is None else [sys.argv[0], *argv])
     gui = GuiApplication(parent=app)
     gui.show_workflow_window()
     return app.exec()
