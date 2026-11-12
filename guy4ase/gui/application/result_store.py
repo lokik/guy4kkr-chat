@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
-from ase2sprkkr.execution import FileState, FileVersion
+from kkrunner.files import FileState, FileVersion
 from guy4ase.gui.application.potential_version import PotentialFileVersion
 from guy4ase.gui.application.result_contract import ResultCapabilities
 from guy4ase.gui.application.result_files import capture_result_files

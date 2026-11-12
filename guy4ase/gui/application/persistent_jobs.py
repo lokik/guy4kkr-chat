@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
-from ase2sprkkr.execution import ExecutionManager, ProjectRepository, RunStore
+from kkrunner.backends.contracts import BackendCapability
+from kkrunner.projects import ProjectRepository, ProjectRunManager
+from ase2sprkkr.outputs.project_results import attach_project_run, load_project_result
+from ase2sprkkr.sprkkr.projects import (
+    default_project_repository,
+    project_execution_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +23,9 @@ JobChangedListener = Callable[[str], None]
 _RECOVERING = object()
 
 
-def project_run_manager(projects: ProjectRepository) -> ExecutionManager:
-    return ExecutionManager(
-        store=RunStore(projects.directory.parent / "projects_runs"),
-        project_repository=projects,
-    )
+def project_run_manager(projects: ProjectRepository) -> ProjectRunManager:
+    """Use ASE2SPRKKR's storage policy with KKRunner's project-run manager."""
+    return project_execution_manager(project_repository=projects)
 
 
 def _value(value: Any) -> str:
@@ -30,19 +34,17 @@ def _value(value: Any) -> str:
 
 
 def _execution_target(record: Any) -> str:
-    endpoint = record.execution.endpoint
-    executor = _value(endpoint.executor) or "local"
-    host = _value(endpoint.host)
-    psij_backend = _value(endpoint.psij_backend)
-    if executor == "local":
-        return "Local"
-    if executor == "psij":
-        return "PSI/J" + (f" · {psij_backend}" if psij_backend else "")
-    label = executor.upper() if executor == "ssh" else executor
-    if host:
-        label = f"{label} · {host}"
-    if psij_backend:
-        label = f"{label} · PSI/J {psij_backend}"
+    """Describe transport and native backend separately."""
+    transport = record.execution.transport
+    backend = record.execution.backend
+    kind = _value(transport.kind)
+    label = "Local" if transport.is_local else f"{kind.upper()} · {transport.host}"
+    if backend.name == "psij":
+        executor_name = dict(backend.options).get("executor_name", "slurm")
+        return (f"PSI/J · {executor_name}" if transport.is_local
+                else f"{label} · PSI/J {executor_name}")
+    if backend.name == "process":
+        return f"{label} · supervised"
     return label
 
 
@@ -50,6 +52,7 @@ def _is_attachable(record: Any, state: str) -> bool:
     return (
         state not in _FINAL_STATES
         and record.execution.backend_id is not None
+        and BackendCapability.REATTACH in record.execution.backend.create().supports
     )
 
 
@@ -98,14 +101,15 @@ class PersistentJob:
         result_files = record.files
         result_files_state = None if result_files is None else _value(result_files.state)
         finished_at = getattr(record, "finished_at", None)
+        metadata = record.metadata.get("ase2sprkkr", {})
         return cls(
             id=str(record.id),
             state=state,
             created_at=str(record.created_at),
             updated_at=str(record.updated_at),
-            task=str(record.task).upper(),
+            task=str(metadata.get("task") or "Unknown").upper(),
             directory=str(record.execution.directory.local),
-            dataset=(None if record.dataset is None else str(record.dataset)),
+            dataset=(None if metadata.get("dataset") is None else str(metadata["dataset"])),
             target=_execution_target(record),
             return_code=getattr(record, "return_code", None),
             message=getattr(record, "message", None),
@@ -142,7 +146,7 @@ class PersistentJobSource:
         if manager is None:
             # The backend stores project runs globally, not in a legacy default
             # persistent-run manager. Browse that same authoritative store.
-            manager = project_run_manager(ProjectRepository())
+            manager = project_run_manager(default_project_repository())
             self._manager = manager
 
         try:
@@ -169,13 +173,11 @@ class PersistentJobSource:
 
     @property
     def supports_results(self) -> bool:
-        return self.available and callable(
-            getattr(self._manager, "load_result", None)
-        )
+        return self.available and callable(getattr(self._manager, "retrieve_result_files", None))
 
     @property
     def supports_attach(self) -> bool:
-        return self.available and callable(getattr(self._manager, "attach_sprkkr", None))
+        return self.available and callable(getattr(self._manager, "attach", None))
 
     @property
     def supports_retry_download(self) -> bool:
@@ -307,7 +309,9 @@ class PersistentJobSource:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot retry a failed download."
             )
-        return self._manager.attach_sprkkr(str(job_id),
+        return attach_project_run(
+            self._manager,
+            str(job_id),
             callback=callback,
             output_listener=output_listener,
         )
@@ -317,7 +321,7 @@ class PersistentJobSource:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot load persistent historical results."
             )
-        result = self._manager.load_result(str(job_id))
+        result = load_project_result(self._manager, str(job_id))
         record = getattr(result, "run_record", None)
         if record is not None:
             job = PersistentJob.from_run_record(record, result_files_verified=True)

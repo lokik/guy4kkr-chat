@@ -1,6 +1,6 @@
 """Potential-file provenance backed by ASE2SPRKKR file identity."""
 
-from ase2sprkkr.execution import FileVersion
+from kkrunner.files import FileVersion
 
 PotentialFileVersion = FileVersion
 
