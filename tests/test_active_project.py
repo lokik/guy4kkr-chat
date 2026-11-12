@@ -84,6 +84,27 @@ def test_active_project_is_explicit_not_current_browser_selection(tmp_path):
     dialog.close()
 
 
+def test_setting_active_project_does_not_read_repository(tmp_path, monkeypatch):
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Project")
+    source = _JobSource()
+    gui = GuiApplication(
+        recent_files_path=tmp_path / "recent.json",
+        settings_path=tmp_path / "settings.json",
+        persistent_jobs=source,
+        project_repository=repository,
+    )
+
+    def unexpected_lookup(_project_id):
+        raise AssertionError("active-project selection must not read the repository")
+
+    monkeypatch.setattr(repository, "project", unexpected_lookup)
+    gui.set_active_project(project.id)
+
+    assert gui.active_project_id == project.id
+
+
 def test_launch_captures_active_project_before_later_selection_change(tmp_path):
     _application = QApplication.instance() or QApplication([])
     repository = ProjectRepository(tmp_path / "projects")

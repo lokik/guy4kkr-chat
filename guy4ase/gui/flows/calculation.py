@@ -36,6 +36,7 @@ def choose_working_directory(
     title: str = "Select Calculation Directory",
 ) -> bool:
     """Choose and publish the workspace calculation directory."""
+    generation = controller.generation
     start_directory = controller.directory or str(Path.home())
     directory = QFileDialog.getExistingDirectory(
         parent,
@@ -44,8 +45,13 @@ def choose_working_directory(
     )
     if not directory:
         return False
-    controller.change_directory(str(directory))
-    return True
+    return document_change_applied(
+        parent,
+        controller.change_directory(
+            str(directory),
+            expected_generation=generation,
+        ),
+    )
 
 
 def _position_like_window(window: QWidget, window_id: str | None) -> None:

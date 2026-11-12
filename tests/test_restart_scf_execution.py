@@ -5,7 +5,7 @@ from ase import Atoms
 from guy4ase.gui.application import sprkkr_execution as execution_module
 from guy4ase.gui.application.result_loading import LoadedResult
 from guy4ase.gui.application.sprkkr_execution import SprkkrExecution
-from guy4ase.gui.application.workspace import Generation, WorkspaceState
+from guy4ase.gui.application.workspace import WorkspaceState
 from guy4ase.gui.application.workspace_controller import (
     CalculationRequest,
     WorkspaceController,
@@ -60,7 +60,6 @@ def test_execution_forwards_restart_scf_to_create_run(monkeypatch, tmp_path):
         atoms=Atoms("Fe"),
         input_parameters=object(),
         directory=str(tmp_path),
-        generation=Generation(),
         structure_id=1,
         state_id=1,
         restart_scf=True,

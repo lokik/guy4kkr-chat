@@ -21,7 +21,8 @@ def create_input_parameters(
     task: str = "scf",
 ) -> bool:
     """Create parameters for a task from the current read-only structure."""
-    generation = controller.generation
+    structure_generation = controller.structure_generation
+    input_generation = controller.input_parameters_generation
     parameters = select_input_parameters(
         controller.atoms,
         parent=parent,
@@ -34,7 +35,8 @@ def create_input_parameters(
         parent,
         controller.replace_input_parameters(
             parameters,
-            expected_generation=generation,
+            expected_input_parameters_generation=input_generation,
+            expected_structure_generation=structure_generation,
         ),
     )
 
@@ -47,8 +49,9 @@ def edit_current_input_parameters(
     show_changed_only: bool = False,
     dataset_default_mode: str | None = None,
 ) -> bool:
-    """Edit current parameters and commit only against the captured revision."""
-    generation = controller.generation
+    """Edit current parameters and commit only against captured dependencies."""
+    structure_generation = controller.structure_generation
+    input_generation = controller.input_parameters_generation
     parameters = controller.input_parameters
     if parameters is None:
         if create_task is None:
@@ -77,7 +80,8 @@ def edit_current_input_parameters(
         parent,
         controller.replace_input_parameters(
             edited,
-            expected_generation=generation,
+            expected_input_parameters_generation=input_generation,
+            expected_structure_generation=structure_generation,
         ),
     )
 

@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QApplication
 from guy4ase.gui.application.operation_results import EmptySpheresResult
 from guy4ase.gui.application.result_presentation import present_result_tree
 from guy4ase.gui.application.result_store import ResultStore
+from guy4ase.gui.application.workspace import EmptySpheresState
 from guy4ase.gui.widgets.result_actions import ResultActionsWidget
 
 
@@ -73,6 +74,7 @@ def test_empty_spheres_breaks_potential_source_provenance():
     assert scf_state is not None
     assert store.potential_source_result(scf_state) is None
 
+    empty_spheres_state = EmptySpheresState(count=1)
     empty_spheres = store.add_result(
         EmptySpheresResult(found=1),
         structure_id=structure_id,
@@ -81,9 +83,11 @@ def test_empty_spheres_breaks_potential_source_provenance():
         directory="run",
         output_atoms=Atoms("FeX"),
         output_potential_path=None,
+        output_empty_spheres=empty_spheres_state,
     )
     empty_state = empty_spheres.output_state_id
     assert empty_state is not None
+    assert store.state(empty_state).empty_spheres == empty_spheres_state
     assert store.potential_source_result(empty_state) is None
 
     dos = store.add_result(

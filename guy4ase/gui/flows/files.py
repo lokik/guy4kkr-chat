@@ -79,7 +79,8 @@ def load_structure(
     file_path: str | Path,
     parent: QWidget,
 ) -> bool:
-    generation = controller.generation
+    structure_generation = controller.structure_generation
+    directory_generation = controller.directory_generation
     path = Path(file_path).resolve()
     candidate = load_structure_candidate(path, parent, reader=_read_structure_file)
     if candidate is None:
@@ -91,7 +92,8 @@ def load_structure(
         atoms,
         potential_path=potential_path,
         directory=str(path.parent),
-        expected_generation=generation,
+        expected_structure_generation=structure_generation,
+        expected_directory_generation=directory_generation,
     )
     if not document_change_applied(parent, change):
         return False
@@ -123,7 +125,8 @@ def load_input_parameters(
     file_path: str | Path,
     parent: QWidget,
 ) -> bool:
-    generation = controller.generation
+    input_generation = controller.input_parameters_generation
+    directory_generation = controller.directory_generation
     path = Path(file_path).resolve()
     try:
         parameters = run_modal_task(
@@ -143,7 +146,8 @@ def load_input_parameters(
     change = controller.replace_input_parameters(
         parameters,
         directory=str(path.parent),
-        expected_generation=generation,
+        expected_input_parameters_generation=input_generation,
+        expected_directory_generation=directory_generation,
     )
     if not document_change_applied(parent, change):
         return False
@@ -215,6 +219,8 @@ def continue_output(
     parent: QWidget,
 ) -> bool:
     """Import or reuse an output and make its reusable calculation state active."""
+    structure_generation = controller.structure_generation
+    directory_generation = controller.directory_generation
     loaded = _read_output(file_path, parent)
     if loaded is None:
         return False
@@ -236,7 +242,10 @@ def continue_output(
 
     if controller.state_id != state.id:
         try:
-            controller.use_result_state(record.id)
+            change = controller.use_result_state(
+                record.id,
+                expected_structure_generation=structure_generation,
+            )
         except (ValueError, PotentialVersionChanged) as exc:
             QMessageBox.warning(
                 parent,
@@ -245,9 +254,19 @@ def continue_output(
             )
             _finish_output_load(adoption, recent_files, file_path, parent)
             return False
+        if not document_change_applied(parent, change):
+            _finish_output_load(adoption, recent_files, file_path, parent)
+            return False
 
-    if loaded.directory is not None:
-        controller.change_directory(loaded.directory)
+    if loaded.directory is not None and not document_change_applied(
+        parent,
+        controller.change_directory(
+            loaded.directory,
+            expected_directory_generation=directory_generation,
+        ),
+    ):
+        _finish_output_load(adoption, recent_files, file_path, parent)
+        return False
     _finish_output_load(adoption, recent_files, file_path, parent)
     return True
 

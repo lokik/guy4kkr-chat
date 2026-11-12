@@ -670,9 +670,8 @@ class ResultStore:
         prepared_state = None
         output_state_id = None
         produces_state = (
-            output_atoms is not None
-            or output_empty_spheres is not _KEEP_EMPTY_SPHERES
-        )
+            result.produces_potential and output_atoms is not None
+        ) or output_empty_spheres is not _KEEP_EMPTY_SPHERES
         if produces_state:
             if structure_id is None:
                 root_empty_spheres = (

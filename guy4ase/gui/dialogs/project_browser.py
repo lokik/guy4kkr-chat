@@ -513,6 +513,7 @@ class ProjectBrowserDialog(QDialog):
                 return None
             except (ProjectRepositoryError, KeyError, ValueError) as exc:
                 QMessageBox.warning(self, f"{title} Failed", str(exc))
+                self.reload_projects()
                 return None
         except (ProjectRepositoryError, KeyError, ValueError) as exc:
             QMessageBox.warning(self, f"{title} Failed", str(exc))

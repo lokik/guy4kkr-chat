@@ -7,7 +7,6 @@ from ase import Atoms
 
 from guy4ase.gui.application import result_store as result_store_module
 from guy4ase.gui.application.result_store import ResultStore
-from guy4ase.gui.application.workspace import Generation
 from guy4ase.gui.application.workspace_controller import (
     CalculationRequest,
     WorkspaceController,
@@ -42,7 +41,6 @@ def test_calculation_request_requires_structure_and_state_ids():
         atoms=Atoms("Fe"),
         input_parameters=object(),
         directory=".",
-        generation=Generation(),
     )
 
     with pytest.raises(TypeError, match="structure_id"):

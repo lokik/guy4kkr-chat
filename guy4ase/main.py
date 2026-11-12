@@ -5,11 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import QObject, Qt
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 from ase2sprkkr.execution import (
     ExecutionManager,
     ProjectRepository,
-    ProjectRepositoryError,
 )
 
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
@@ -21,7 +20,10 @@ from guy4ase.gui.application.result_loading import (
 )
 from guy4ase.gui.application.settings import ApplicationSettings
 from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
+from guy4ase.gui.application.workspace_controller import (
+    WorkspaceConflict,
+    WorkspaceController,
+)
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.main_window import MainWindow
 from guy4ase.gui.dialogs.project_browser import ProjectBrowserDialog
@@ -45,7 +47,12 @@ class GuiApplication(QObject):
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self.controller = WorkspaceController(workspace, parent=self)
+        self.controller = WorkspaceController(
+            workspace,
+            parent=self,
+            conflict_resolver=self._confirm_workspace_conflicts,
+        )
+        self.controller.activeProjectChanged.connect(self._active_project_changed)
         self.recent_files = RecentFiles(
             Path(recent_files_path) if recent_files_path is not None else None,
             parent=self,
@@ -71,14 +78,32 @@ class GuiApplication(QObject):
             result_adopter=self._adopt_persistent_result,
             parent=self,
         )
-        self._active_project_id: str | None = None
         self._workflow_window: WorkflowWindow | None = None
         self._main_window: MainWindow | None = None
         self._project_browser: ProjectBrowserDialog | None = None
 
     @property
     def active_project_id(self) -> str | None:
-        return self._active_project_id
+        return self.controller.active_project_id
+
+    @staticmethod
+    def _confirm_workspace_conflicts(
+        conflicts: tuple[WorkspaceConflict, ...],
+    ) -> bool:
+        labels = ", ".join(conflict.component for conflict in conflicts)
+        noun = "value has" if len(conflicts) == 1 else "values have"
+        answer = QMessageBox.question(
+            QApplication.activeWindow(),
+            "Workspace Changed",
+            (
+                f"The following workspace {noun} changed while this operation "
+                f"was in progress: {labels}.\n\n"
+                "Apply your change anyway?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def create_workflow_window(self) -> WorkflowWindow:
         """Return the session's workflow view, creating it lazily."""
@@ -184,12 +209,12 @@ class GuiApplication(QObject):
 
     def set_active_project(self, project_id: str | None) -> None:
         """Select the project that receives subsequently created persistent runs."""
-        if project_id is not None:
-            try:
-                project_id = self.projects.project(str(project_id)).id
-            except (KeyError, ProjectRepositoryError, ValueError):
-                project_id = None
-        self._active_project_id = project_id
+        self.controller.set_active_project(
+            project_id,
+            expected_generation=self.controller.generation,
+        )
+
+    def _active_project_changed(self, project_id: str | None) -> None:
         if self._project_browser is not None:
             self._project_browser.set_active_project(project_id)
 
@@ -197,7 +222,7 @@ class GuiApplication(QObject):
         """Capture execution/project context before the monitor starts its worker."""
         monitor_window.set_execution_context(
             self.execution_manager,
-            project_id=self._active_project_id,
+            project_id=self.controller.active_project_id,
         )
         self.persistent_jobs_controller.track_launch_window(monitor_window)
 
@@ -206,7 +231,7 @@ class GuiApplication(QObject):
         self._show_window(self.create_workflow_window())
 
     def show_main_window(self) -> None:
-        """Show and activate the expert view."""
+        """Show and activate the expert view, creating it lazily."""
         self._show_window(self.create_main_window())
 
     def show_project_browser(self) -> None:
@@ -215,7 +240,7 @@ class GuiApplication(QObject):
             dialog = ProjectBrowserDialog(
                 self.projects,
                 self.persistent_jobs_controller,
-                active_project_id=self._active_project_id,
+                active_project_id=self.controller.active_project_id,
             )
             dialog.activeProjectRequested.connect(self.set_active_project)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)

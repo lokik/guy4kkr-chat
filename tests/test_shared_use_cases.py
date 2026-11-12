@@ -44,17 +44,17 @@ class _RunWindow:
 
 
 def test_workspace_calculation_input_completeness_requires_all_inputs():
-    workspace = WorkspaceState()
-    assert not workspace.is_calculation_input_complete()
+    controller = WorkspaceController(WorkspaceState())
+    assert not controller.can_calculate()
 
-    workspace.atoms = Atoms("Fe")
-    assert not workspace.is_calculation_input_complete()
+    controller.replace_structure(Atoms("Fe"))
+    assert not controller.can_calculate()
 
-    workspace.input_parameters = _Parameters("scf")
-    assert not workspace.is_calculation_input_complete()
+    controller.replace_input_parameters(_Parameters("scf"))
+    assert not controller.can_calculate()
 
-    workspace.directory = "calculation"
-    assert workspace.is_calculation_input_complete()
+    controller.change_directory("calculation")
+    assert controller.can_calculate()
 
 
 def test_create_calculation_request_reports_missing_preconditions():

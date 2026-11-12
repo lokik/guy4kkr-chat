@@ -5,7 +5,6 @@ from ase import Atoms
 from guy4ase.gui.application import sprkkr_execution as execution_module
 from guy4ase.gui.application.execution_cancellation import ExecutionCancelled
 from guy4ase.gui.application.sprkkr_execution import SprkkrExecution
-from guy4ase.gui.application.workspace import Generation
 from guy4ase.gui.application.workspace_controller import CalculationRequest
 
 
@@ -25,7 +24,6 @@ def _request(tmp_path, *, restart_scf: bool = False) -> CalculationRequest:
         atoms=Atoms("Fe"),
         input_parameters=object(),
         directory=str(tmp_path),
-        generation=Generation(),
         structure_id=1,
         state_id=1,
         restart_scf=restart_scf,
