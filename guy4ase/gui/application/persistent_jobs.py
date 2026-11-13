@@ -94,6 +94,7 @@ class PersistentJob:
     result_files_verified: bool = False
     failure_phase: str | None = None
     project_id: str | None = None
+    profile: str | None = None
 
     @property
     def started_at(self) -> str:
@@ -148,6 +149,7 @@ class PersistentJob:
             result_files_verified=result_files_verified,
             failure_phase=(None if record.failure_phase is None else _value(record.failure_phase)),
             project_id=getattr(record, "project_id", None),
+            profile=metadata.get("profile"),
         )
 
 
