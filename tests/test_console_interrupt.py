@@ -117,3 +117,22 @@ def test_cancelling_save_aborts_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(file_flows, "save_structure", lambda *_args: False)
     assert not gui.request_exit()
     assert gui.controller.has_unsaved_structure
+
+
+def test_loaded_structure_exits_without_save_prompt(tmp_path, monkeypatch):
+    gui = GuiApplication(recent_files_path=tmp_path / "recent.json")
+    file_path = tmp_path / "Fe.cif"
+    monkeypatch.setattr(
+        file_flows, "ase_read",
+        lambda _path: Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True),
+    )
+    assert file_flows.load_structure(
+        gui.controller, gui.recent_files, file_path, None
+    )
+    assert not gui.controller.has_unsaved_structure
+
+    def unexpected_prompt(*_args):
+        raise AssertionError("loading a structure must not prompt on exit")
+
+    monkeypatch.setattr(QMessageBox, "question", unexpected_prompt)
+    assert gui.request_exit()

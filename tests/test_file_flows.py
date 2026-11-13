@@ -25,6 +25,7 @@ def test_structure_flow_loads_potential_and_document_metadata(tmp_path, monkeypa
     assert controller.atoms is atoms
     assert controller.directory == str(tmp_path.resolve())
     assert controller.potential_path == str(path.resolve())
+    assert not controller.has_unsaved_structure
     assert controller.input_parameters is parameters
     assert history.paths("structure") == (str(path),)
 
@@ -134,3 +135,20 @@ def test_loading_unknown_structure_from_file_warns_but_keeps_it(tmp_path, monkey
 
     assert file_flows.load_structure(controller, history, tmp_path / "layer.xyz", object())
     assert [title for title, _message in warnings] == ["Unknown Structure Type"]
+
+
+def test_loaded_structure_is_clean_until_edited(tmp_path, monkeypatch):
+    structure = tmp_path / "Fe.cif"
+    atoms = Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True)
+    monkeypatch.setattr(file_flows, "ase_read", lambda _path: atoms)
+    controller = WorkspaceController()
+    recent = RecentFiles(tmp_path / "recent.json")
+
+    assert file_flows.load_structure(controller, recent, structure, object())
+    assert not controller.has_unsaved_structure
+
+    controller.apply_structure_edit(
+        lambda original: original.repeat((2, 1, 1)),
+        expected_structure_generation=controller.structure_generation,
+    )
+    assert controller.has_unsaved_structure

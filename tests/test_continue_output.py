@@ -55,6 +55,7 @@ def test_continue_output_activates_state_and_reuses_same_result(tmp_path, monkey
     record = controller.result_store.results[0]
     assert controller.state_id == record.output_state_id
     assert controller.atoms is not None
+    assert not controller.has_unsaved_structure
     assert controller.directory == str(tmp_path)
 
     structure_generation = controller.structure_generation
@@ -64,6 +65,7 @@ def test_continue_output_activates_state_and_reuses_same_result(tmp_path, monkey
     assert controller.state_id == record.output_state_id
     assert controller.structure_generation == structure_generation
     assert controller.directory_generation == directory_generation
+    assert not controller.has_unsaved_structure
 
 
 def test_restart_after_continue_resets_effective_scf_status(tmp_path, monkeypatch):

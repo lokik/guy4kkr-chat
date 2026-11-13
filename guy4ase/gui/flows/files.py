@@ -349,6 +349,10 @@ def continue_output(
     ):
         _finish_output_load(adoption, recent_files, file_path, parent)
         return False
+    # Continuing from an existing output restores a file-backed structure,
+    # not a new unsaved edit. Only commit its saved baseline once the entire
+    # continuation (including the working directory) succeeded.
+    controller.mark_structure_saved(controller.structure_generation)
     _finish_output_load(adoption, recent_files, file_path, parent)
     return True
 
