@@ -94,6 +94,9 @@ class ProfileSelectionDialog(QDialog):
         require_directory: bool = True,
         project_repository: ProjectRepository | None = None,
         active_project_id: str | None = None,
+        selected_profile_name: str | None = None,
+        initial_identification: RunIdentification | None = None,
+        directory_is_explicit: bool = False,
     ) -> None:
         super().__init__(parent)
         self._require_directory = require_directory
@@ -101,7 +104,7 @@ class ProfileSelectionDialog(QDialog):
         # this dialog. Project directories take precedence until the user
         # types a directory or chooses one with Browse.
         self._fallback_directory = directory or ""
-        self._explicit_directory: str | None = None
+        self._explicit_directory: str | None = directory if directory_is_explicit else None
         self._projects_by_id = {}
         self._directory_assignment_overrides = {}
         self._projects = project_repository if project_repository is not None else default_project_repository()
@@ -134,7 +137,10 @@ class ProfileSelectionDialog(QDialog):
             identifier_form = QFormLayout(identifiers)
 
             self.dataset_edit = QLineEdit(identifiers)
-            self.dataset_edit.setText(dataset_value(input_parameters) or "")
+            self.dataset_edit.setText(
+                (dataset_value(input_parameters) if initial_identification is None
+                 else initial_identification.dataset) or ""
+            )
             self.dataset_edit.setPlaceholderText("Automatic naming")
             self.dataset_edit.setValidator(
                 QRegularExpressionValidator(
@@ -154,7 +160,10 @@ class ProfileSelectionDialog(QDialog):
             identifier_form.addRow("", dataset_hint)
 
             self.adsi_edit = QLineEdit(identifiers)
-            adsi = input_parameters.CONTROL.ADSI()
+            adsi = (
+                input_parameters.CONTROL.ADSI() if initial_identification is None
+                else initial_identification.adsi
+            )
             self.adsi_edit.setText("" if adsi is None else str(adsi))
             self.adsi_edit.setToolTip(
                 "SPR-KKR CONTROL.ADSI. An additional identifier for the calculation."
@@ -240,7 +249,7 @@ class ProfileSelectionDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-        self._reload_profiles()
+        self._reload_profiles(selected_profile_name)
 
     def _load_projects(self, selected_project_id: str | None) -> None:
         """Reload project choices and select an ID rather than a display label."""

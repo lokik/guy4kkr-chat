@@ -76,6 +76,9 @@ def _select_profile(
     project_repository: ProjectRepository | None = None,
     active_project_id: str | None = None,
     position_like_window: str | None = None,
+    selected_profile_name: str | None = None,
+    initial_identification: RunIdentification | None = None,
+    directory_is_explicit: bool = False,
 ) -> tuple[bool, str | None, RunIdentification | None, str | None, str | None]:
     """Choose execution, run identifiers, working directory and project."""
     dialog = ProfileSelectionDialog(
@@ -84,6 +87,9 @@ def _select_profile(
         directory=directory,
         project_repository=project_repository,
         active_project_id=active_project_id,
+        selected_profile_name=selected_profile_name,
+        initial_identification=initial_identification,
+        directory_is_explicit=directory_is_explicit,
     )
     _position_like_window(dialog, position_like_window)
     if dialog.exec() != dialog.DialogCode.Accepted:
@@ -113,6 +119,8 @@ def run_calculation(
     select_profile: bool = True,
     profile_name: str | None = None,
     position_like_window: str | None = None,
+    initial_identification: RunIdentification | None = None,
+    restore_run_directory: bool = False,
     track_launch_monitor: LaunchMonitorTracker | None = None,
     project_repository: ProjectRepository | None = None,
 ) -> SprkkrRunWindow | None:
@@ -124,7 +132,7 @@ def run_calculation(
     worker starts; standalone callers that omit it retain ordinary parent
     ownership.
     """
-    identification = None
+    identification = initial_identification
     project_id = controller.active_project_id
     if select_profile:
         # Resolve the directory only after input-parameter editing. Cancelling
@@ -145,6 +153,9 @@ def run_calculation(
             project_repository=project_repository,
             active_project_id=project_id,
             position_like_window=position_like_window,
+            selected_profile_name=profile_name,
+            initial_identification=initial_identification,
+            directory_is_explicit=restore_run_directory,
         )
         if not accepted or not directory:
             return None
@@ -190,6 +201,22 @@ def run_calculation(
     except (KeyError, TypeError, ValueError):
         description = None
 
+    def back_to_run_setup() -> None:
+        # A file conflict was rejected before the new job started. Open the
+        # normal setup dialog again, without discarding the user's last choices.
+        # The run identifiers were request-only overrides, not workspace edits.
+        run_calculation(
+            controller,
+            recent_files,
+            parent,
+            profile_name=profile_name,
+            position_like_window=position_like_window,
+            initial_identification=identification,
+            restore_run_directory=True,
+            track_launch_monitor=track_launch_monitor,
+            project_repository=project_repository,
+        )
+
     window = SprkkrRunWindow(
         request=request,
         profile_name=profile_name,
@@ -197,6 +224,7 @@ def run_calculation(
         project_id=project_id,
         parent=None if track_launch_monitor is not None else parent,
         on_finished=finished,
+        on_back_to_setup=back_to_run_setup if select_profile else None,
     )
     try:
         if track_launch_monitor is not None:
