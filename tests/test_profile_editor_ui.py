@@ -37,7 +37,7 @@ def test_profile_form_explains_selected_run_target():
 
     expected = {
         "local": "Run directly on this computer.",
-        "ssh": "Run on another computer connected over SSH.",
+        "ssh": "Run on another computer over SSH as a reattachable process.",
         "psij": (
             "Submit the calculation to a workload manager accessible from this computer."
         ),
@@ -79,6 +79,7 @@ def test_profile_form_serializes_all_execution_types():
     assert combined["executor"] == "ssh"
     assert combined["host"] == "user@cluster"
     assert combined["psij_backend"] == "slurm"
+    assert combined["backend"] == "psij"
     form.close()
 
 
@@ -264,13 +265,124 @@ def test_simple_mode_preserves_advanced_values_when_editing_common_settings():
     }
     form.load(ProfileDraft("cluster", configured))
     assert form.mode.currentData() == "simple"
-    assert form.values() == configured
+    expected = {**configured, "backend": "psij"}
+    assert form.values() == expected
 
     form.host.setText("other@cluster")
-    expected = {**configured, "host": "other@cluster"}
+    expected = {**expected, "host": "other@cluster"}
     assert form.values() == expected
     form.mode.setCurrentIndex(form.mode.findData("expert"))
     assert form.values() == expected
     form.mode.setCurrentIndex(form.mode.findData("simple"))
     assert form.values() == expected
+    form.close()
+
+
+def test_supervision_is_available_for_local_and_ssh_in_simple_mode():
+    _application = _app()
+    form = ProfileForm()
+    assert not form.supervised.isHidden()
+    assert not form.supervised.isChecked()
+    assert "backend" not in form.values()
+
+    form.kind.setCurrentIndex(form.kind.findData("ssh"))
+    assert not form.supervised.isHidden()
+    assert form.supervised.isChecked()
+    assert "backend" not in form.values()
+
+    form.kind.setCurrentIndex(form.kind.findData("psij"))
+    assert form.supervised.isHidden()
+    assert "backend" not in form.values()
+
+    form.kind.setCurrentIndex(form.kind.findData("ssh-psij"))
+    assert form.supervised.isHidden()
+    assert form.values()["backend"] == "psij"
+    form.close()
+
+
+def test_supervision_selection_roundtrips_and_reaches_profile_backend():
+    from ase2sprkkr.sprkkr.profile import SPRKKRProfile
+
+    _application = _app()
+    form = ProfileForm()
+    for executor, supervised in (
+        ("local", True), ("local", False),
+        ("ssh", True), ("ssh", False),
+    ):
+        selected = "process" if supervised else "direct"
+        values = {"executor": executor, "backend": selected, "host": "example.org"}
+        form.load(ProfileDraft("run", values))
+        assert form.supervised.isChecked() is supervised
+        assert form.values()["backend"] == selected
+        assert SPRKKRProfile(
+            executor=executor, backend=form.values()["backend"],
+            host="example.org",
+        ).backend_config.name == selected
+
+    form.load(ProfileDraft("default", {"executor": "local"}))
+    form.supervised.setChecked(True)
+    assert form.values()["backend"] == "process"
+    form.kind.setCurrentIndex(form.kind.findData("ssh"))
+    assert form.supervised.isChecked()
+    form.supervised.setChecked(False)
+    assert form.values()["backend"] == "direct"
+    form.close()
+
+
+def test_profile_without_explicit_backend_uses_transport_specific_default():
+    _application = _app()
+    form = ProfileForm()
+    for executor, supervised in (("local", False), ("ssh", True)):
+        form.load(ProfileDraft("default", {"executor": executor}))
+        assert form.supervised.isChecked() is supervised
+        assert "backend" not in form.values()
+    form.kind.setCurrentIndex(form.kind.findData("local"))
+    assert not form.supervised.isChecked()
+    assert "backend" not in form.values()
+    form.close()
+
+
+def test_explicit_process_backend_is_not_misidentified_as_ssh_psij():
+    from guy4ase.gui.application.execution_profiles import draft_kind
+
+    _application = _app()
+    form = ProfileForm()
+    values = {
+        "executor": "ssh", "host": "example.org", "backend": "process",
+        "psij_backend": "slurm",
+    }
+    assert draft_kind(values) == "ssh"
+    form.load(ProfileDraft("ssh", values))
+    assert form.kind.currentData() == "ssh"
+    assert form.values()["backend"] == "process"
+    assert "psij_backend" not in form.values()
+    form.close()
+
+
+
+def test_reattachable_process_text_explains_capability_and_requirements():
+    _application = _app()
+    form = ProfileForm()
+    assert form.supervised.text() == "Reattachable process"
+    tooltip = form.supervised.toolTip()
+    assert "reattach later" in tooltip
+    assert "SSH connection" in tooltip
+    assert "ASE2SPRKKR or at least KKRunner" in tooltip
+    assert "machine" in tooltip
+    assert "supervised process backend" in tooltip
+    assert tooltip.count("\n") == 5
+    assert "output.\n\nASE2SPRKKR" in tooltip
+
+    form.supervised.setChecked(True)
+    assert form.run_target_description.text() == (
+        "Run on this computer as a reattachable process."
+    )
+    form.kind.setCurrentIndex(form.kind.findData("ssh"))
+    assert form.run_target_description.text() == (
+        "Run on another computer over SSH as a reattachable process."
+    )
+    form.supervised.setChecked(False)
+    assert form.run_target_description.text() == (
+        "Run directly on another computer connected over SSH."
+    )
     form.close()

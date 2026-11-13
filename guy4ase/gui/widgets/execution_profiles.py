@@ -172,6 +172,9 @@ class ProfileForm(QWidget):
         run_box = QGroupBox("Run target", self.form_widget)
         run_form = QFormLayout(run_box)
         run_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self._backend_explicit = False
+        self._loaded_backend = None
+        self._last_kind = None
         self.kind = QComboBox(run_box)
         for value, label in self.KINDS:
             self.kind.addItem(label, value)
@@ -182,6 +185,15 @@ class ProfileForm(QWidget):
         self.run_target_description.setWordWrap(True)
         self.run_target_description.setStyleSheet("color: palette(mid);")
         run_form.addRow(self.run_target_description)
+        self.supervised = QCheckBox("Reattachable process", run_box)
+        self.supervised.setToolTip(
+            "Keep the calculation running if the GUI closes or an SSH connection is lost.\n"
+            "You can reattach later to monitor its status and output.\n\n"
+            "ASE2SPRKKR or at least KKRunner must be installed on the target machine.\n\n"
+            "(Uses KKRunner's supervised process backend when enabled.)"
+        )
+        self.supervised.toggled.connect(self._supervision_changed)
+        run_form.addRow(self.supervised)
         self.mpi = MpiEditor(run_box)
         self.mpi.mode.currentIndexChanged.connect(self._update_mpi_warning_visibility)
         run_form.addRow("MPI:", self.mpi)
@@ -262,13 +274,42 @@ class ProfileForm(QWidget):
             and self.mpi.mode.currentData() == "auto"
         )
 
+    def _set_supervised(self, checked: bool) -> None:
+        previous = self.supervised.blockSignals(True)
+        try:
+            self.supervised.setChecked(checked)
+        finally:
+            self.supervised.blockSignals(previous)
+
+    def _supervision_changed(self, _checked: bool) -> None:
+        self._backend_explicit = True
+        self._update_run_target_description()
+
+    def _update_run_target_description(self) -> None:
+        kind = str(self.kind.currentData())
+        description = RUN_TARGET_DESCRIPTIONS.get(kind, "")
+        if kind == "local" and self.supervised.isChecked():
+            description = "Run on this computer as a reattachable process."
+        elif kind == "ssh":
+            description = (
+                "Run on another computer over SSH as a reattachable process."
+                if self.supervised.isChecked()
+                else "Run directly on another computer connected over SSH."
+            )
+        self.run_target_description.setText(description)
+
     def _update_visibility(self) -> None:
         kind = str(self.kind.currentData())
+        if kind != self._last_kind:
+            if kind in {"local", "ssh"} and not self._backend_explicit:
+                self._set_supervised(kind == "ssh")
+            self._last_kind = kind
         ssh = kind in {"ssh", "ssh-psij"}
         psij = kind in {"psij", "ssh-psij"}
         expert = self.mode.currentData() == "expert"
 
-        self.run_target_description.setText(RUN_TARGET_DESCRIPTIONS.get(kind, ""))
+        self._update_run_target_description()
+        self.supervised.setVisible(kind in {"local", "ssh"})
         self.ssh_box.setVisible(ssh)
         self.psij_box.setVisible(psij)
         self._update_mpi_warning_visibility()
@@ -289,7 +330,14 @@ class ProfileForm(QWidget):
     def load(self, draft: ProfileDraft) -> None:
         values = draft.values
         kind = draft_kind(values)
+        self._loaded_backend = values.get("backend")
+        self._backend_explicit = self._loaded_backend in {"direct", "process"}
         self.kind.setCurrentIndex(max(self.kind.findData(kind), 0))
+        self._set_supervised(
+            self._loaded_backend == "process"
+            if self._backend_explicit else kind == "ssh"
+        )
+        self._last_kind = kind
         self.mpi.set_value(values.get("mpi"))
         self.mpi_warning.setChecked(bool(values.get("mpi_warning", True)))
         self.executable_dir.setText(str(values.get("executable_dir") or ""))
@@ -315,6 +363,13 @@ class ProfileForm(QWidget):
             "mpi": self.mpi.value(),
             "mpi_warning": self.mpi_warning.isChecked(),
         }
+        if kind in {"local", "ssh"}:
+            backend = "process" if self.supervised.isChecked() else "direct"
+            default_backend = "process" if kind == "ssh" else "direct"
+            if self._backend_explicit or backend != default_backend:
+                values["backend"] = backend
+        elif kind == "ssh-psij" or (kind == "psij" and self._loaded_backend == "psij"):
+            values["backend"] = "psij"
         for name, edit in (
             ("executable_dir", self.executable_dir),
             ("executable_suffix", self.executable_suffix),

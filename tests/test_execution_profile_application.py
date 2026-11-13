@@ -67,6 +67,7 @@ class _Config:
 def test_profile_description_explains_backend_and_mpi(monkeypatch):
     profile = SimpleNamespace(
         executor="ssh",
+        backend_config=SimpleNamespace(name="psij"),
         host="cluster.example",
         psij_backend="slurm",
         psij_url=None,
@@ -157,3 +158,18 @@ def test_profile_editor_owns_creation_and_deletion_policy():
 
     editor.delete("cluster")
     assert "cluster" not in editor.drafts
+
+
+def test_profile_description_distinguishes_direct_and_supervised(monkeypatch):
+    from ase2sprkkr.sprkkr.profile import SPRKKRProfile
+
+    for executor, backend in (("local", "direct"), ("ssh", "process")):
+        profile = SPRKKRProfile(executor=executor, backend=backend, host="example.org")
+        monkeypatch.setattr(
+            profile_application,
+            "resolve_sprkkr_profile",
+            lambda name, *, configuration=None: profile,
+        )
+        assert backend.replace("process", "supervised") in (
+            profile_application.profile_description("run")
+        )

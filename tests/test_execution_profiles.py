@@ -61,6 +61,7 @@ def test_profile_form_parses_mpi_and_backend_specific_values():
     assert values["host"] == "user@cluster"
     assert values["ssh_options"] == ["-p", "2222"]
     assert values["psij_backend"] == "slurm"
+    assert values["backend"] == "psij"
     form.close()
 
 
