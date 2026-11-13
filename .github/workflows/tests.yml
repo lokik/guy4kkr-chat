@@ -18,7 +18,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       !startsWith(github.head_ref, 'chatgpt-')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +48,13 @@ jobs:
       - name: Check Python 3.9 source compatibility
         run: python tests/test_python39_compat.py
 
+      - name: Checkout KKRunner
+        uses: actions/checkout@v7
+        with:
+          repository: ase2sprkkr/kkrunner
+          ref: master
+          path: .ci/kkrunner
+
       # The frontend tests target the new historical-result API.
       - name: Checkout ASE2SPRKKR persistent result API
         uses: actions/checkout@v7
@@ -59,6 +66,7 @@ jobs:
       - name: Install package and test dependencies
         run: |
           python -m pip install --upgrade pip
+          python -m pip install -e ./.ci/kkrunner
           python -m pip install -e ./.ci/ase2sprkkr
           python -m pip install -e . pytest
 
