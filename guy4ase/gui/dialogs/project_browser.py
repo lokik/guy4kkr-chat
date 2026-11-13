@@ -7,7 +7,6 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
-    QDialog,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
@@ -37,8 +36,8 @@ class _RepositorySignals(QObject):
     changed = pyqtSignal(str)
 
 
-class ProjectBrowserDialog(QDialog):
-    """Browse projects and their immutable project-owned run history."""
+class ProjectBrowserDialog(QWidget):
+    """Non-modal window for projects and their immutable run history."""
 
     activeProjectRequested = pyqtSignal(object)
 
@@ -50,7 +49,8 @@ class ProjectBrowserDialog(QDialog):
         *,
         active_project_id: str | None = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__(parent, Qt.WindowType.Window)
+        self.setWindowModality(Qt.WindowModality.NonModal)
         self.setWindowTitle("Project Browser")
         manage_window_geometry(
             self,
