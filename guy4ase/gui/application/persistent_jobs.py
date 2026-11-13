@@ -52,12 +52,25 @@ def _execution_target(record: Any) -> str:
     return label
 
 
-def _is_attachable(record: Any, state: str) -> bool:
-    return (
-        state not in _FINAL_STATES
-        and record.execution.backend_id is not None
-        and BackendCapability.REATTACH in record.execution.backend.create().supports
-    )
+def _attachment_availability(record: Any, state: str) -> tuple[bool, str | None]:
+    """Explain whether a persisted execution can be observed after a GUI restart."""
+    if state in _FINAL_STATES:
+        return False, None
+    if record.execution.backend_id is None:
+        return (
+            False,
+            "No backend identity has been saved for this calculation yet. "
+            "Refresh statuses to attempt submission recovery.",
+        )
+    backend = record.execution.backend.create()
+    if BackendCapability.REATTACH not in backend.supports:
+        return (
+            False,
+            f"The {backend.name} backend cannot reattach to an existing calculation. "
+            "A remote calculation may still be running, even when its status is Unknown. "
+            "For future SSH calculations, enable 'Reattachable process' in the run profile.",
+        )
+    return True, None
 
 
 @dataclass(frozen=True)
@@ -77,6 +90,7 @@ class PersistentJob:
     result_files_state: str | None = None
     finished_at: str | None = None
     attachable: bool = False
+    reattach_unavailable_reason: str | None = None
     result_files_verified: bool = False
     failure_phase: str | None = None
     project_id: str | None = None
@@ -115,6 +129,7 @@ class PersistentJob:
         result_files_state = None if result_files is None else _value(result_files.state)
         finished_at = getattr(record, "finished_at", None)
         metadata = record.metadata.get("ase2sprkkr", {})
+        attachable, reattach_unavailable_reason = _attachment_availability(record, state)
         return cls(
             id=str(record.id),
             state=state,
@@ -128,7 +143,8 @@ class PersistentJob:
             message=getattr(record, "message", None),
             result_files_state=result_files_state or None,
             finished_at=None if finished_at is None else str(finished_at),
-            attachable=_is_attachable(record, state),
+            attachable=attachable,
+            reattach_unavailable_reason=reattach_unavailable_reason,
             result_files_verified=result_files_verified,
             failure_phase=(None if record.failure_phase is None else _value(record.failure_phase)),
             project_id=getattr(record, "project_id", None),

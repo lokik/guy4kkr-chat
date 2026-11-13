@@ -182,10 +182,18 @@ class PersistentJobsWidget(QWidget):
         self.message_value.hide()
         details_layout.addWidget(self.message_value)
 
-        self.monitor_button = QPushButton("Monitor output", details)
+        self.monitor_button = QPushButton("Reattach / monitor", details)
+        self.monitor_button.setToolTip(
+            "Reconnect to this calculation without submitting it again."
+        )
         self.monitor_button.clicked.connect(self._request_monitor)
         self.monitor_button.hide()
         details_layout.addWidget(self.monitor_button)
+
+        self.reattach_notice = QLabel(details)
+        self.reattach_notice.setWordWrap(True)
+        self.reattach_notice.hide()
+        details_layout.addWidget(self.reattach_notice)
 
         self.retry_postprocessing_button = QPushButton("Retry postprocessing", details)
         self.retry_postprocessing_button.clicked.connect(self._request_retry_postprocessing)
@@ -398,6 +406,7 @@ class PersistentJobsWidget(QWidget):
                 widget.setText("—")
             self.message_value.hide()
             self.monitor_button.hide()
+            self.reattach_notice.hide()
             self.retry_download_button.hide()
             self.retry_postprocessing_button.hide()
             self.load_result_button.hide()
@@ -407,7 +416,10 @@ class PersistentJobsWidget(QWidget):
 
         self._selected_job_id = job.id
         self.detail_title.setText(job.dataset or f"Calculation {job.id[:12]}")
-        self.status_value.setText(_status_label(job.state))
+        self.status_value.setText(
+            "Unknown — status unverified"
+            if job.state == "unknown" else _status_label(job.state)
+        )
         self.task_value.setText(job.task or "—")
         self.target_value.setText(job.target)
         self.directory_value.setText(job.directory or "—")
@@ -428,7 +440,22 @@ class PersistentJobsWidget(QWidget):
         self.result_files_value.setText(result_files_label)
         self.message_value.setText(job.message or "")
         self.message_value.setVisible(bool(job.message))
-        self.monitor_button.setVisible(job.attachable and self._supports_attach)
+        # Keep the action visible for unverified jobs. Otherwise users have
+        # no explanation why a still-running direct SSH job cannot be reopened.
+        self.monitor_button.setVisible(not job.is_final)
+        self.monitor_button.setEnabled(job.attachable and self._supports_attach)
+        reason = (
+            job.reattach_unavailable_reason
+            if self._supports_attach
+            else "This installation cannot reattach to persistent calculations."
+        )
+        self.monitor_button.setToolTip(
+            "Reconnect without submitting another calculation."
+            if job.attachable and self._supports_attach
+            else (reason or "Reattachment is not available for this calculation.")
+        )
+        self.reattach_notice.setText(reason or "")
+        self.reattach_notice.setVisible(not job.is_final and bool(reason))
         self.retry_download_button.setVisible(
             job.can_retry_download and self._supports_retry_download
         )

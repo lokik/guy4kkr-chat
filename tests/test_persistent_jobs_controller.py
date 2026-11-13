@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -494,3 +495,36 @@ def test_postprocessing_retry_button_runs_worker_and_adopts_result(monkeypatch):
     assert adopted == [(job.id, result, False)]
     assert not view.retry_postprocessing_button.isVisible()
     view.close()
+
+def test_reconnect_action_is_visible_with_explanation_for_unknown_direct_run():
+    _application = QApplication.instance() or QApplication([])
+    job = replace(
+        _job("direct-run", state="unknown"),
+        attachable=False,
+        reattach_unavailable_reason="Direct backend cannot reattach.",
+    )
+    view = _view()
+    view.set_jobs(
+        (job,), available=True, unavailable_reason=None,
+        supports_refresh=True, supports_results=True,
+        supports_attach=True, supports_retry_download=True,
+    )
+    assert not view.monitor_button.isHidden()
+    assert not view.monitor_button.isEnabled()
+    assert not view.reattach_notice.isHidden()
+    assert "Direct backend" in view.reattach_notice.text()
+    assert "status unverified" in view.status_value.text()
+
+
+def test_reconnect_action_is_enabled_for_unknown_supervised_run():
+    _application = QApplication.instance() or QApplication([])
+    view = _view()
+    view.set_jobs(
+        (_job("supervised-run", state="unknown"),),
+        available=True, unavailable_reason=None,
+        supports_refresh=True, supports_results=True,
+        supports_attach=True, supports_retry_download=True,
+    )
+    assert not view.monitor_button.isHidden()
+    assert view.monitor_button.isEnabled()
+    assert view.reattach_notice.isHidden()
