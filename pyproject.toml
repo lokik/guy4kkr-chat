@@ -10,12 +10,13 @@ requires-python = ">=3.9"
 dependencies = [
   "kkrunner>=0.2.0b1,<0.3",
   "PyQt6",
+  "qonsole>=3.3,<4",
   "matplotlib",
   "numpy",
   "ase",
   "platformdirs",
   "pyxtal",
-  "ase2sprkkr>=4.0.0b1",
+  "ase2sprkkr>=4.0.0b2",
 ]
 
 [project.scripts]

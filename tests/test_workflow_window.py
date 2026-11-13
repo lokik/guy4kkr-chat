@@ -97,6 +97,7 @@ def test_typed_commands_are_dispatched_without_title_interpretation(
     )
     monkeypatch.setattr(window, "_update_empty_spheres", lambda: events.append("spheres"))
     monkeypatch.setattr(window, "_create_3d", lambda: events.append("create-3d"))
+    monkeypatch.setattr(window, "_create_shell", lambda: events.append("create-shell"))
     monkeypatch.setattr(
         window, "_create_from_database", lambda: events.append("prototype")
     )
@@ -130,6 +131,7 @@ def test_typed_commands_are_dispatched_without_title_interpretation(
         UpdateEmptySpheres(),
         CreateStructure(CreateStructureKind.THREE_D),
         CreateStructure(CreateStructureKind.PROTOTYPE),
+        CreateStructure(CreateStructureKind.SHELL),
         CreateStructure(CreateStructureKind.SURFACE),
         CreateStructure(CreateStructureKind.TWO_D),
         Build2D(Build2DKind.SURFACE),
@@ -150,6 +152,7 @@ def test_typed_commands_are_dispatched_without_title_interpretation(
         "spheres",
         "create-3d",
         "prototype",
+        "create-shell",
         "surface",
         "transition",
         ("build-2d", True),

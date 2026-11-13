@@ -114,6 +114,7 @@ def test_initial_plan_uses_typed_commands_and_planned_recent_menu():
     assert _commands(plan, WorkflowSection.CREATE) == (
         CreateStructure(CreateStructureKind.THREE_D),
         CreateStructure(CreateStructureKind.PROTOTYPE),
+        CreateStructure(CreateStructureKind.SHELL),
         CreateStructure(CreateStructureKind.SURFACE),
         CreateStructure(CreateStructureKind.TWO_D),
     )

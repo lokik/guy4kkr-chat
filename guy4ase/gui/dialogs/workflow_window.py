@@ -241,6 +241,7 @@ class WorkflowWindow(QMainWindow):
             {
                 CreateStructureKind.THREE_D: self._create_3d,
                 CreateStructureKind.PROTOTYPE: self._create_from_database,
+                CreateStructureKind.SHELL: self._create_shell,
                 CreateStructureKind.SURFACE: self._create_surface,
                 CreateStructureKind.TWO_D: self._create_transition,
             }[command.kind]()
@@ -278,6 +279,9 @@ class WorkflowWindow(QMainWindow):
 
     def _create_3d(self) -> None:
         structure_flows.create_structure(self.controller, self)
+
+    def _create_shell(self) -> None:
+        structure_flows.create_structure_by_shell(self.controller, self)
 
     def _create_from_database(self) -> None:
         structure_flows.create_structure_from_database(self.controller, self)

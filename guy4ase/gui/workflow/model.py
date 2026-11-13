@@ -11,6 +11,7 @@ from guy4ase.gui.presentation import ActionCategory
 class CreateStructureKind(Enum):
     THREE_D = auto()
     PROTOTYPE = auto()
+    SHELL = auto()
     SURFACE = auto()
     TWO_D = auto()
 
@@ -45,6 +46,7 @@ class ActionIcon(Enum):
     CONTINUE = auto()
     NEW_CALCULATION = auto()
     RESET = auto()
+    SHELL = auto()
 
 
 ContinueRecentKind = Literal["structure", "output"]
