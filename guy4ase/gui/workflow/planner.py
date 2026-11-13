@@ -130,6 +130,13 @@ class WorkflowPlanner:
                     ActionIcon.FILE,
                 ),
                 _action(
+                    CreateStructure(CreateStructureKind.SHELL),
+                    "Create by Python Shell",
+                    "Build an ASE structure interactively in Python",
+                    "structure",
+                    ActionIcon.SHELL,
+                ),
+                _action(
                     CreateStructure(CreateStructureKind.SURFACE),
                     "Create a 2D Surface",
                     "Build a surface with vacuum on one side",

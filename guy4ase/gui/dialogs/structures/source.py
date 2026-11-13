@@ -84,6 +84,15 @@ class StructureSourceDialog(QDialog):
             icon=QStyle.StandardPixmap.SP_DirIcon,
         )
 
+        self._add_action(
+            create_layout,
+            "Create by Python Shell",
+            "Create an ASE Atoms structure using Python",
+            self._create_from_shell,
+            category="structure",
+            icon=QStyle.StandardPixmap.SP_ComputerIcon,
+        )
+
         load_layout = self._add_section(layout, "Load structure")
         self._add_action(
             load_layout,
@@ -183,6 +192,13 @@ class StructureSourceDialog(QDialog):
         self._accept_candidate(
             structure_candidates.create_structure_candidate(self)
         )
+
+    def _create_from_shell(self) -> None:
+        from guy4ase.gui.dialogs.structures.shell import select_shell_structure
+
+        atoms = select_shell_structure(self)
+        if atoms is not None:
+            self._accept_candidate(StructureCandidate(atoms))
 
     def _create_from_database(self) -> None:
         self._accept_candidate(
