@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 from kkrunner.projects import ProjectRepository
 from guy4ase.gui.application.persistent_jobs import project_run_manager
 
+from guy4ase.gui.application.console_interrupt import ConsoleInterrupt
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 from guy4ase.gui.application.potential_version import PotentialFileVersion
 from guy4ase.gui.application.recent_files import RecentFiles
@@ -30,6 +31,7 @@ from guy4ase.gui.dialogs.project_browser import ProjectBrowserDialog
 from guy4ase.gui.dialogs.run_calculation import SprkkrRunWindow
 from guy4ase.gui.dialogs.workflow_window import WorkflowWindow
 from guy4ase.gui.flows import calculation as calculation_flow
+from guy4ase.gui.flows import files as file_flows
 from guy4ase.gui.presenters.result_actions import ResultActionsPresenter
 
 
@@ -81,6 +83,7 @@ class GuiApplication(QObject):
         self._workflow_window: WorkflowWindow | None = None
         self._main_window: MainWindow | None = None
         self._project_browser: ProjectBrowserDialog | None = None
+        self._exit_in_progress = False
 
     @property
     def active_project_id(self) -> str | None:
@@ -267,6 +270,64 @@ class GuiApplication(QObject):
     def _project_browser_closed(self, *_args) -> None:
         self._project_browser = None
 
+    def request_exit(self) -> bool:
+        """Quit on Ctrl+C unless the user cancels saving unsaved work."""
+        if self._exit_in_progress:
+            return False
+        self._exit_in_progress = True
+        try:
+            if not self._confirm_unsaved_work():
+                return False
+            app = QApplication.instance()
+            if app is not None:
+                app.quit()
+            return True
+        finally:
+            self._exit_in_progress = False
+
+    def _confirm_unsaved_work(self) -> bool:
+        structure = self.controller.has_unsaved_structure
+        parameters = self.controller.has_unsaved_input_parameters
+        if not structure and not parameters:
+            return True
+
+        names = []
+        if structure:
+            names.append("structure")
+        if parameters:
+            names.append("input parameters")
+        answer = QMessageBox.question(
+            QApplication.activeWindow(),
+            "Unsaved Work",
+            f"Save unsaved {' and '.join(names)} before quitting?",
+            (
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel
+            ),
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer == QMessageBox.StandardButton.Discard:
+            return True
+        if answer != QMessageBox.StandardButton.Save:
+            return False
+
+        parent = QApplication.activeWindow() or self._workflow_window or self._main_window
+        if structure and not file_flows.save_structure(
+            self.controller, self.recent_files, parent
+        ):
+            return False
+        if parameters and not file_flows.save_input_parameters(
+            self.controller, self.recent_files, parent
+        ):
+            return False
+        # Modal file dialogs can process further workspace edits; never
+        # silently discard a revision newer than the saved one.
+        return not (
+            self.controller.has_unsaved_structure
+            or self.controller.has_unsaved_input_parameters
+        )
+
     @staticmethod
     def _show_window(window: QWidget) -> None:
         window.show()
@@ -278,7 +339,11 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(sys.argv if argv is None else [sys.argv[0], *argv])
     gui = GuiApplication(parent=app)
     gui.show_workflow_window()
-    return app.exec()
+    interrupt = ConsoleInterrupt(gui.request_exit, parent=app)
+    try:
+        return app.exec()
+    finally:
+        interrupt.close()
 
 
 if __name__ == "__main__":
