@@ -208,6 +208,12 @@ class WorkspaceController(QObject):
         self._saved_structure_generation = generation
         return True
 
+    def _mark_file_backed_structure_saved(self, state_id: int) -> None:
+        """A structure recovered from an available POTFIL is already saved."""
+        version = self._results.state(state_id).potential_version
+        if version is not None and version.available:
+            self.mark_structure_saved(self.structure_generation)
+
     def mark_input_parameters_saved(self, generation: Generation) -> bool:
         """Do not mark changes made during a file dialog as saved."""
         if generation != self.input_parameters_generation or self.input_parameters is None:
@@ -713,6 +719,7 @@ class WorkspaceController(QObject):
                 )
             )
             workspace_updated = True
+            self._mark_file_backed_structure_saved(state.id)
             self.structureChanged.emit(loaded.atoms)
 
         self.resultChanged.emit(loaded.result)
@@ -783,6 +790,7 @@ class WorkspaceController(QObject):
             expected_generation=baseline,
             force=force,
         )
+        self._mark_file_backed_structure_saved(target_state.id)
         self.structureChanged.emit(atoms)
         return DocumentChange.APPLIED
 
@@ -824,6 +832,9 @@ class WorkspaceController(QObject):
         if rejected is not None:
             return rejected
         baseline = self.structure_generation
+        # Branching a calculation changes provenance, not necessarily geometry.
+        source_was_saved = not self.has_unsaved_structure
+        source_state_id = self.state_id
 
         child_kwargs: dict[str, Any] = {}
         if result_id is None:
@@ -879,6 +890,10 @@ class WorkspaceController(QObject):
             expected_generation=baseline,
             force=force,
         )
+        if source_was_saved and parent_state_id == source_state_id:
+            self.mark_structure_saved(self.structure_generation)
+        else:
+            self._mark_file_backed_structure_saved(state.id)
         self.structureChanged.emit(atoms)
         return DocumentChange.APPLIED
 
