@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QPalette
+from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -14,7 +14,6 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
-    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -26,6 +25,7 @@ from guy4ase.gui.application.window_geometry import manage_window_geometry
 from guy4ase.gui.application.workspace_controller import WorkspaceController
 from guy4ase.gui.dialogs.object_view import execute_value_action
 from guy4ase.gui.dialogs.settings import edit_settings
+from guy4ase.gui.misc.icons import settings_icon
 from guy4ase.gui.flows import calculation as calculation_flow
 from guy4ase.gui.flows import files as file_flows
 from guy4ase.gui.flows import structures as structure_flows
@@ -197,14 +197,7 @@ class WorkflowWindow(QMainWindow):
         settings_btn = QToolButton(expert_box)
         settings_btn.setAutoRaise(True)
         settings_btn.setFixedSize(40, 40)
-        settings_btn.setIcon(
-            QIcon.fromTheme(
-                "preferences-system",
-                self.style().standardIcon(
-                    QStyle.StandardPixmap.SP_FileDialogDetailedView
-                ),
-            )
-        )
+        settings_btn.setIcon(settings_icon())
         settings_btn.setToolTip("Settings")
         settings_btn.setAccessibleName("Settings")
         settings_btn.clicked.connect(self._open_settings)

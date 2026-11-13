@@ -72,3 +72,14 @@ def test_read_only_profile_cannot_be_deleted_or_edited():
     assert not dialog.delete_button.isEnabled()
     assert not dialog.form.form_widget.isEnabled()
     dialog.close()
+
+
+def test_standalone_profile_dialog_reuses_run_settings_page():
+    from guy4ase.gui.widgets.settings.run_configurations import RunConfigurationsPage
+
+    dialog = profiles_dialogs.ProfilesDialog(store=_ReadOnlyStore())
+    assert isinstance(dialog.page, RunConfigurationsPage)
+    assert dialog.form is dialog.page.form
+    assert dialog.delete_button is dialog.page.delete_button
+    assert dialog.findChildren(RunConfigurationsPage) == [dialog.page]
+    dialog.close()
