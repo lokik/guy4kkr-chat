@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.15']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14', '3.15']
 
     env:
       QT_QPA_PLATFORM: offscreen
@@ -45,8 +45,8 @@ jobs:
             libxkbcommon-x11-0 \
             libxcb-cursor0
 
-      - name: Check Python 3.9 source compatibility
-        run: python tests/test_python39_compat.py
+      - name: Check Python 3.10 source compatibility
+        run: python tests/test_python310_compat.py
 
       - name: Checkout KKRunner
         uses: actions/checkout@v7

@@ -144,6 +144,11 @@ class WorkflowActionsWidget(QWidget):
             ActionIcon.EMPTY_SPHERES: "run-build-clean.svg",
             ActionIcon.NEW_CALCULATION: "run-build-clean.svg",
         }
+        if icon is ActionIcon.SHELL:
+            return QIcon.fromTheme(
+                "utilities-terminal",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon),
+            )
         if icon in resource:
             return QIcon(str(icon_path(resource[icon])))
         return self.style().standardIcon(standard[icon])
