@@ -1,4 +1,4 @@
-"""Structure shell behavior with the embedded PyQtGraph console."""
+"""Interactive ASE structure shell and workspace publication contracts."""
 from __future__ import annotations
 
 import os
@@ -6,7 +6,9 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from ase import Atoms
-from PyQt6.QtWidgets import QApplication, QDialog
+from PyQt6.QtCore import Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QDialog, QPlainTextEdit
 
 from guy4ase.gui.application.workspace_controller import WorkspaceController
 from guy4ase.gui.dialogs.structures import shell
@@ -20,55 +22,98 @@ def _app():
     return QApplication.instance() or QApplication([])
 
 
-def _enter(dialog, line):
-    """Use the console widget's real command-input path."""
-    dialog.console.input.setText(line)
-    dialog.console.input.execCmd()
+def _flush():
+    # Qonsole runs user commands via a queued connection on the GUI thread.
+    for _ in range(10):
+        _app().processEvents()
 
 
-def test_shell_hints_and_explicit_selection():
+def _enter(dialog, source):
+    dialog.console.insert_input_text(source)
+    QTest.keyClick(dialog.console.edit, Qt.Key.Key_Return)
+    _flush()
+
+
+def test_shell_uses_one_editable_console_with_instructions():
     _app()
     dialog = shell.StructureShellDialog()
-    assert "use_structure(atoms)" in dialog.console.output.toPlainText()
-    assert "exit()" in dialog.console.output.toPlainText()
+    assert isinstance(dialog.console.edit, QPlainTextEdit)
+    assert "use_structure(atoms)" in dialog.console.edit.toPlainText()
+    assert "Shift+Enter" in dialog.console.edit.toPlainText()
+    assert not hasattr(dialog.console, "input")
+    assert ">>>" in dialog.console.edit.toPlainText()
+    dialog.reject()
+
+
+def test_shell_accepts_explicit_use_and_shows_output():
+    _app()
+    dialog = shell.StructureShellDialog()
     _enter(dialog, "atoms = bulk('Fe', 'bcc', a=2.87, cubic=True)")
     assert dialog.candidate is None
     _enter(dialog, "print(atoms.get_chemical_formula())")
-    assert "Fe2" in dialog.console.output.toPlainText()
+    assert "Fe2" in dialog.console.edit.toPlainText()
     _enter(dialog, "use(atoms)")
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert isinstance(dialog.candidate, Atoms)
     assert dialog.candidate.get_chemical_symbols() == ["Fe", "Fe"]
 
 
-def test_shell_multiline_and_accepted_structure_is_detached():
+def test_shell_pastes_and_executes_whole_python_block():
     _app()
     dialog = shell.StructureShellDialog()
-    for line in ("for _ in range(2):", "    print('ok')", ""):
-        _enter(dialog, line)
-    assert dialog.console.output.toPlainText().count("ok") >= 2
-    _enter(dialog, "structure = Atoms('Ni', positions=[(0, 0, 0)])")
-    _enter(dialog, "use_structure(structure)")
+    block = (
+        "from ase.build import bulk\n"
+        "atoms = bulk('Ni', 'fcc', a=3.52)\n"
+        "atoms *= (2, 1, 1)\n"
+        "use_structure(atoms)"
+    )
+    _app().clipboard().setText(block)
+    QTest.keyClick(
+        dialog.console.edit,
+        Qt.Key.Key_V,
+        Qt.KeyboardModifier.ControlModifier,
+    )
+    assert dialog.console.input_buffer() == block
+    QTest.keyClick(dialog.console.edit, Qt.Key.Key_Return)
+    _flush()
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    assert dialog.candidate.get_chemical_symbols() == ["Ni", "Ni"]
+
+
+def test_shell_shift_enter_edits_multiline_before_execution():
+    _app()
+    dialog = shell.StructureShellDialog()
+    dialog.console.insert_input_text("structure = Atoms('Ni')")
+    QTest.keyClick(
+        dialog.console.edit,
+        Qt.Key.Key_Return,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    assert dialog.console.input_buffer() == "structure = Atoms('Ni')\n"
+    dialog.console.insert_input_text("use_structure(structure)")
+    QTest.keyClick(dialog.console.edit, Qt.Key.Key_Return)
+    _flush()
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert dialog.candidate.get_chemical_symbols() == ["Ni"]
-    dialog.console.localNamespace["structure"].set_chemical_symbols(["Cu"])
+    # The accepted value is a copy of the console variable.
+    dialog.console.interpreter.locals["structure"].set_chemical_symbols(["Cu"])
     assert dialog.candidate.get_chemical_symbols() == ["Ni"]
 
 
-def test_shell_invalid_candidate_does_not_accept():
+def test_shell_invalid_candidate_does_not_close_and_reports_error():
     _app()
     dialog = shell.StructureShellDialog()
     _enter(dialog, "use('Fe')")
     assert dialog.candidate is None
     assert dialog.result() != QDialog.DialogCode.Accepted
-    assert "expects an ase.Atoms" in dialog.console.output.toPlainText()
+    assert "expects an ase.Atoms" in dialog.console.edit.toPlainText()
     _enter(dialog, "use(Atoms('Fe'))")
     assert dialog.result() == QDialog.DialogCode.Accepted
 
 
-def test_shell_close_exit_and_quit_discard_without_exiting_application():
+def test_shell_close_exit_quit_and_sys_exit_discard_session():
     _app()
-    for action in ("close", "exit()", "quit()"):
+    for action in ("close", "exit()", "quit()", "import sys; sys.exit()"):
         dialog = shell.StructureShellDialog()
         _enter(dialog, "atoms = Atoms('Fe')")
         if action == "close":
@@ -79,16 +124,21 @@ def test_shell_close_exit_and_quit_discard_without_exiting_application():
         assert dialog.result() == QDialog.DialogCode.Rejected
 
 
-def test_shell_command_history_is_managed_by_console():
+def test_shell_history_is_part_of_console():
     _app()
     dialog = shell.StructureShellDialog()
     _enter(dialog, "x = 1")
     _enter(dialog, "x = 2")
-    assert dialog.console.input.history[1:3] == ["x = 2", "x = 1"]
+    QTest.keyClick(dialog.console.edit, Qt.Key.Key_Up)
+    assert dialog.console.input_buffer() == "x = 2"
+    QTest.keyClick(dialog.console.edit, Qt.Key.Key_Up)
+    assert dialog.console.input_buffer() == "x = 1"
+    QTest.keyClick(dialog.console.edit, Qt.Key.Key_Down)
+    assert dialog.console.input_buffer() == "x = 2"
     dialog.reject()
 
 
-def test_shell_flow_only_publishes_selected_structure(monkeypatch):
+def test_shell_flow_only_publishes_when_selected(monkeypatch):
     _app()
     controller = WorkspaceController()
     generation = controller.structure_generation

@@ -6,11 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "guy4kkr"
 version = "0.1.0"
 description = "PyQt6 GUI for building/editing ASE structures and running SPR-KKR via ase2sprkkr."
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
   "kkrunner>=0.2.0b1,<0.3",
   "PyQt6",
-  "pyqtgraph>=0.14,<0.15",
+  "qonsole>=3.3,<4",
   "matplotlib",
   "numpy",
   "ase",

@@ -1,14 +1,13 @@
-"""Embedded Python console for creating a detached ASE structure.
+"""Embedded, multiline ASE Python shell for detached structure creation.
 
-The console runs user-entered code in the GUI process. Only an explicit
-use_structure(atoms) / use(atoms) call selects a structure; dismissing the
-dialog otherwise leaves the workspace unchanged.
+User code runs in the GUI process. An explicit use(atoms) / use_structure(atoms)
+selects a snapshot; closing the dialog or exiting the interpreter leaves the
+workspace unchanged.
 """
 from __future__ import annotations
 
 from ase import Atoms
 from ase.build import bulk, surface
-from pyqtgraph.console import ConsoleWidget
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -16,22 +15,25 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from qonsole import PythonConsole
 
 
 _HINT = """Interactive ASE Python shell
 
 Create an ASE Atoms object, then call use(atoms) or use_structure(atoms).
-Example:
+For example:
+
     atoms = bulk('Fe', 'bcc', a=2.87, cubic=True)
     use(atoms)
 
 Atoms, bulk and surface are already imported.
-Type exit() or quit(), or close the window, to discard the session.
+Paste complete Python blocks, or use Shift+Enter to insert another line.
+Press Enter to execute. Type exit(), quit() or sys.exit() to discard the session.
 """
 
 
 class StructureShellDialog(QDialog):
-    """Use PyQtGraph's interactive console, committing only an explicit choice."""
+    """Present a real editable console; publish only an explicit ASE candidate."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -48,36 +50,36 @@ class StructureShellDialog(QDialog):
         notice.setWordWrap(True)
         layout.addWidget(notice)
 
-        self.console = ConsoleWidget(
+        self.console = PythonConsole(
             parent=self,
-            namespace={
+            locals={
                 "Atoms": Atoms,
                 "bulk": bulk,
                 "surface": surface,
                 "use_structure": self.use_structure,
                 "use": self.use_structure,
-                # PyQtGraph does not catch SystemExit. Override the built-in
-                # helpers locally so exit()/quit() cannot terminate Guy4ASE.
-                "exit": self.reject,
-                "quit": self.reject,
             },
-            text=_HINT,
-            allowNonGuiExecution=False,
+            inprompt=">>>",
+            welcome_message=_HINT,
         )
+        # Execute on the GUI thread: use_structure() calls QDialog.accept().
+        # Qonsole handles SystemExit from exit(), quit() and sys.exit() itself.
+        self.console.eval_queued()
+        self.console.interpreter.exit_signal.connect(self.reject)
         layout.addWidget(self.console, 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel, self)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-        self.console.input.setFocus()
+        self.console.edit.setFocus()
 
     @property
     def candidate(self) -> Atoms | None:
-        """Detached accepted structure; None after normal console dismissal."""
+        """Detached accepted structure, or None after ordinary dismissal."""
         return self._candidate
 
     def use_structure(self, atoms: Atoms) -> None:
-        """Select a snapshot and close; publication belongs to the caller."""
+        """Select a defensive copy; publication belongs to the calling flow."""
         if not isinstance(atoms, Atoms):
             raise TypeError("use_structure() expects an ase.Atoms object")
         self._candidate = atoms.copy()
@@ -85,7 +87,7 @@ class StructureShellDialog(QDialog):
 
 
 def select_shell_structure(parent: QWidget | None = None) -> Atoms | None:
-    """Return an ASE structure only when the user explicitly calls use()."""
+    """Return a structure only if the user explicitly selected it in Python."""
     dialog = StructureShellDialog(parent)
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
