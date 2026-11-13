@@ -261,7 +261,7 @@ def test_cancel_new_2d_prompts_to_keep_or_discard_3d(tmp_path, monkeypatch, keep
     window.close()
 
 
-def test_workflow_navigation_is_one_bottom_panel_with_three_icon_buttons(
+def test_workflow_navigation_is_one_bottom_panel_with_four_icon_buttons(
     tmp_path, monkeypatch
 ):
     _application = QApplication.instance() or QApplication([])
@@ -287,9 +287,10 @@ def test_workflow_navigation_is_one_bottom_panel_with_three_icon_buttons(
         window._project_browser_button,
         window._expert_button,
         window._settings_button,
+        window._close_button,
     ]
     assert [button.text() for button in buttons] == [
-        "Project Browser", "Expert Mode", "Settings"
+        "Project Browser", "Expert Mode", "Settings", "Close"
     ]
     assert all(not button.icon().isNull() for button in buttons)
     assert all(
@@ -319,5 +320,67 @@ def test_workflow_navigation_is_one_bottom_panel_with_three_icon_buttons(
     # the same non-modal project browser as the expert window.
     assert gui._project_browser is not None
     assert gui._project_browser.isVisible()
-    gui._project_browser.close()
+    window.show()
+    _application.processEvents()
+    window._close_button.click()
+    _application.processEvents()
+    assert not window.isVisible()
+    assert gui._project_browser is None or not gui._project_browser.isVisible()
+
+
+def test_main_window_close_also_closes_project_browser(tmp_path):
+    application = QApplication.instance() or QApplication([])
+    gui, window = _workflow(tmp_path)
+    window.show()
+    gui.show_project_browser()
+    assert gui._project_browser is not None
+    assert gui._project_browser.isVisible()
+
+    # Window-manager close uses the same application shutdown route.
     window.close()
+    application.processEvents()
+
+    assert not window.isVisible()
+    assert gui._project_browser is None or not gui._project_browser.isVisible()
+
+
+def test_cancelled_exit_keeps_workflow_and_browser_open(tmp_path, monkeypatch):
+    application = QApplication.instance() or QApplication([])
+    gui, window = _workflow(tmp_path)
+    window.show()
+    gui.show_project_browser()
+    monkeypatch.setattr(gui, "_confirm_unsaved_work", lambda: False)
+
+    window._close_button.click()
+    application.processEvents()
+
+    assert window.isVisible()
+    assert gui._project_browser is not None
+    assert gui._project_browser.isVisible()
+
+    # A cancelled shutdown does not poison a subsequent accepted exit.
+    monkeypatch.setattr(gui, "_confirm_unsaved_work", lambda: True)
+    window.close()
+    application.processEvents()
+    assert not window.isVisible()
+    assert gui._project_browser is None or not gui._project_browser.isVisible()
+
+
+def test_expert_exit_menu_uses_shared_shutdown(tmp_path):
+    application = QApplication.instance() or QApplication([])
+    gui, workflow = _workflow(tmp_path)
+    workflow.show()
+    expert = gui.create_main_window()
+    expert.show()
+    gui.show_project_browser()
+
+    structure_menu = expert.menuBar().actions()[0].menu()
+    exit_action = next(
+        action for action in structure_menu.actions() if action.text() == "E&xit"
+    )
+    exit_action.trigger()
+    application.processEvents()
+
+    assert not expert.isVisible()
+    assert not workflow.isVisible()
+    assert gui._project_browser is None or not gui._project_browser.isVisible()
