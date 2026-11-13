@@ -329,7 +329,7 @@ def test_reset_workspace_clears_the_document_and_views(app, tmp_path):
     assert overview is not None
     assert setup is not None
     assert setup.input_preview_text
-    assert setup.directory_text == '/tmp/calculation'
+    assert not hasattr(setup, 'directory_text')
     assert setup.potential_path_text == '/tmp/potential'
 
     window.controller.reset()
@@ -343,7 +343,6 @@ def test_reset_workspace_clears_the_document_and_views(app, tmp_path):
     assert overview.scf_status_text == ''
     assert overview.info_text.startswith('No structure loaded.')
     assert setup.input_preview_text == ''
-    assert setup.directory_text == '—'
     assert setup.potential_path_text == '—'
     assert not setup.save_input_enabled
     window.close()
