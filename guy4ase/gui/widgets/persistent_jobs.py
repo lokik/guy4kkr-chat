@@ -61,12 +61,17 @@ def _status_label(state: str) -> str:
     return state.replace("_", " ").title() or "Unknown"
 
 
+def _profile_label(job: PersistentJob) -> str:
+    return job.profile or "—"
+
+
 _GROUPS: tuple[tuple[str, Callable[[PersistentJob], str]], ...] = (
     ("Started date", _started_date),
     ("Finished date", _finished_date),
     ("Status", lambda job: _status_label(job.state)),
     ("Task", lambda job: job.task or "Unknown task"),
     ("Execution target", lambda job: job.target),
+    ("Run profile", _profile_label),
 )
 
 
@@ -127,15 +132,15 @@ class PersistentJobsWidget(QWidget):
         root.addWidget(self.splitter, 1)
 
         self.tree = QTreeWidget(self.splitter)
-        self.tree.setColumnCount(6)
+        self.tree.setColumnCount(7)
         self.tree.setHeaderLabels(
-            ("Job", "Status", "Started", "Finished", "Task", "Target")
+            ("Job", "Status", "Started", "Finished", "Task", "Target", "Profile")
         )
         self.tree.setRootIsDecorated(True)
         self.tree.setAlternatingRowColors(True)
         header = self.tree.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for column in range(1, 6):
+        for column in range(1, 7):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         self.tree.currentItemChanged.connect(self._selection_changed)
         self.tree.itemDoubleClicked.connect(self._item_double_clicked)
@@ -152,6 +157,7 @@ class PersistentJobsWidget(QWidget):
         self.status_value = QLabel("—", details)
         self.task_value = QLabel("—", details)
         self.target_value = QLabel("—", details)
+        self.profile_value = QLabel("—", details)
         self.directory_value = QLabel("—", details)
         self.directory_value.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
@@ -166,6 +172,7 @@ class PersistentJobsWidget(QWidget):
             ("Status", self.status_value),
             ("Task", self.task_value),
             ("Execution target", self.target_value),
+            ("Run profile", self.profile_value),
             ("Directory", self.directory_value),
             ("Dataset", self.dataset_value),
             ("Started", self.started_value),
@@ -342,6 +349,7 @@ class PersistentJobsWidget(QWidget):
                         _timestamp_label(job.finished_at),
                         job.task,
                         job.target,
+                        _profile_label(job),
                     ]
                 )
                 item.setData(0, _JOB_ID_ROLE, job.id)
@@ -395,6 +403,7 @@ class PersistentJobsWidget(QWidget):
                 self.status_value,
                 self.task_value,
                 self.target_value,
+                self.profile_value,
                 self.directory_value,
                 self.dataset_value,
                 self.started_value,
@@ -422,6 +431,7 @@ class PersistentJobsWidget(QWidget):
         )
         self.task_value.setText(job.task or "—")
         self.target_value.setText(job.target)
+        self.profile_value.setText(_profile_label(job))
         self.directory_value.setText(job.directory or "—")
         self.directory_value.setToolTip(job.directory or "")
         self.dataset_value.setText(job.dataset or "—")

@@ -160,3 +160,15 @@ def test_submitting_run_explains_missing_backend_identity():
     )
     assert not restored.attachable
     assert "Refresh statuses" in restored.reattach_unavailable_reason
+
+
+def test_profile_comes_from_ase2sprkkr_metadata():
+    item = record()
+    item.metadata["ase2sprkkr"]["profile"] = "deleted-cluster"
+    assert PersistentJob.from_run_record(item).profile == "deleted-cluster"
+
+    # Explicitly unnamed profiles and legacy records have the same representation.
+    item.metadata["ase2sprkkr"]["profile"] = None
+    assert PersistentJob.from_run_record(item).profile is None
+    item.metadata["ase2sprkkr"].pop("profile")
+    assert PersistentJob.from_run_record(item).profile is None

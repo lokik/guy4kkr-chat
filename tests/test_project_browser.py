@@ -14,7 +14,7 @@ from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.project_browser import ProjectBrowserDialog
 
 
-def _job(job_id: str, *, dataset: str, project_id=None) -> PersistentJob:
+def _job(job_id: str, *, dataset: str, project_id=None, profile=None) -> PersistentJob:
     return PersistentJob(
         id=job_id,
         state="finished",
@@ -29,6 +29,7 @@ def _job(job_id: str, *, dataset: str, project_id=None) -> PersistentJob:
         message=None,
         result_files_state="current",
         project_id=project_id,
+        profile=profile,
     )
 
 
@@ -298,3 +299,25 @@ def test_project_browser_is_an_independent_non_modal_window(tmp_path):
 
     browser.close()
     parent.close()
+
+
+def test_project_browser_displays_historical_execution_profile(tmp_path):
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Project")
+    source = _JobSource((
+        _job("run-1", dataset="First", project_id=project.id,
+             profile="remote-cluster"),
+        _job("run-2", dataset="Old", project_id=project.id),
+    ))
+    browser = _dialog(repository, source)
+    assert browser.jobs.tree.headerItem().text(6) == "Profile"
+    assert browser.jobs.profile_value.text() == "remote-cluster"
+    displayed = {
+        row.text(0): row.text(6)
+        for group_index in range(browser.jobs.tree.topLevelItemCount())
+        for group in (browser.jobs.tree.topLevelItem(group_index),)
+        for row in (group.child(i) for i in range(group.childCount()))
+    }
+    assert displayed == {"First": "remote-cluster", "Old": "—"}
+    browser.close()
