@@ -1,4 +1,12 @@
-"""Bridge terminal Ctrl+C into the Qt event loop without polling."""
+"""Bridge terminal Ctrl+C into the Qt event loop without polling.
+
+Qt documents the socket-pair + QSocketNotifier pattern for Unix signals:
+https://doc.qt.io/qt-6/unix-signals.html
+
+Qt APIs cannot safely run in a POSIX signal handler. Python's
+signal.set_wakeup_fd() writes a byte to the socket on SIGINT; the notifier
+then wakes Qt so the normal shutdown callback runs on the GUI thread.
+"""
 from __future__ import annotations
 
 import signal
