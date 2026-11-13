@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (
     QHBoxLayout,
@@ -54,6 +54,8 @@ from guy4ase.gui.workspace_semantics import EmptySpheresAction
 
 class MainWindow(QMainWindow):
     """Expert-mode shell composing menus and focused presentation widgets."""
+
+    exitRequested = pyqtSignal()
 
     def __init__(
         self,
@@ -363,7 +365,7 @@ class MainWindow(QMainWindow):
 
         exit_action = QAction("E&xit", self)
         exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
+        exit_action.triggered.connect(lambda _checked=False: self.exitRequested.emit())
         structure_menu.addAction(exit_action)
 
         help_menu = menubar.addMenu("&Help")

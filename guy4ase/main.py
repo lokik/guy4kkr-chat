@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QObject, Qt
+from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 from kkrunner.projects import ProjectRepository
 from guy4ase.gui.application.persistent_jobs import project_run_manager
@@ -84,6 +84,10 @@ class GuiApplication(QObject):
         self._main_window: MainWindow | None = None
         self._project_browser: ProjectBrowserDialog | None = None
         self._exit_in_progress = False
+        self._exit_approved = False
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._close_project_browser)
 
     @property
     def active_project_id(self) -> str | None:
@@ -138,9 +142,14 @@ class GuiApplication(QObject):
     def _wire_window(self, window: WorkflowWindow | MainWindow) -> None:
         """Connect application-owned actions exposed by a top-level window."""
         self._wire_result_actions(window)
-        window.browser_panel.projectBrowserRequested.connect(
-            self.show_project_browser
-        )
+        window.installEventFilter(self)
+        if isinstance(window, WorkflowWindow):
+            window.projectBrowserRequested.connect(self.show_project_browser)
+        else:
+            window.browser_panel.projectBrowserRequested.connect(
+                self.show_project_browser
+            )
+            window.exitRequested.connect(self.request_exit)
 
     def _wire_result_actions(self, window: WorkflowWindow | MainWindow) -> None:
         """Compose result presentation and route its top-level mutation intents."""
@@ -270,14 +279,48 @@ class GuiApplication(QObject):
     def _project_browser_closed(self, *_args) -> None:
         self._project_browser = None
 
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """Treat closing the primary window as an application exit request."""
+        if (
+            event.type() == QEvent.Type.Close
+            and not self._exit_approved
+            and isinstance(watched, QWidget)
+            and watched.isVisible()
+            and (
+                watched is self._workflow_window
+                or (
+                    watched is self._main_window
+                    and (
+                        self._workflow_window is None
+                        or not self._workflow_window.isVisible()
+                    )
+                )
+            )
+        ):
+            # request_exit closes every window only after the user approves
+            # saving or discarding changes. Consume the original close event.
+            self.request_exit()
+            return True
+        return super().eventFilter(watched, event)
+
+    def _close_project_browser(self) -> None:
+        """Close the independent browser on every application shutdown path."""
+        if self._project_browser is not None:
+            self._project_browser.close()
+
     def request_exit(self) -> bool:
-        """Quit on Ctrl+C unless the user cancels saving unsaved work."""
+        """Quit only after the unsaved-work check, closing auxiliary windows."""
         if self._exit_in_progress:
             return False
         self._exit_in_progress = True
         try:
             if not self._confirm_unsaved_work():
                 return False
+            self._exit_approved = True
+            self._close_project_browser()
+            for window in (self._main_window, self._workflow_window):
+                if window is not None:
+                    window.close()
             app = QApplication.instance()
             if app is not None:
                 app.quit()

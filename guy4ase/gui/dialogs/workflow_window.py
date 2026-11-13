@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPalette
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QIcon, QPalette
 from PyQt6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
-    QPushButton,
+    QStyle,
     QSizePolicy,
     QSplitter,
     QToolButton,
@@ -41,7 +41,6 @@ from guy4ase.gui.style import (
     heading_font,
     secondary_text_stylesheet,
 )
-from guy4ase.gui.widgets.browser_panel import BrowserPanel
 from guy4ase.gui.widgets.result_actions import ResultActionsWidget
 from guy4ase.gui.widgets.workflow_actions import WorkflowActionsWidget
 from guy4ase.gui.workflow.model import (
@@ -65,6 +64,8 @@ from guy4ase.gui.workflow.planner import WorkflowPlanner
 
 class WorkflowWindow(QMainWindow):
     """Task-oriented entry point that keeps the full UI available as expert mode."""
+
+    projectBrowserRequested = pyqtSignal()
 
     def __init__(
         self,
@@ -96,11 +97,6 @@ class WorkflowWindow(QMainWindow):
     def result_actions_widget(self) -> ResultActionsWidget:
         """Return the result browser owned by this window."""
         return self._result_actions_widget
-
-    @property
-    def browser_panel(self) -> BrowserPanel:
-        """Return the session-independent browser entry points."""
-        return self._browser_panel
 
     @property
     def workflow_plan(self) -> WorkflowPlan:
@@ -143,23 +139,19 @@ class WorkflowWindow(QMainWindow):
         content_layout.addStretch(1)
         splitter.addWidget(content)
 
-        side = QFrame(splitter)
-        side.setFrameShape(QFrame.Shape.StyledPanel)
+        # The sidebar is only a layout container: the result view and the
+        # bottom navigation must be independent, visually separate panels.
+        side = QWidget(splitter)
         side.setMinimumWidth(300)
         side.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         side_layout = QVBoxLayout(side)
         side_layout.setContentsMargins(0, 0, 0, 0)
         side_layout.setSpacing(SPACE_SM)
 
-        self._browser_panel = BrowserPanel(side)
-        self._browser_panel.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        side_layout.addWidget(self._browser_panel)
-
-        self._result_actions = QWidget(side)
+        self._result_actions = QFrame(side)
+        self._result_actions.setFrameShape(QFrame.Shape.StyledPanel)
         result_actions_layout = QVBoxLayout(self._result_actions)
-        result_actions_layout.setContentsMargins(0, 0, 0, 0)
+        result_actions_layout.setContentsMargins(SPACE_SM, SPACE_SM, SPACE_SM, SPACE_SM)
         result_actions_layout.setSpacing(SPACE_XS)
         result_actions_title = QLabel("Results...", self._result_actions)
         result_actions_title.setFont(
@@ -175,40 +167,74 @@ class WorkflowWindow(QMainWindow):
         result_actions_layout.addWidget(self._result_actions_widget, 1)
         side_layout.addWidget(self._result_actions, 1)
 
-        expert_box = QGroupBox("", side)
-        expert_box.setSizePolicy(
+        # Keep the application-level navigation actions together at the
+        # bottom of the sidebar, below the workspace results.
+        navigation = QGroupBox("", side)
+        navigation.setObjectName("workflowNavigation")
+        navigation.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        expert_layout = QVBoxLayout(expert_box)
-        side_text = QLabel("Access the full expert interface.", expert_box)
-        side_text.setWordWrap(True)
-        side_text.setStyleSheet(secondary_text_stylesheet(self.palette()))
-        expert_layout.addWidget(side_text)
+        navigation_layout = QHBoxLayout(navigation)
+        navigation_layout.setContentsMargins(SPACE_SM, SPACE_SM, SPACE_SM, SPACE_SM)
+        navigation_layout.setSpacing(SPACE_XS)
 
-        bottom_row = QHBoxLayout()
-        bottom_row.setContentsMargins(0, 0, 0, 0)
-        bottom_row.setSpacing(SPACE_XS)
-        expert_btn = QPushButton("Open Expert Mode", expert_box)
-        expert_btn.setMinimumHeight(40)
-        expert_btn.setStyleSheet(button_stylesheet(self.palette()))
-        expert_btn.clicked.connect(self._open_expert_mode)
-        bottom_row.addWidget(expert_btn, 1)
+        def add_navigation_button(
+            label: str, icon: QIcon, tooltip: str, callback: Callable[[], None]
+        ) -> QToolButton:
+            button = QToolButton(navigation)
+            button.setText(label)
+            button.setIcon(icon)
+            button.setIconSize(QSize(24, 24))
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            button.setMinimumHeight(72)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+            button.setStyleSheet(
+                button_stylesheet(self.palette(), selector="QToolButton")
+            )
+            button.setToolTip(tooltip)
+            button.setAccessibleName(label)
+            button.clicked.connect(callback)
+            navigation_layout.addWidget(button, 1)
+            return button
 
-        settings_btn = QToolButton(expert_box)
-        settings_btn.setAutoRaise(True)
-        settings_btn.setFixedSize(40, 40)
-        settings_btn.setIcon(settings_icon())
-        settings_btn.setToolTip("Settings")
-        settings_btn.setAccessibleName("Settings")
-        settings_btn.clicked.connect(self._open_settings)
-        bottom_row.addWidget(settings_btn)
-        expert_layout.addLayout(bottom_row)
-        expert_box.setStyleSheet(
+        self._project_browser_button = add_navigation_button(
+            "Project Browser",
+            QIcon.fromTheme(
+                "folder-open",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon),
+            ),
+            "Browse projects and past calculations",
+            lambda _checked=False: self.projectBrowserRequested.emit(),
+        )
+        self._expert_button = add_navigation_button(
+            "Expert Mode",
+            QIcon.fromTheme(
+                "emblem-important",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning),
+            ),
+            "Open the full expert interface",
+            self._open_expert_mode,
+        )
+        self._settings_button = add_navigation_button(
+            "Settings", settings_icon(), "Configure Guy4ASE", self._open_settings
+        )
+        self._close_button = add_navigation_button(
+            "Close",
+            QIcon.fromTheme(
+                "application-exit",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton),
+            ),
+            "Close Guy4ASE",
+            self.close,
+        )
+        navigation.setStyleSheet(
             group_panel_stylesheet(
                 self.palette(), self.palette().color(QPalette.ColorRole.Highlight)
             )
         )
-        side_layout.addWidget(expert_box, alignment=Qt.AlignmentFlag.AlignBottom)
+        side_layout.addWidget(navigation, alignment=Qt.AlignmentFlag.AlignBottom)
         splitter.addWidget(side)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
