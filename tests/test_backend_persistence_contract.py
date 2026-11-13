@@ -92,7 +92,7 @@ def test_persistent_task_identity_round_trip_drives_recompute_editor(
         resolved_tasks.append(task)
         return Reader
 
-    monkeypatch.setattr(reader_registry, "class_for_task_name", lambda name: reader_class_for_task(InputParameters.task_registry[name]))
+    monkeypatch.setattr(reader_registry, "class_for_task", reader_class_for_task)
 
     loaded = PersistentJobSource(manager).load_result(run.id)
 

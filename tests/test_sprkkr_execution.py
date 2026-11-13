@@ -107,7 +107,7 @@ def test_execution_binds_persistent_manager_to_launch_project(monkeypatch, tmp_p
         id = "run-1"
         record = SimpleNamespace(
             execution=SimpleNamespace(
-                endpoint=SimpleNamespace(executor="local", host=None)
+                transport=SimpleNamespace(is_local=True, host=None)
             )
         )
 

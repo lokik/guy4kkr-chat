@@ -88,7 +88,6 @@ def test_expert_side_panel_composes_independent_views():
         edit_input=noop,
         load_input=noop,
         save_input=noop,
-        choose_directory=noop,
         run_calculation_action=QAction("Run"),
         load_output=noop,
         value_action=lambda _value, _action: None,
