@@ -41,7 +41,8 @@ def test_shell_uses_one_editable_console_with_instructions():
     assert "use_structure(atoms)" in dialog.console.edit.toPlainText()
     assert "Shift+Enter" in dialog.console.edit.toPlainText()
     assert not hasattr(dialog.console, "input")
-    assert ">>>" in dialog.console.edit.toPlainText()
+    # Qonsole renders the prompt in its separate gutter, not in the editor text.
+    assert dialog.console.in_prompt().strip() == ">>>"
     dialog.reject()
 
 
