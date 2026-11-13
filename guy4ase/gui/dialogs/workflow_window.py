@@ -167,7 +167,7 @@ class WorkflowWindow(QMainWindow):
         result_actions_layout.addWidget(self._result_actions_widget, 1)
         side_layout.addWidget(self._result_actions, 1)
 
-        # Keep the three application-level navigation actions together at the
+        # Keep the application-level navigation actions together at the
         # bottom of the sidebar, below the workspace results.
         navigation = QGroupBox("", side)
         navigation.setObjectName("workflowNavigation")
@@ -219,6 +219,15 @@ class WorkflowWindow(QMainWindow):
         )
         self._settings_button = add_navigation_button(
             "Settings", settings_icon(), "Configure Guy4ASE", self._open_settings
+        )
+        self._close_button = add_navigation_button(
+            "Close",
+            QIcon.fromTheme(
+                "application-exit",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton),
+            ),
+            "Close Guy4ASE",
+            self.close,
         )
         navigation.setStyleSheet(
             group_panel_stylesheet(
