@@ -30,9 +30,7 @@ def profile_values(profile: Any) -> dict[str, Any]:
 def backend_kind(profile: Any) -> str:
     """Return the UI execution kind represented by a resolved runtime profile."""
     executor = profile.executor or "local"
-    if executor == "ssh" and (
-        profile.psij_backend is not None or profile.psij_url is not None
-    ):
+    if executor == "ssh" and profile.backend_config.name == "psij":
         return "ssh-psij"
     return str(executor)
 
@@ -40,8 +38,13 @@ def backend_kind(profile: Any) -> str:
 def draft_kind(values: dict[str, Any]) -> str:
     """Return the UI execution kind represented by persisted profile values."""
     executor = values.get("executor") or "local"
+    backend = values.get("backend")
     if executor == "ssh" and (
-        values.get("psij_backend") is not None or values.get("psij_url") is not None
+        backend == "psij"
+        or (backend is None and (
+            values.get("psij_backend") is not None
+            or values.get("psij_url") is not None
+        ))
     ):
         return "ssh-psij"
     return str(executor)
@@ -72,6 +75,10 @@ def profile_description(name: str | None, *, configuration: Any | None = None) -
         where = f"PSI/J ({profile.psij_backend or 'slurm'})"
     else:
         where = f"{profile.executor} execution"
+
+    if kind in {"local", "ssh"}:
+        mode = "supervised" if profile.backend_config.name == "process" else "direct"
+        where = f"{where} · {mode}"
 
     mpi = profile.mpi
     if mpi is False:
