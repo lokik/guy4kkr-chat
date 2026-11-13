@@ -496,14 +496,21 @@ class PersistentJobsWidget(QWidget):
         )
         self.cancel_button.setVisible(not job.is_final)
         self.cancel_button.setEnabled(
-            not job.is_final and job.cancelable and self._supports_cancel
+            job.can_request_cancel and self._supports_cancel
         )
         self.cancel_button.setToolTip(
-            "Request termination of the original calculation process."
-            if job.cancelable and self._supports_cancel
+            "Attempt cancellation of the unknown-status job. The backend "
+            "verifies the stored process reference before sending a signal; "
+            "if no safe identity exists, cancellation will fail without "
+            "affecting another process."
+            if job.state == "unknown" and self._supports_cancel
             else (
-                job.cancel_unavailable_reason
-                or "Cancelling persisted processes is not supported by this installation."
+                "Request termination of the original calculation process."
+                if job.cancelable and self._supports_cancel
+                else (
+                    job.cancel_unavailable_reason
+                    or "Cancelling persisted processes is not supported by this installation."
+                )
             )
         )
         self.forget_button.setVisible(self._supports_forget)

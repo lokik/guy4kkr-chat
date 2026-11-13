@@ -576,3 +576,87 @@ def test_cancel_uses_native_backend_and_keeps_history(monkeypatch):
     view.cancelRequested.emit(job.id)
     assert calls == [job.id]
     assert view.all_jobs == (job,)
+
+
+def test_unknown_job_allows_backend_cancel_request_even_if_capability_is_uncertain(monkeypatch):
+    from PyQt6.QtWidgets import QMessageBox
+
+    _app = QApplication.instance() or QApplication([])
+    job = replace(
+        _job("legacy-direct", state="unknown"),
+        cancelable=False,
+        cancel_unavailable_reason="Legacy process identity cannot be verified",
+    )
+    source = _Source((job,))
+    source.supports_cancel = True
+    requested = []
+    source.cancel = requested.append
+    controller = PersistentJobsController(source)
+    view = _view()
+    controller.bind_view(view)
+
+    assert job.can_request_cancel
+    assert view.cancel_button.isEnabled()
+    assert "unknown-status" in view.cancel_button.toolTip()
+    monkeypatch.setattr(
+        controller_module, "run_modal_task",
+        lambda _view, operation, **_kwargs: operation(),
+    )
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    view.cancelRequested.emit(job.id)
+
+    assert requested == [job.id]
+    assert view.all_jobs == (job,)
+
+
+def test_unknown_cancel_failure_reports_actual_backend_limitation(monkeypatch):
+    from PyQt6.QtWidgets import QMessageBox
+
+    _app = QApplication.instance() or QApplication([])
+    job = replace(_job("unknown", state="unknown"), cancelable=False)
+    source = _Source((job,))
+    source.supports_cancel = True
+    calls = []
+
+    def unsupported_cancel(job_id):
+        calls.append(job_id)
+        raise NotImplementedError("No verified process reference")
+
+    source.cancel = unsupported_cancel
+    controller = PersistentJobsController(source)
+    view = _view()
+    controller.bind_view(view)
+    monkeypatch.setattr(
+        controller_module, "run_modal_task",
+        lambda _view, operation, **_kwargs: operation(),
+    )
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    warnings = []
+    monkeypatch.setattr(
+        QMessageBox, "warning",
+        lambda _view, title, message: warnings.append((title, message)),
+    )
+    view.cancelRequested.emit(job.id)
+
+    assert calls == [job.id]
+    assert warnings == [("Cancellation Failed", "No verified process reference")]
+    assert view.all_jobs == (job,)
+
+
+def test_completed_job_cannot_be_cancelled_through_unknown_state_rule():
+    _app = QApplication.instance() or QApplication([])
+    job = replace(_job("completed", state="finished"), cancelable=True)
+    source = _Source((job,))
+    source.supports_cancel = True
+    controller = PersistentJobsController(source)
+    view = _view()
+    controller.bind_view(view)
+
+    assert not job.can_request_cancel
+    assert not view.cancel_button.isEnabled()

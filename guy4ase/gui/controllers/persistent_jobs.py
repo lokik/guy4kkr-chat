@@ -429,13 +429,18 @@ class PersistentJobsController(QObject):
     def _cancel_requested(self, view: PersistentJobsWidget, job_id: str) -> None:
         """Cancel a native process, not its historical metadata."""
         job = self._source.job(job_id)
-        if job is None or job.is_final or not job.cancelable or not self._source.supports_cancel:
+        if job is None or not job.can_request_cancel or not self._source.supports_cancel:
             return
         answer = QMessageBox.question(
             view,
             "Cancel calculation process?",
             f"Request termination of {job.dataset or job.id}? "
-            "The calculation may be running on another computer. "
+            + (
+                "Its status is unknown. The backend will check the saved process "
+                "identity before attempting to terminate it. "
+                if job.state == "unknown" else ""
+            )
+            + "The calculation may be running on another computer. "
             "Its history and result files will be preserved.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
