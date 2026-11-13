@@ -56,6 +56,8 @@ def test_visualization_uses_configured_viewer(monkeypatch):
 
     settings = ApplicationSettings()
     settings.viewer = "ngl"
+    # This test checks handoff to the configured viewer, not availability.
+    monkeypatch.setattr(visualization, "viewer_unavailability", lambda name: None)
 
     assert visualization.visualize_structure(
         Controller(),
