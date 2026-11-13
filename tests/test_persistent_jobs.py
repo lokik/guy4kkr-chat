@@ -1,6 +1,7 @@
 """Persistent history adapters use current project-backed ASE2SPRKKR API."""
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 import pytest
 from kkrunner.runs import RunState, FailurePhase, ExecutionMetadata, WorkingDirectory
@@ -134,3 +135,28 @@ def test_explicit_postprocessing_retry_delegates_to_application(monkeypatch):
     assert source.retry_postprocessing(item.id) is expected
     assert calls == [(manager, item.id)]
     assert store.calls == [item.id]
+
+def test_unknown_supervised_ssh_run_can_be_reattached_after_restart():
+    item = record(RunState.UNKNOWN)
+    item.execution = replace(item.execution, backend=BackendConfig("process"))
+    restored = PersistentJob.from_run_record(item)
+    assert restored.attachable
+    assert restored.reattach_unavailable_reason is None
+    assert not restored.is_final
+
+
+def test_unknown_direct_ssh_run_explains_why_it_cannot_be_reattached():
+    item = record(RunState.UNKNOWN)
+    item.execution = replace(item.execution, backend=BackendConfig("direct"))
+    restored = PersistentJob.from_run_record(item)
+    assert not restored.attachable
+    assert "direct backend" in restored.reattach_unavailable_reason
+    assert "still be running" in restored.reattach_unavailable_reason
+
+
+def test_submitting_run_explains_missing_backend_identity():
+    restored = PersistentJob.from_run_record(
+        record(RunState.SUBMITTING, backend_id=None)
+    )
+    assert not restored.attachable
+    assert "Refresh statuses" in restored.reattach_unavailable_reason
