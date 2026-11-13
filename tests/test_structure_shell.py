@@ -112,6 +112,27 @@ def test_shell_invalid_candidate_does_not_close_and_reports_error():
     assert dialog.result() == QDialog.DialogCode.Accepted
 
 
+def test_enter_in_visible_shell_never_triggers_cancel_button():
+    _app()
+    dialog = shell.StructureShellDialog()
+    dialog.show()
+    _flush()
+
+    # Even with the dialog showing, the first plain Enter is a console input,
+    # not a click on the dialog's sole Cancel button.
+    _enter(dialog, "")
+    assert dialog.isVisible()
+    assert dialog.result() != QDialog.DialogCode.Rejected
+
+    _enter(dialog, "x = 42")
+    assert dialog.isVisible()
+    assert dialog.console.interpreter.locals["x"] == 42
+
+    _enter(dialog, "use(Atoms('Fe'))")
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    assert dialog.candidate.get_chemical_symbols() == ["Fe"]
+
+
 def test_shell_python_exceptions_keep_dialog_open_and_console_usable():
     _app()
     dialog = shell.StructureShellDialog()

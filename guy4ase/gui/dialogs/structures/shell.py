@@ -69,6 +69,11 @@ class StructureShellDialog(QDialog):
         layout.addWidget(self.console, 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel, self)
+        # QDialog makes auto-default buttons react to Enter. The console owns
+        # Enter (including empty lines); it must never activate Cancel.
+        cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel.setAutoDefault(False)
+        cancel.setDefault(False)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
         self.console.edit.setFocus()
