@@ -24,6 +24,7 @@ from guy4ase.gui.application.window_geometry import manage_window_geometry
 from guy4ase.gui.application.workspace_controller import WorkspaceController
 from guy4ase.gui.dialogs.object_view import execute_value_action
 from guy4ase.gui.dialogs.settings import edit_settings
+from guy4ase.gui.misc.icons import settings_icon
 from guy4ase.gui.dialogs.structures.transforms import (
     repeat_atoms,
     rotate_atoms,
@@ -332,7 +333,7 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.visualize_structure_action)
 
         tools_menu = menubar.addMenu("&Tools")
-        settings_action = QAction("&Settings...", self)
+        settings_action = QAction(settings_icon(), "&Settings...", self)
         settings_action.setMenuRole(QAction.MenuRole.PreferencesRole)
         settings_action.triggered.connect(self._open_settings)
         tools_menu.addAction(settings_action)

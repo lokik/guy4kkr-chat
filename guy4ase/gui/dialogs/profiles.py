@@ -19,28 +19,19 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
 
-from guy4ase.gui.application.execution_profiles import (
-    ExecutionProfileEditor,
-    ExecutionProfileStore,
-    draft_kind,
-    kind_label,
-)
+from guy4ase.gui.application.execution_profiles import ExecutionProfileStore
 from guy4ase.gui.application.window_geometry import manage_window_geometry
 from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
 from guy4ase.gui.input_parameters.dataset import dataset_value, filename_component
-from guy4ase.gui.widgets.execution_profiles import ProfileForm
+from guy4ase.gui.widgets.settings.run_configurations import RunConfigurationsPage
 
 
 @dataclass(frozen=True)
@@ -52,7 +43,7 @@ class RunIdentification:
 
 
 class ProfilesDialog(QDialog):
-    """Edit persistent ASE2SPRKKR execution profiles."""
+    """Standalone compatibility wrapper around the reusable settings page."""
 
     def __init__(
         self,
@@ -61,69 +52,17 @@ class ProfilesDialog(QDialog):
         store: ExecutionProfileStore | None = None,
     ) -> None:
         super().__init__(parent)
-        self._store = store or ExecutionProfileStore()
-        self._editor = ExecutionProfileEditor(self._store)
-        self._drafts = self._editor.drafts
-
         self.setWindowTitle("SPR-KKR Execution Profiles")
         self.setMinimumSize(1040, 680)
         manage_window_geometry(
-            self,
-            "execution-profiles",
-            default_size=(1200, 800),
+            self, "execution-profiles", default_size=(1200, 800)
         )
-
         root = QVBoxLayout(self)
-        root.setContentsMargins(18, 18, 18, 14)
-        root.setSpacing(12)
-
-        heading = QLabel("Execution profiles", self)
-        heading_font = heading.font()
-        heading_font.setPointSize(heading_font.pointSize() + 3)
-        heading_font.setBold(True)
-        heading.setFont(heading_font)
-        root.addWidget(heading)
-        intro = QLabel(
-            "Profiles define where SPR-KKR runs and how executables, MPI and remote workspaces are configured.",
-            self,
-        )
-        intro.setWordWrap(True)
-        root.addWidget(intro)
-
-        splitter = QSplitter(Qt.Orientation.Horizontal, self)
-        splitter.setChildrenCollapsible(False)
-        root.addWidget(splitter, 1)
-
-        left = QWidget(splitter)
-        left.setMinimumWidth(230)
-        left.setMaximumWidth(330)
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 8, 0)
-        left_layout.setSpacing(8)
-        list_heading = QLabel("Profiles", left)
-        list_font = list_heading.font()
-        list_font.setBold(True)
-        list_heading.setFont(list_font)
-        left_layout.addWidget(list_heading)
-        self.list = QListWidget(left)
-        self.list.setAlternatingRowColors(True)
-        self.list.currentItemChanged.connect(self._selection_changed)
-        left_layout.addWidget(self.list, 1)
-        row = QHBoxLayout()
-        self.add_button = QPushButton("New…", left)
-        self.delete_button = QPushButton("Delete", left)
-        self.add_button.clicked.connect(self._add_profile)
-        self.delete_button.clicked.connect(self._delete_profile)
-        row.addWidget(self.add_button)
-        row.addWidget(self.delete_button)
-        left_layout.addLayout(row)
-        splitter.addWidget(left)
-
-        self.form = ProfileForm(splitter)
-        splitter.addWidget(self.form)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([260, 700])
-
+        self.page = RunConfigurationsPage(self, store=store)
+        root.addWidget(self.page, 1)
+        # Existing users may access the exposed widgets of this dialog.
+        self.form = self.page.form
+        self.delete_button = self.page.delete_button
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel,
@@ -132,83 +71,10 @@ class ProfilesDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
-        self._reload_list()
-
-    def _store_current(self) -> None:
-        item = self.list.currentItem()
-        if item is None:
-            return
-        name = str(item.data(Qt.ItemDataRole.UserRole))
-        draft = self._drafts[name]
-        if not draft.read_only:
-            draft.values = self.form.values()
-
-    def _reload_list(self, select: str | None = None) -> None:
-        current = select
-        if current is None and self.list.currentItem() is not None:
-            current = str(self.list.currentItem().data(Qt.ItemDataRole.UserRole))
-        self.list.blockSignals(True)
-        self.list.clear()
-        for name in sorted(self._drafts):
-            draft = self._drafts[name]
-            kind = kind_label(draft_kind(draft.values))
-            suffix = " · read-only" if draft.read_only else ""
-            item = QListWidgetItem(f"{name}\n{kind}{suffix}")
-            item.setData(Qt.ItemDataRole.UserRole, name)
-            self.list.addItem(item)
-            if name == current:
-                self.list.setCurrentItem(item)
-        self.list.blockSignals(False)
-        if self.list.currentItem() is None and self.list.count():
-            self.list.setCurrentRow(0)
-        else:
-            self._selection_changed(self.list.currentItem(), None)
-
-    def _selection_changed(
-        self,
-        current: QListWidgetItem | None,
-        previous: QListWidgetItem | None,
-    ) -> None:
-        if previous is not None:
-            name = str(previous.data(Qt.ItemDataRole.UserRole))
-            draft = self._drafts.get(name)
-            if draft is not None and not draft.read_only:
-                draft.values = self.form.values()
-        if current is None:
-            self.form.setEnabled(False)
-            self.delete_button.setEnabled(False)
-            return
-        name = str(current.data(Qt.ItemDataRole.UserRole))
-        draft = self._drafts[name]
-        self.form.setEnabled(True)
-        self.form.title.setText(name)
-        self.form.load(draft)
-        self.delete_button.setEnabled(not draft.read_only)
-
-    def _add_profile(self) -> None:
-        self._store_current()
-        name, ok = QInputDialog.getText(self, "New Execution Profile", "Profile name:")
-        if not ok:
-            return
-        try:
-            draft = self._editor.add(name)
-        except ValueError as exc:
-            QMessageBox.warning(self, "Profile Name", str(exc))
-            return
-        self._reload_list(draft.name)
-
-    def _delete_profile(self) -> None:
-        item = self.list.currentItem()
-        if item is None:
-            return
-        name = str(item.data(Qt.ItemDataRole.UserRole))
-        self._editor.delete(name)
-        self._reload_list()
 
     def accept(self) -> None:  # type: ignore[override]
-        self._store_current()
         try:
-            self._editor.save()
+            self.page.save()
         except (OSError, TypeError, ValueError) as exc:
             QMessageBox.critical(self, "Cannot Save Profiles", str(exc))
             return
@@ -519,6 +385,7 @@ class ProfileSelectionDialog(QDialog):
         self.description.setText(text)
 
     def _edit_profiles(self) -> None:
+        """Open only the reusable run-configuration editor, not all Settings."""
         selected = self.profiles.currentData()
         if ProfilesDialog(self, store=self._store).exec() == QDialog.DialogCode.Accepted:
             self._reload_profiles(selected)

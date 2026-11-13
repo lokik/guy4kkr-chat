@@ -15,6 +15,7 @@ from guy4ase.gui.application import viewers
 from guy4ase.gui.application.settings import ApplicationSettings
 from guy4ase.gui.dialogs import settings as settings_dialog
 from guy4ase.gui.flows import visualization
+from guy4ase.gui.widgets.settings import general as general_settings
 
 
 def _app():
@@ -53,10 +54,10 @@ def test_settings_show_unavailable_viewers_in_red_and_warn_on_selection(
 ):
     app = _app()
     monkeypatch.setattr(
-        settings_dialog, "available_viewers", lambda: ("ase", "missing_test")
+        general_settings, "available_viewers", lambda: ("ase", "missing_test")
     )
     monkeypatch.setattr(
-        settings_dialog,
+        general_settings,
         "viewer_unavailability",
         lambda name: "Executable missing_test not found" if name == "missing_test" else None,
     )
@@ -81,10 +82,10 @@ def test_settings_show_unavailable_viewers_in_red_and_warn_on_selection(
 def test_settings_require_confirmation_for_unavailable_viewer(monkeypatch, tmp_path):
     app = _app()
     monkeypatch.setattr(
-        settings_dialog, "available_viewers", lambda: ("ase", "missing_test")
+        general_settings, "available_viewers", lambda: ("ase", "missing_test")
     )
     monkeypatch.setattr(
-        settings_dialog,
+        general_settings,
         "viewer_unavailability",
         lambda name: "Viewer executable missing_test is not installed"
         if name == "missing_test" else None,

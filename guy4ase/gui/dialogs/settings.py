@@ -1,93 +1,50 @@
-"""Application settings dialog."""
+"""Application settings dialog composing independent tab pages."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
-    QGroupBox,
-    QLabel,
     QMessageBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from guy4ase.gui.application.execution_profiles import ExecutionProfileStore
 from guy4ase.gui.application.settings import ApplicationSettings
-from guy4ase.gui.application.viewers import viewer_unavailability
-
-
-def available_viewers() -> tuple[str, ...]:
-    """Return viewer names understood by ASE."""
-    from ase.visualize.viewers import VIEWERS
-
-    return tuple(sorted(str(name) for name in VIEWERS))
-
-
-_DATASET_MODE_LABELS = (
-    ("empty", "Leave unset (ASE2SPRKKR automatic)"),
-    ("datetime", "Structure + date/time"),
-    ("uuid", "Structure + UUID"),
-)
+from guy4ase.gui.widgets.settings.run_configurations import RunConfigurationsPage
+from guy4ase.gui.widgets.settings.general import GeneralSettingsPage
 
 
 class SettingsDialog(QDialog):
-    """Edit application-wide preferences."""
+    """Edit application-wide preferences and persistent execution profiles."""
 
     def __init__(
         self,
         settings: ApplicationSettings,
         parent: QWidget | None = None,
+        *,
+        profile_store: ExecutionProfileStore | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
+        self.setMinimumSize(1050, 700)
         self._settings = settings
 
         layout = QVBoxLayout(self)
-        visualization = QGroupBox("Visualization", self)
-        form = QFormLayout(visualization)
+        self.tabs = QTabWidget(self)
+        layout.addWidget(self.tabs, 1)
 
-        self.viewer = QComboBox(visualization)
-        viewers = available_viewers()
-        self.viewer.addItems(viewers)
-        if settings.viewer not in viewers:
-            self.viewer.addItem(settings.viewer)
-        self.viewer.setCurrentText(settings.viewer)
-        self.viewer.setToolTip("ASE viewer used for atomic structures")
-        for index in range(self.viewer.count()):
-            name = self.viewer.itemText(index)
-            reason = viewer_unavailability(name)
-            if reason:
-                self.viewer.setItemData(
-                    index, QColor("#cc3333"), Qt.ItemDataRole.ForegroundRole
-                )
-                self.viewer.setItemData(
-                    index, reason, Qt.ItemDataRole.ToolTipRole
-                )
-        form.addRow("Structure viewer:", self.viewer)
-        self.viewer_warning = QLabel(visualization)
-        self.viewer_warning.setWordWrap(True)
-        self.viewer_warning.setStyleSheet("color: #cc3333;")
-        form.addRow("", self.viewer_warning)
-        self.viewer.currentTextChanged.connect(self._update_viewer_warning)
-        self._update_viewer_warning()
-        layout.addWidget(visualization)
-
-        sprkkr = QGroupBox("SPR-KKR", self)
-        sprkkr_form = QFormLayout(sprkkr)
-        self.dataset_default_mode = QComboBox(sprkkr)
-        for value, label in _DATASET_MODE_LABELS:
-            self.dataset_default_mode.addItem(label, value)
-        index = self.dataset_default_mode.findData(settings.dataset_default_mode)
-        self.dataset_default_mode.setCurrentIndex(max(index, 0))
-        self.dataset_default_mode.setToolTip(
-            "Default DATASET for newly created calculations. An explicit value "
-            "entered in the calculation editor always takes precedence."
+        self.general_page = GeneralSettingsPage(settings, self.tabs)
+        self.run_configurations_page = RunConfigurationsPage(
+            self.tabs, store=profile_store
         )
-        sprkkr_form.addRow("Default DATASET:", self.dataset_default_mode)
-        layout.addWidget(sprkkr)
+        self.tabs.addTab(self.general_page, "General")
+        self.tabs.addTab(self.run_configurations_page, "Run configurations")
+
+        self.viewer = self.general_page.viewer
+        self.viewer_warning = self.general_page.viewer_warning
+        self.dataset_default_mode = self.general_page.dataset_default_mode
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -98,15 +55,8 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def _update_viewer_warning(self) -> None:
-        reason = viewer_unavailability(self.viewer.currentText())
-        self.viewer_warning.setText(
-            f"Viewer is not available: {reason}" if reason else ""
-        )
-        self.viewer_warning.setVisible(bool(reason))
-
     def accept(self) -> None:  # type: ignore[override]
-        reason = viewer_unavailability(self.viewer.currentText())
+        reason = self.general_page.selected_viewer_unavailability()
         if reason:
             answer = QMessageBox.warning(
                 self,
@@ -133,6 +83,11 @@ class SettingsDialog(QDialog):
                 "Cannot Save Settings",
                 f"Could not write settings to:\n{self._settings.path}",
             )
+            return
+        try:
+            self.run_configurations_page.save()
+        except (OSError, TypeError, ValueError) as exc:
+            QMessageBox.critical(self, "Cannot Save Run Configurations", str(exc))
             return
         super().accept()
 

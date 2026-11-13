@@ -655,3 +655,64 @@ def test_editing_project_to_current_directory_disables_assignment(
     assert not dialog.assign_directory_checkbox.isEnabled()
     assert not dialog.assign_directory_checkbox.isChecked()
     dialog.close()
+
+
+def test_run_dialog_manages_profiles_without_opening_all_settings(
+    application, monkeypatch, tmp_path
+):
+    from PyQt6.QtWidgets import QDialog
+
+    repository = ProjectRepository(tmp_path / "projects")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, directory=str(tmp_path)
+    )
+    assert dialog.edit_profiles_button.text() == "Manage Profiles…"
+    selected = dialog.profiles.currentData()
+    events = []
+
+    class ProfileEditor:
+        def __init__(self, parent, *, store):
+            assert parent is dialog
+            assert store is dialog._store
+            events.append("open")
+
+        def exec(self):
+            events.append("accept")
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(profiles_module, "ProfilesDialog", ProfileEditor)
+    monkeypatch.setattr(
+        dialog, "_reload_profiles",
+        lambda name: events.append(("reload", name)),
+    )
+    dialog.edit_profiles_button.click()
+
+    assert events == ["open", "accept", ("reload", selected)]
+    dialog.close()
+
+
+def test_cancelled_profile_management_does_not_reload_selection(
+    application, monkeypatch, tmp_path
+):
+    from PyQt6.QtWidgets import QDialog
+
+    repository = ProjectRepository(tmp_path / "projects")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, directory=str(tmp_path)
+    )
+    events = []
+
+    class ProfileEditor:
+        def __init__(self, parent, *, store):
+            assert parent is dialog
+            assert store is dialog._store
+
+        def exec(self):
+            return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(profiles_module, "ProfilesDialog", ProfileEditor)
+    monkeypatch.setattr(dialog, "_reload_profiles", lambda *_: events.append("reload"))
+    dialog.edit_profiles_button.click()
+
+    assert events == []
+    dialog.close()
