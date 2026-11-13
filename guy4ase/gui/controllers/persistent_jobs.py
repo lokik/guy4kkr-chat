@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import Future, ThreadPoolExecutor
 from collections.abc import Callable
 from typing import Any
 from weakref import ReferenceType, ref
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QMessageBox
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
+from guy4ase.gui.application.result_cache import ResultLRU
 from guy4ase.gui.dialogs.attached_run import create_attached_run_monitor_window
 from guy4ase.gui.dialogs.run_calculation import SprkkrRunWindow
 from guy4ase.gui.dialogs.run_monitor import RunMonitorWindow
@@ -23,6 +25,25 @@ PersistentResultAdopter = Callable[[str, Any, bool], None]
 
 class _SourceSignals(QObject):
     changed = pyqtSignal(str)
+
+
+class _ResultSignals(QObject):
+    ready = pyqtSignal(str, object, object)
+
+
+def _result_version(job: PersistentJob) -> tuple[Any, ...]:
+    """Metadata affecting the persisted result, excluding file-check bookkeeping."""
+    return (
+        job.state, job.updated_at, job.finished_at, job.result_files_state,
+        job.failure_phase, job.return_code, job.directory, job.dataset, job.task,
+    )
+
+
+def _can_load_result(job: PersistentJob | None, source: PersistentJobSource) -> bool:
+    return bool(
+        job is not None and job.is_final and not job.can_retry_download
+        and source.supports_results
+    )
 
 
 class PersistentJobsController(QObject):
@@ -63,6 +84,21 @@ class PersistentJobsController(QObject):
         self._launch_monitor_windows: set[SprkkrRunWindow] = set()
         self._pending_monitor_windows: set[SprkkrRunWindow] = set()
         self._monitor_windows: dict[str, RunMonitorWindow] = {}
+        self._result_cache = ResultLRU()
+        self._cached_presentations: dict[str, tuple[Any, ...]] = {}
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="guy4ase-result")
+        self._loads: dict[str, tuple[tuple[Any, ...], Future[Any]]] = {}
+        self._preload_ids: tuple[str, ...] = ()
+        self._selected_preload_id: str | None = None
+        self._result_signals = _ResultSignals(self)
+        self._result_signals.ready.connect(
+            self._background_result_ready, Qt.ConnectionType.QueuedConnection
+        )
+        self.destroyed.connect(
+            lambda *_args, executor=self._executor: executor.shutdown(
+                wait=False, cancel_futures=True
+            )
+        )
 
         self._source_signals = _SourceSignals(self)
         self._source_signals.changed.connect(self._source_changed)
@@ -91,7 +127,9 @@ class PersistentJobsController(QObject):
                 bound_view, job_id
             )
         )
-        view.jobSelected.connect(self._job_selected)
+        view.jobSelected.connect(
+            lambda job_id, bound_view=view_ref: self._job_selected(job_id, bound_view())
+        )
         self.refresh_view(view)
 
     def _live_views(self) -> tuple[PersistentJobsWidget, ...]:
@@ -120,26 +158,134 @@ class PersistentJobsController(QObject):
             self.refresh_view(view)
 
     def load_result(self, job_id: str, *, select_result: bool = True) -> Any:
-        """Load a persisted result and publish it through the application bridge."""
+        """Synchronously obtain and publish a cached or persisted result."""
         job_id = str(job_id)
         job = self._source.job(job_id)
         if job is not None and job.can_retry_download:
             raise RuntimeError(
                 f"Persistent job {job_id} requires download retry before loading"
             )
-        result = self._source.load_result(job_id)
+        found, result = self._cached_result(job_id)
+        if not found:
+            loading = self._loads.get(job_id)
+            if loading is not None and job is not None and loading[0] == _result_version(job):
+                result = loading[1].result()
+            else:
+                result = self._source.load_result(job_id)
+            self._ensure_current_result(job_id, job)
         self._publish_result(job_id, result, select_result=select_result)
         return result
+
+    def _cached_result(self, job_id: str) -> tuple[bool, Any]:
+        job = self._source.job(job_id)
+        if not _can_load_result(job, self._source):
+            return False, None
+        return self._result_cache.lookup(job_id, _result_version(job))
+
+    def _ensure_current_result(self, job_id: str, before: PersistentJob | None) -> None:
+        """Never display a result loaded against an obsolete run revision."""
+        after = self._source.job(job_id)
+        if before is not None and (
+            after is None or _result_version(after) != _result_version(before)
+        ):
+            raise RuntimeError(f"Calculation {job_id} changed while loading its result")
+
+    def preload_results(self, job_ids: Any) -> None:
+        """Queue a bounded slice of the selected project's history for background parsing."""
+        if not self._source.supports_results:
+            return
+        eligible = []
+        for job_id in job_ids:
+            job_id = str(job_id)
+            if _can_load_result(self._source.job(job_id), self._source):
+                eligible.append(job_id)
+            if len(eligible) == self._result_cache.max_entries:
+                break
+        self._preload_ids = tuple(eligible)
+        self._keep_relevant_loads()
+        for job_id in eligible:
+            self._load_in_background(job_id)
+
+    def _keep_relevant_loads(self) -> None:
+        wanted = set(self._preload_ids)
+        if self._selected_preload_id is not None:
+            wanted.add(self._selected_preload_id)
+        for job_id, (_version, future) in tuple(self._loads.items()):
+            if job_id not in wanted and future.cancel():
+                self._loads.pop(job_id, None)
+
+    def _load_in_background(self, job_id: str) -> None:
+        job = self._source.job(job_id)
+        if not _can_load_result(job, self._source):
+            return
+        version = _result_version(job)
+        found, result = self._result_cache.lookup(job_id, version)
+        if found:
+            self._set_result_in_views(job_id, result)
+            return
+        loading = self._loads.get(job_id)
+        if loading is not None:
+            if loading[0] == version:
+                return
+            loading[1].cancel()
+        future = self._executor.submit(self._source.load_result, job_id)
+        self._loads[job_id] = (version, future)
+        future.add_done_callback(
+            lambda completed, key=job_id, revision=version:
+                self._result_signals.ready.emit(key, revision, completed)
+        )
+        for view in self._live_views():
+            if view.auto_load_results:
+                view.set_result_pending(job_id)
+
+    @pyqtSlot(str, object, object)
+    def _background_result_ready(
+        self, job_id: str, version: tuple[Any, ...], future: Future[Any]
+    ) -> None:
+        loading = self._loads.get(job_id)
+        if loading is None or loading != (version, future):
+            return
+        self._loads.pop(job_id, None)
+        wanted = set(self._preload_ids)
+        if self._selected_preload_id is not None:
+            wanted.add(self._selected_preload_id)
+        if job_id not in wanted or future.cancelled():
+            return
+        job = self._source.job(job_id)
+        if not _can_load_result(job, self._source) or _result_version(job) != version:
+            if job_id == self._selected_preload_id:
+                self._load_in_background(job_id)
+            return
+        try:
+            result = future.result()
+        except Exception as exc:  # noqa: BLE001 - parse/backend data boundary
+            logger.debug("Could not preload result for %s", job_id, exc_info=True)
+            for view in self._live_views():
+                if view.auto_load_results:
+                    view.set_result_error(job_id, str(exc))
+            return
+        self._result_cache.store(job_id, version, result)
+        # Preloading is browsing, not a request to adopt a result in the workspace.
+        self._set_result_in_views(job_id, result)
 
     @pyqtSlot(str)
     def _source_changed(self, job_id: str) -> None:
         """Project one authoritative source change without rebuilding unrelated state."""
         job = self._source.job(job_id)
         if job is None:
+            self._result_cache.invalidate(job_id)
+            self._loads.pop(job_id, None)
             self.refresh_views()
             return
+        shown_version = self._cached_presentations.get(job_id)
+        if shown_version is not None and shown_version != _result_version(job):
+            self._cached_presentations.pop(job_id, None)
+            self._result_cache.invalidate(job_id)
+            self._set_result_in_views(job_id, None)
         for view in self._live_views():
             view.update_job(job)
+        if job_id in self._preload_ids or job_id == self._selected_preload_id:
+            self._load_in_background(job_id)
 
     def track_launch_window(self, monitor_window: SprkkrRunWindow) -> None:
         """Own and observe a launch monitor before its worker is started."""
@@ -236,8 +382,17 @@ class PersistentJobsController(QObject):
             if registered is monitor_window:
                 self._monitor_windows.pop(job_id, None)
 
-    @pyqtSlot(object)
-    def _job_selected(self, job_id: object) -> None:
+    def _job_selected(
+        self, job_id: object, view: PersistentJobsWidget | None = None
+    ) -> None:
+        if view is not None and view.auto_load_results:
+            self._selected_preload_id = None if job_id is None else str(job_id)
+            self._keep_relevant_loads()
+            if job_id is not None and _can_load_result(
+                self._source.job(str(job_id)), self._source
+            ):
+                self._load_in_background(str(job_id))
+                return
         if job_id is None or not self._source.supports_result_file_check:
             return
         job = self._source.job(str(job_id))
@@ -349,6 +504,7 @@ class PersistentJobsController(QObject):
             QMessageBox.warning(view, "Postprocessing Failed", str(exc))
             return
         self._reload_job(job.id)
+        self._result_cache.invalidate(job.id)
         self._publish_result(job.id, result, select_result=False)
 
     def _publish_result(
@@ -358,11 +514,19 @@ class PersistentJobsController(QObject):
         *,
         select_result: bool,
     ) -> None:
+        job = self._source.job(job_id)
+        if _can_load_result(job, self._source):
+            self._result_cache.store(job_id, _result_version(job), result)
+            self._cached_presentations[job_id] = _result_version(job)
         if self._result_adopter is not None:
             self._result_adopter(job_id, result, select_result)
         self._set_result_in_views(job_id, result)
 
     def _set_result_in_views(self, job_id: str, result: Any) -> None:
+        if result is not None:
+            job = self._source.job(job_id)
+            if job is not None:
+                self._cached_presentations[job_id] = _result_version(job)
         for view in self._live_views():
             view.set_result(job_id, result)
 
@@ -380,15 +544,22 @@ class PersistentJobsController(QObject):
         ):
             return
         try:
-            # Backend/file I/O belongs in the worker. Result adoption modifies
-            # WorkspaceController and Qt widgets, so publish only on the GUI thread
-            # after the modal worker has returned its value.
-            result = run_modal_task(
-                view,
-                lambda: self._source.load_result(job_id),
-                title="Loading Calculation Result",
-                label="Loading result files…",
-            )
+            found, result = self._cached_result(job_id)
+            if not found:
+                revision = _result_version(job)
+                loading = self._loads.get(job_id)
+                operation = (
+                    (lambda: loading[1].result())
+                    if loading is not None and loading[0] == revision
+                    else (lambda: self._source.load_result(job_id))
+                )
+                # Only file parsing runs in the worker; adoption belongs to Qt.
+                result = run_modal_task(
+                    view, operation,
+                    title="Loading Calculation Result",
+                    label="Loading result files…",
+                )
+                self._ensure_current_result(job_id, job)
             self._publish_result(job_id, result, select_result=True)
         except Exception as exc:  # noqa: BLE001 - persisted/backend data boundary
             QMessageBox.warning(view, "Result Load Failed", str(exc))

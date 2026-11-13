@@ -131,6 +131,7 @@ class ProjectBrowserDialog(QWidget):
         self.jobs = PersistentJobsWidget(
             lambda value, action: execute_value_action(value, action, self),
             splitter,
+            auto_load_results=True,
         )
         self._persistent_jobs_controller.bind_view(self.jobs)
         self.jobs.jobsChanged.connect(self._refresh_project_projection)
@@ -282,26 +283,22 @@ class ProjectBrowserDialog(QWidget):
     def _apply_project_selection(self) -> None:
         project_id = self._selected_project_id
         self._show_imported_results(project_id)
-        available_refs = {job.id for job in self.jobs.all_jobs}
         if project_id is None:
-            self.jobs.set_visible_refs(())
-            self.project_notice.hide()
-            return
-
-        if project_id == _UNASSIGNED:
-            self.jobs.set_visible_refs(
+            refs = ()
+        elif project_id == _UNASSIGNED:
+            refs = tuple(
                 job.id for job in self.jobs.all_jobs
                 if job.project_id not in self._projects_by_id
             )
-            self.project_notice.hide()
-            return
-
-        project = self._projects_by_id.get(project_id)
-        self.jobs.set_visible_refs(
-            () if project is None else (
+        else:
+            project = self._projects_by_id.get(project_id)
+            refs = tuple(
                 job.id for job in self.jobs.all_jobs
-                if job.project_id == project.id
+                if project is not None and job.project_id == project.id
             )
+        self.jobs.set_visible_refs(refs)
+        self._persistent_jobs_controller.preload_results(
+            job.id for job in self.jobs.visible_jobs
         )
         self.project_notice.hide()
 
