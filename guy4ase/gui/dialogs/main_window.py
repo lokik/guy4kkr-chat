@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
     QMenu,
     QMessageBox,
     QSplitter,
+    QStyle,
     QWidget,
 )
 
@@ -146,6 +147,7 @@ class MainWindow(QMainWindow):
         self.save_input_action.setEnabled(has_input)
         self._calculation_setup.set_save_input_enabled(has_input)
         self.run_calculation_action.setEnabled(self.controller.can_calculate())
+        self.create_shell_action.setVisible(not has_structure)
 
         empty_spheres = self.controller.empty_spheres_action()
         self.empty_spheres_action.setVisible(empty_spheres is not None)
@@ -264,6 +266,16 @@ class MainWindow(QMainWindow):
         create_action.setShortcut("Ctrl+N")
         create_action.triggered.connect(self.create_structure)
         structure_menu.addAction(create_action)
+        self.create_shell_action = QAction(
+            QIcon.fromTheme(
+                "utilities-terminal",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon),
+            ),
+            "Create by Python Shell...",
+            self,
+        )
+        self.create_shell_action.triggered.connect(self.create_structure_by_shell)
+        structure_menu.addAction(self.create_shell_action)
         create_database_action = QAction("Create from &Prototype Database...", self)
         create_database_action.triggered.connect(self.create_structure_from_database)
         structure_menu.addAction(create_database_action)
@@ -365,6 +377,9 @@ class MainWindow(QMainWindow):
 
     def create_structure(self) -> None:
         structure_flows.create_structure(self.controller, self)
+
+    def create_structure_by_shell(self) -> None:
+        structure_flows.create_structure_by_shell(self.controller, self)
 
     def create_structure_from_database(self) -> None:
         structure_flows.create_structure_from_database(self.controller, self)
