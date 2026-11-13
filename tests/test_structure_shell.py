@@ -6,7 +6,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from ase import Atoms
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QPlainTextEdit
 
@@ -122,7 +122,6 @@ def test_enter_in_visible_shell_never_triggers_cancel_button():
     # not a click on the dialog's sole Cancel button.
     _enter(dialog, "")
     assert dialog.isVisible()
-    assert dialog.result() != QDialog.DialogCode.Rejected
 
     _enter(dialog, "x = 42")
     assert dialog.isVisible()
@@ -131,6 +130,25 @@ def test_enter_in_visible_shell_never_triggers_cancel_button():
     _enter(dialog, "use(Atoms('Fe'))")
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert dialog.candidate.get_chemical_symbols() == ["Fe"]
+
+
+def test_enter_does_not_close_modal_shell():
+    _app()
+    dialog = shell.StructureShellDialog()
+    observed = []
+
+    def interact():
+        for code in ("", "x = 42", "raise ValueError('bad structure')"):
+            _enter(dialog, code)
+            observed.append(dialog.isVisible())
+        # Reject deliberately to end the modal event loop.
+        dialog.reject()
+
+    QTimer.singleShot(0, interact)
+    assert dialog.exec() == QDialog.DialogCode.Rejected
+    assert observed == [True, True, True]
+    assert dialog.console.interpreter.locals["x"] == 42
+    assert "ValueError: bad structure" in dialog.console.edit.toPlainText()
 
 
 def test_shell_python_exceptions_keep_dialog_open_and_console_usable():
