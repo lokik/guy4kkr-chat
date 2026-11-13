@@ -135,6 +135,15 @@ class PersistentJob:
         return self.state in _FINAL_STATES
 
     @property
+    def can_request_cancel(self) -> bool:
+        """Unknown status never hides the option to request cancellation.
+
+        The backend must still verify that the saved reference identifies the
+        original process before attempting to signal it.
+        """
+        return not self.is_final and (self.cancelable or self.state == "unknown")
+
+    @property
     def can_retry_download(self) -> bool:
         """Whether an explicit retry of failed output transfer is meaningful."""
         return self.state == "failed" and self.failure_phase == "download" and self.return_code == 0
