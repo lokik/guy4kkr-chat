@@ -8,6 +8,7 @@ from ase.visualize import view as ase_view
 from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from guy4ase.gui.application.settings import ApplicationSettings
+from guy4ase.gui.application.viewers import viewer_unavailability
 from guy4ase.gui.application.workspace_controller import WorkspaceController
 
 
@@ -38,16 +39,47 @@ def visualize_structure(
         )
         return False
 
-    try:
-        ase_view(atoms, viewer=settings.viewer)
-    except Exception as exc:  # noqa: BLE001 - external viewer boundary
+    selected = settings.viewer
+    reason = viewer_unavailability(selected)
+    if reason is None:
+        try:
+            ase_view(atoms, viewer=selected)
+        except Exception as exc:  # noqa: BLE001 - external viewer boundary
+            reason = f"{type(exc).__name__}: {exc}"
+        else:
+            return True
+
+    if selected == "ase":
         QMessageBox.critical(
             parent,
             "Visualization Error",
-            (
-                f"Could not open the structure with ASE viewer "
-                f"'{settings.viewer}':\n{exc}"
-            ),
+            f"Could not open the ASE viewer:\n{reason}",
+        )
+        return False
+
+    answer = QMessageBox.warning(
+        parent,
+        "Viewer Not Available" if viewer_unavailability(selected) else "Visualization Error",
+        (
+            f"Could not open the structure with viewer '{selected}':\n"
+            f"{reason}\n\n"
+            "The viewer may not be installed or configured correctly. "
+            "You can change it in Settings → Visualization.\n\n"
+            "Open this structure using the ASE viewer instead?"
+        ),
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.Yes,
+    )
+    if answer != QMessageBox.StandardButton.Yes:
+        return False
+
+    try:
+        ase_view(atoms, viewer="ase")
+    except Exception as exc:  # noqa: BLE001 - ASE viewer boundary
+        QMessageBox.critical(
+            parent,
+            "Visualization Error",
+            f"The fallback ASE viewer also failed:\n{type(exc).__name__}: {exc}",
         )
         return False
     return True
