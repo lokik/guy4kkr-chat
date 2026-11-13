@@ -120,6 +120,9 @@ class WorkspaceController(QObject):
         self._workspace = workspace or WorkspaceState()
         self._conflict_resolver = conflict_resolver
         self._results = ResultStore()
+        # The loaded or written revision, not merely the presence of a file.
+        self._saved_structure_generation: Generation | None = None
+        self._saved_input_parameters_generation: Generation | None = None
 
         structure_lock = self._workspace.structure
         structure = structure_lock.value
@@ -183,6 +186,34 @@ class WorkspaceController(QObject):
     @property
     def input_parameters_generation(self) -> Generation:
         return self._workspace.input_parameters.generation
+
+    @property
+    def has_unsaved_structure(self) -> bool:
+        return (
+            self.atoms is not None
+            and self.structure_generation != self._saved_structure_generation
+        )
+
+    @property
+    def has_unsaved_input_parameters(self) -> bool:
+        return (
+            self.input_parameters is not None
+            and self.input_parameters_generation != self._saved_input_parameters_generation
+        )
+
+    def mark_structure_saved(self, generation: Generation) -> bool:
+        """Record only the structure revision actually loaded or written."""
+        if generation != self.structure_generation or self.atoms is None:
+            return False
+        self._saved_structure_generation = generation
+        return True
+
+    def mark_input_parameters_saved(self, generation: Generation) -> bool:
+        """Do not mark changes made during a file dialog as saved."""
+        if generation != self.input_parameters_generation or self.input_parameters is None:
+            return False
+        self._saved_input_parameters_generation = generation
+        return True
 
     @property
     def directory_generation(self) -> Generation:

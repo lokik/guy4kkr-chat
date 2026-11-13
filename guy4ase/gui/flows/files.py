@@ -97,6 +97,7 @@ def load_structure(
     )
     if not document_change_applied(parent, change):
         return False
+    controller.mark_structure_saved(controller.structure_generation)
     warn_if_structure_kind_is_unknown(atoms, parent)
     recent_files.remember("structure", file_path)
     return True
@@ -151,6 +152,7 @@ def load_input_parameters(
     )
     if not document_change_applied(parent, change):
         return False
+    controller.mark_input_parameters_saved(controller.input_parameters_generation)
     recent_files.remember("input", file_path)
     return True
 
@@ -359,6 +361,7 @@ def save_structure(
     atoms = controller.atoms
     if atoms is None:
         return False
+    generation = controller.structure_generation
     formats = {
         " ".join(f"*.{ext}" for ext in file_format.extensions): file_format.name
         for file_format in ioformats.values()
@@ -386,6 +389,7 @@ def save_structure(
         )
         return False
     recent_files.remember("structure", file_path)
+    controller.mark_structure_saved(generation)
     return True
 
 
@@ -397,6 +401,7 @@ def save_input_parameters(
     parameters = controller.input_parameters
     if parameters is None:
         return False
+    generation = controller.input_parameters_generation
     file_path, _ = QFileDialog.getSaveFileName(
         parent,
         "Save Input File",
@@ -415,6 +420,7 @@ def save_input_parameters(
         )
         return False
     recent_files.remember("input", file_path)
+    controller.mark_input_parameters_saved(generation)
     return True
 
 
