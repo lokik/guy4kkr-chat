@@ -5,7 +5,8 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication, QMessageBox, QTreeWidgetItem
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QTreeWidgetItem, QWidget
 from kkrunner.projects import ProjectRepository, ProjectRepositoryError
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob
@@ -274,3 +275,26 @@ def test_project_edit_changes_name_and_directory(tmp_path, monkeypatch):
     assert current.directory == str(tmp_path / "calculations")
     assert _find_project_item(dialog, "Edited").text(0) == "Edited"
     dialog.close()
+
+
+def test_project_browser_is_an_independent_non_modal_window(tmp_path):
+    application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    parent = QWidget()
+    parent.show()
+    browser = ProjectBrowserDialog(
+        repository, PersistentJobsController(_JobSource(())), parent=parent
+    )
+    browser.show()
+    application.processEvents()
+
+    # The browser must not block the structure manager even with a parent.
+    assert browser.isWindow()
+    assert not isinstance(browser, QDialog)
+    assert browser.windowModality() == Qt.WindowModality.NonModal
+    assert QApplication.activeModalWidget() is None
+    assert parent.isVisible() and parent.isEnabled()
+    assert browser.isVisible()
+
+    browser.close()
+    parent.close()
