@@ -112,6 +112,31 @@ def test_shell_invalid_candidate_does_not_close_and_reports_error():
     assert dialog.result() == QDialog.DialogCode.Accepted
 
 
+def test_shell_python_exceptions_keep_dialog_open_and_console_usable():
+    _app()
+    dialog = shell.StructureShellDialog()
+    dialog.show()
+    _flush()
+
+    for statement, expected in (
+        ("raise ValueError('bad structure')", "ValueError: bad structure"),
+        ("undefined_structure_name", "NameError"),
+        ("raise KeyboardInterrupt", "KeyboardInterrupt"),
+        ("if True print('invalid')", "SyntaxError"),
+    ):
+        _enter(dialog, statement)
+        assert dialog.isVisible(), statement
+        assert dialog.result() != QDialog.DialogCode.Accepted
+        assert dialog.candidate is None
+        assert expected in dialog.console.edit.toPlainText()
+
+    # Errors must not poison the interpreter or select a structure.
+    _enter(dialog, "atoms = Atoms('Fe')")
+    _enter(dialog, "use(atoms)")
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    assert dialog.candidate.get_chemical_symbols() == ["Fe"]
+
+
 def test_shell_close_exit_quit_and_sys_exit_discard_session():
     _app()
     for action in ("close", "exit()", "quit()", "import sys; sys.exit()"):
