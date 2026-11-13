@@ -1,3 +1,4 @@
+from guy4ase.gui.dialogs.profiles import RunIdentification
 import pytest
 from ase import Atoms
 
@@ -415,3 +416,47 @@ def test_stale_project_selection_does_not_change_directory_or_launch(
     assert created == []
     assert controller.active_project_id == "concurrent"
     assert controller.directory == str(tmp_path)
+
+
+def test_back_from_conflict_reopens_run_picker_with_previous_settings(
+    monkeypatch, tmp_path
+):
+    controller = _controller(tmp_path)
+    recent = RecentFiles(tmp_path / "recent.json")
+    ident = RunIdentification("Fe_collision", "label-2")
+    selected = []
+    launched = []
+
+    def select(_parent, **kwargs):
+        selected.append(kwargs)
+        if len(selected) == 1:
+            return True, "remote-profile", ident, str(tmp_path), "project-1"
+        # The new dialog starts with exactly the previous run setup.
+        assert kwargs["selected_profile_name"] == "remote-profile"
+        assert kwargs["initial_identification"] == ident
+        assert kwargs["directory"] == str(tmp_path)
+        assert kwargs["active_project_id"] == "project-1"
+        assert kwargs["directory_is_explicit"] is True
+        return False, None, None, None, None
+
+    class Window:
+        def __init__(self, **kwargs):
+            launched.append(kwargs)
+
+        def show(self):
+            pass
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(calculation_flow, "_select_profile", select)
+    monkeypatch.setattr(calculation_flow, "_apply_run_identification", lambda _params, _ident: None)
+    monkeypatch.setattr(calculation_flow, "SprkkrRunWindow", Window)
+    monkeypatch.setattr(calculation_flow, "profile_description", lambda _: None)
+
+    assert calculation_flow.run_calculation(controller, recent, object()) is not None
+    assert len(launched) == 1
+    launched[0]["on_back_to_setup"]()
+    assert len(selected) == 2
+    # Declining a conflicting run does not start the second calculation.
+    assert len(launched) == 1

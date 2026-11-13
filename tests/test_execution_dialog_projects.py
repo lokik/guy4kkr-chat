@@ -716,3 +716,54 @@ def test_cancelled_profile_management_does_not_reload_selection(
 
     assert events == []
     dialog.close()
+
+
+def test_reopened_run_setup_preserves_profile_identifiers_and_explicit_directory(
+    application, tmp_path
+):
+    from types import SimpleNamespace
+    from guy4ase.gui.dialogs.profiles import RunIdentification
+
+    repo = ProjectRepository(tmp_path / "projects")
+    initial = repo.create("Initial", directory=tmp_path / "default")
+    other = repo.create("Other", directory=tmp_path / "other")
+    custom = str(tmp_path / "manually-chosen")
+    identification = RunIdentification("Fe_retry", "calculation-B")
+
+    class Option:
+        def __init__(self, value):
+            self.value = value
+
+        def is_set(self):
+            return True
+
+        def __call__(self):
+            return self.value
+
+    parameters = SimpleNamespace(CONTROL=SimpleNamespace(
+        DATASET=Option("original"),
+        ADSI=Option("original-label"),
+    ))
+    store = SimpleNamespace(
+        names=lambda: ["local-profile", "remote-profile"],
+        resolved_name=lambda _name: "local-profile",
+        describe=lambda _name: "Execution profile",
+    )
+    dialog = ProfileSelectionDialog(
+        input_parameters=parameters,
+        store=store,
+        project_repository=repo,
+        directory=custom,
+        active_project_id=initial.id,
+        selected_profile_name="remote-profile",
+        initial_identification=identification,
+        directory_is_explicit=True,
+    )
+
+    assert dialog.directory_name() == custom
+    assert dialog.project_id() == initial.id
+    assert dialog.profile_name() == "remote-profile"
+    assert dialog.identification() == identification
+    dialog.project_selector.setCurrentIndex(dialog.project_selector.findData(other.id))
+    assert dialog.directory_name() == custom
+    dialog.close()
