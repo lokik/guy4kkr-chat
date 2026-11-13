@@ -89,8 +89,11 @@ class PersistentJobsWidget(QWidget):
         self,
         value_action: Callable[[Any, Any], None],
         parent: QWidget | None = None,
+        *,
+        auto_load_results: bool = False,
     ) -> None:
         super().__init__(parent)
+        self.auto_load_results = auto_load_results
         self._all_jobs: tuple[PersistentJob, ...] = ()
         self._jobs: tuple[PersistentJob, ...] = ()
         self._jobs_by_id: dict[str, PersistentJob] = {}
@@ -290,6 +293,14 @@ class PersistentJobsWidget(QWidget):
         """Show a loaded result only while its job remains selected."""
         if self._selected_job_id == job_id:
             self.result_widget.set_result(result)
+
+    def set_result_pending(self, job_id: str) -> None:
+        if self._selected_job_id == job_id:
+            self.result_widget.set_status("Loading result in background…")
+
+    def set_result_error(self, job_id: str, error: str) -> None:
+        if self._selected_job_id == job_id:
+            self.result_widget.set_status(f"Result unavailable: {error}. Use Load result to retry.")
 
     def _apply_filter(self) -> None:
         if self._visible_refs is None:

@@ -263,6 +263,11 @@ class ResultActionsWidget(QWidget):
         self._update_assignment_controls()
         self.set_result(model.selected)
 
+    def set_status(self, message: str) -> None:
+        """Display non-blocking loading or error state instead of a result."""
+        self.set_result(None)
+        self._show_empty(message)
+
     def set_result(self, presentation: ResultPresentation | Any | None) -> None:
         """Render one presentation; raw live results are delegated to the presenter."""
         if presentation is not None and not isinstance(presentation, ResultPresentation):
