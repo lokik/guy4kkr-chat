@@ -1,4 +1,4 @@
-"""Interactive ASE structure shell and workspace publication contracts."""
+"""Structure shell behavior with the embedded PyQtGraph console."""
 from __future__ import annotations
 
 import os
@@ -21,85 +21,74 @@ def _app():
 
 
 def _enter(dialog, line):
-    dialog.command.setText(line)
-    dialog.execute_command()
+    """Use the console widget's real command-input path."""
+    dialog.console.input.setText(line)
+    dialog.console.input.execCmd()
 
 
-def test_shell_prints_instructions_and_accepts_explicit_use():
+def test_shell_hints_and_explicit_selection():
     _app()
     dialog = shell.StructureShellDialog()
-    assert "use_structure(atoms)" in dialog.output.toPlainText()
-    assert "exit()" in dialog.output.toPlainText()
+    assert "use_structure(atoms)" in dialog.console.output.toPlainText()
+    assert "exit()" in dialog.console.output.toPlainText()
     _enter(dialog, "atoms = bulk('Fe', 'bcc', a=2.87, cubic=True)")
     assert dialog.candidate is None
     _enter(dialog, "print(atoms.get_chemical_formula())")
-    assert "Fe2" in dialog.output.toPlainText()
+    assert "Fe2" in dialog.console.output.toPlainText()
     _enter(dialog, "use(atoms)")
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert isinstance(dialog.candidate, Atoms)
     assert dialog.candidate.get_chemical_symbols() == ["Fe", "Fe"]
 
 
-def test_shell_multiline_and_use_structure_preserve_snapshot():
+def test_shell_multiline_and_accepted_structure_is_detached():
     _app()
     dialog = shell.StructureShellDialog()
     for line in ("for _ in range(2):", "    print('ok')", ""):
         _enter(dialog, line)
-    assert dialog.output.toPlainText().count("ok") >= 2
+    assert dialog.console.output.toPlainText().count("ok") >= 2
     _enter(dialog, "structure = Atoms('Ni', positions=[(0, 0, 0)])")
     _enter(dialog, "use_structure(structure)")
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert dialog.candidate.get_chemical_symbols() == ["Ni"]
-    # The accepted value is a copy, not the mutable console variable.
-    dialog.console.locals["structure"].set_chemical_symbols(["Cu"])
+    dialog.console.localNamespace["structure"].set_chemical_symbols(["Cu"])
     assert dialog.candidate.get_chemical_symbols() == ["Ni"]
 
 
-def test_shell_invalid_candidate_does_not_close_and_reports_error():
+def test_shell_invalid_candidate_does_not_accept():
     _app()
     dialog = shell.StructureShellDialog()
     _enter(dialog, "use('Fe')")
     assert dialog.candidate is None
-    assert "expects an ase.Atoms" in dialog.output.toPlainText()
+    assert dialog.result() != QDialog.DialogCode.Accepted
+    assert "expects an ase.Atoms" in dialog.console.output.toPlainText()
     _enter(dialog, "use(Atoms('Fe'))")
     assert dialog.result() == QDialog.DialogCode.Accepted
 
 
-def test_shell_close_and_exit_discard_session():
+def test_shell_close_exit_and_quit_discard_without_exiting_application():
     _app()
-    dialog = shell.StructureShellDialog()
-    _enter(dialog, "atoms = Atoms('Fe')")
-    dialog.reject()
-    assert dialog.candidate is None
-    assert dialog.result() == QDialog.DialogCode.Rejected
+    for action in ("close", "exit()", "quit()"):
+        dialog = shell.StructureShellDialog()
+        _enter(dialog, "atoms = Atoms('Fe')")
+        if action == "close":
+            dialog.reject()
+        else:
+            _enter(dialog, action)
+        assert dialog.candidate is None
+        assert dialog.result() == QDialog.DialogCode.Rejected
 
-    other = shell.StructureShellDialog()
-    _enter(other, "exit()")
-    assert other.result() == QDialog.DialogCode.Rejected
-    assert other.candidate is None
 
-
-def test_shell_history():
+def test_shell_command_history_is_managed_by_console():
     _app()
     dialog = shell.StructureShellDialog()
     _enter(dialog, "x = 1")
     _enter(dialog, "x = 2")
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QKeyEvent
-
-    def key(code):
-        return QKeyEvent(QKeyEvent.Type.KeyPress, code, Qt.KeyboardModifier.NoModifier)
-
-    dialog.command.keyPressEvent(key(Qt.Key.Key_Up))
-    assert dialog.command.text() == "x = 2"
-    dialog.command.keyPressEvent(key(Qt.Key.Key_Up))
-    assert dialog.command.text() == "x = 1"
-    dialog.command.keyPressEvent(key(Qt.Key.Key_Down))
-    assert dialog.command.text() == "x = 2"
+    assert dialog.console.input.history[1:3] == ["x = 2", "x = 1"]
     dialog.reject()
 
 
-def test_shell_workflow_only_publishes_when_selected(monkeypatch):
+def test_shell_flow_only_publishes_selected_structure(monkeypatch):
     _app()
     controller = WorkspaceController()
     generation = controller.structure_generation
