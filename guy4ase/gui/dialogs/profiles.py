@@ -11,6 +11,7 @@ from PyQt6.QtGui import QRegularExpressionValidator
 from kkrunner.projects import ProjectRepository, ProjectRepositoryError
 
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -235,7 +236,8 @@ class ProfileSelectionDialog(QDialog):
         # types a directory or chooses one with Browse.
         self._fallback_directory = directory or ""
         self._explicit_directory: str | None = None
-        self._project_directories = {}
+        self._projects_by_id = {}
+        self._directory_assignment_overrides = {}
         self._projects = project_repository if project_repository is not None else default_project_repository()
         self._store = store or ExecutionProfileStore()
         self.setWindowTitle("Run SPR-KKR Calculation")
@@ -329,11 +331,15 @@ class ProfileSelectionDialog(QDialog):
         )
         self.new_project_button.clicked.connect(self._create_project)
         project_row.addWidget(self.new_project_button)
+        self.edit_project_button = QPushButton("Edit…", self.project_box)
+        self.edit_project_button.clicked.connect(self._edit_project)
+        project_row.addWidget(self.edit_project_button)
         layout.addWidget(self.project_box)
         self.project_box.setVisible(require_directory)
 
         directory_box = QGroupBox("Working directory", self)
-        directory_row = QHBoxLayout(directory_box)
+        directory_layout = QVBoxLayout(directory_box)
+        directory_row = QHBoxLayout()
         self.directory_edit = QLineEdit(directory_box)
         self.directory_edit.setText(directory or "")
         self.directory_edit.textEdited.connect(self._directory_edited)
@@ -342,6 +348,19 @@ class ProfileSelectionDialog(QDialog):
         browse = QPushButton("Browse…", directory_box)
         browse.clicked.connect(self._browse_directory)
         directory_row.addWidget(browse)
+        directory_layout.addLayout(directory_row)
+        self.assign_directory_checkbox = QCheckBox(
+            "Assign working directory to selected project", directory_box
+        )
+        self.assign_directory_checkbox.setToolTip(
+            "Save the directory above as the project's default working directory "
+            "when starting this calculation."
+        )
+        directory_layout.addWidget(self.assign_directory_checkbox)
+        self.assign_directory_checkbox.clicked.connect(
+            self._directory_assignment_changed
+        )
+        self.directory_edit.textChanged.connect(self._refresh_directory_assignment)
         layout.addWidget(directory_box)
         directory_box.setVisible(require_directory)
         self._project_changed()
@@ -366,7 +385,7 @@ class ProfileSelectionDialog(QDialog):
             return
 
         by_id = {project.id: project for project in projects}
-        self._project_directories = {project.id: project.directory for project in projects}
+        self._projects_by_id = by_id
 
         def label(project):
             parts = [project.name]
@@ -392,7 +411,8 @@ class ProfileSelectionDialog(QDialog):
         self._explicit_directory = text
 
     def _project_changed(self) -> None:
-        project_directory = self._project_directories.get(self.project_id())
+        project = self._projects_by_id.get(self.project_id())
+        project_directory = None if project is None else project.directory
         desired = (
             self._explicit_directory
             if self._explicit_directory is not None
@@ -400,6 +420,31 @@ class ProfileSelectionDialog(QDialog):
         )
         if hasattr(self, "directory_edit") and self.directory_edit.text() != desired:
             self.directory_edit.setText(desired)
+        if hasattr(self, "edit_project_button"):
+            self.edit_project_button.setEnabled(project is not None)
+        if hasattr(self, "assign_directory_checkbox"):
+            self._refresh_directory_assignment()
+
+    def _refresh_directory_assignment(self, _text: str = "") -> None:
+        """Only allow assigning a directory when it would change the project."""
+        project = self._projects_by_id.get(self.project_id())
+        directory = self.directory_name()
+        differs = (
+            project is not None
+            and directory is not None
+            and directory != project.directory
+        )
+        self.assign_directory_checkbox.setEnabled(differs)
+        self.assign_directory_checkbox.setChecked(
+            self._directory_assignment_overrides.get(
+                project.id, project.directory is None
+            ) if differs else False
+        )
+
+    def _directory_assignment_changed(self, checked: bool) -> None:
+        project_id = self.project_id()
+        if project_id is not None:
+            self._directory_assignment_overrides[project_id] = checked
 
     def project_id(self) -> str | None:
         """Return the project selected for this run, or None if unassigned."""
@@ -422,6 +467,32 @@ class ProfileSelectionDialog(QDialog):
             QMessageBox.warning(self, "Create Project Failed", str(exc))
             return
         self._load_projects(created.id)
+        self._project_changed()
+
+    def _edit_project(self) -> None:
+        """Edit the selected project without changing the current run setup."""
+        project = self._projects_by_id.get(self.project_id())
+        if project is None:
+            return
+        dialog = ProjectEditDialog(
+            self, name=project.name, directory=project.directory,
+            title="Edit Project",
+        )
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        try:
+            updated = project.modify(
+                name=dialog.project_name(),
+                directory=dialog.project_directory(),
+            )
+            if updated == project:
+                return
+            self._projects.save(updated, expected_generation=project.generation)
+        except (ProjectRepositoryError, KeyError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Edit Project Failed", str(exc))
+            self._load_projects(project.id)
+            return
+        self._load_projects(project.id)
         self._project_changed()
 
     def _reload_profiles(self, selected: str | None = None) -> None:
@@ -496,6 +567,25 @@ class ProfileSelectionDialog(QDialog):
                 "Enter a calculation label (SPR-KKR CONTROL.ADSI).",
             )
             return
+        if (
+            self._require_directory
+            and self.assign_directory_checkbox.isEnabled()
+            and self.assign_directory_checkbox.isChecked()
+        ):
+            project = self._projects_by_id.get(self.project_id())
+            directory = self.directory_name()
+            if project is not None and directory is not None:
+                updated = project.modify(directory=directory)
+                if updated != project:
+                    try:
+                        self._projects.save(
+                            updated, expected_generation=project.generation
+                        )
+                    except (ProjectRepositoryError, KeyError, OSError, ValueError) as exc:
+                        QMessageBox.warning(
+                            self, "Assign Project Directory Failed", str(exc)
+                        )
+                        return
         super().accept()
 
     def identification(self) -> RunIdentification | None:

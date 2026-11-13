@@ -311,3 +311,347 @@ def test_new_project_dialog_sets_working_directory(application, monkeypatch, tmp
     assert repository.project(project_id).directory == str(directory)
     assert dialog.directory_name() == str(directory)
     dialog.close()
+
+
+def test_project_editing_controls_and_directory_defaults(application, tmp_path):
+    repository = ProjectRepository(tmp_path / "projects")
+    assigned = repository.create("Assigned", directory=tmp_path / "existing")
+    empty = repository.create("Empty")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, directory=str(tmp_path / "workspace")
+    )
+    assert not dialog.edit_project_button.isEnabled()
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+
+    dialog.project_selector.setCurrentIndex(dialog.project_selector.findData(assigned.id))
+    assert dialog.edit_project_button.isEnabled()
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+
+    dialog.project_selector.setCurrentIndex(dialog.project_selector.findData(empty.id))
+    assert dialog.edit_project_button.isEnabled()
+    assert dialog.assign_directory_checkbox.isEnabled()
+    assert dialog.assign_directory_checkbox.isChecked()
+    dialog.project_selector.setCurrentIndex(0)
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+    dialog.close()
+
+
+def test_edit_current_project_updates_label_and_directory(
+    application, monkeypatch, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    current = repository.create("Original", directory=tmp_path / "old")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=current.id,
+        directory=str(tmp_path / "workspace"),
+    )
+
+    def edit(project_dialog):
+        assert project_dialog.name_edit.text() == "Original"
+        assert project_dialog.project_directory() == str(tmp_path / "old")
+        project_dialog.name_edit.setText("Renamed")
+        project_dialog.directory_edit.setText(str(tmp_path / "new"))
+        return project_dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ProjectEditDialog, "exec", edit)
+    dialog.edit_project_button.click()
+
+    saved = repository.project(current.id)
+    assert saved.name == "Renamed"
+    assert saved.directory == str(tmp_path / "new")
+    assert dialog.project_id() == current.id
+    assert dialog.project_selector.currentText() == "Renamed"
+    assert dialog.directory_name() == str(tmp_path / "new")
+    assert not dialog.assign_directory_checkbox.isChecked()
+    dialog.close()
+
+
+def test_edit_project_does_not_override_explicit_run_directory(
+    application, monkeypatch, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    current = repository.create("Original", directory=tmp_path / "old")
+    manual = str(tmp_path / "manual")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=current.id,
+    )
+    dialog.directory_edit.setText(manual)
+    dialog._directory_edited(manual)
+
+    def edit(project_dialog):
+        project_dialog.directory_edit.setText(str(tmp_path / "new"))
+        return project_dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ProjectEditDialog, "exec", edit)
+    dialog.edit_project_button.click()
+    assert repository.project(current.id).directory == str(tmp_path / "new")
+    assert dialog.directory_name() == manual
+    dialog.close()
+
+
+def test_edit_project_cancel_and_failure_do_not_change_repository(
+    application, monkeypatch, tmp_path
+):
+    from kkrunner.projects import ProjectRepositoryError
+
+    repository = ProjectRepository(tmp_path / "projects")
+    current = repository.create("Original")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=current.id,
+    )
+    monkeypatch.setattr(ProjectEditDialog, "exec", lambda self: self.DialogCode.Rejected)
+    dialog.edit_project_button.click()
+    assert repository.project(current.id) == current
+
+    def edit(project_dialog):
+        project_dialog.name_edit.setText("Failed")
+        return project_dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ProjectEditDialog, "exec", edit)
+    def fail_save(*_args, **_kwargs):
+        raise ProjectRepositoryError("Concurrent edit")
+    monkeypatch.setattr(repository, "save", fail_save)
+    warnings = []
+    monkeypatch.setattr(
+        profiles_module.QMessageBox, "warning",
+        lambda _dialog, title, message: warnings.append((title, message)),
+    )
+    dialog.edit_project_button.click()
+    assert warnings == [("Edit Project Failed", "Concurrent edit")]
+    assert repository.project(current.id) == current
+    assert dialog.project_id() == current.id
+    dialog.close()
+
+
+def test_assign_directory_by_default_for_project_without_one(application, tmp_path):
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Empty")
+    directory = str(tmp_path / "workspace")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id, directory=directory,
+    )
+    assert dialog.assign_directory_checkbox.isChecked()
+    assert dialog.directory_name() == directory
+    assert repository.project(project.id).directory is None
+    dialog.accept()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert repository.project(project.id).directory == directory
+    dialog.close()
+
+
+def test_assign_directory_does_not_modify_project_when_unchecked(
+    application, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Existing", directory=tmp_path / "project")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id,
+    )
+    manual = str(tmp_path / "run-only")
+    dialog.directory_edit.setText(manual)
+    dialog._directory_edited(manual)
+    assert not dialog.assign_directory_checkbox.isChecked()
+    dialog.accept()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert dialog.directory_name() == manual
+    assert repository.project(project.id).directory == str(tmp_path / "project")
+    dialog.close()
+
+
+def test_assign_directory_checkbox_can_update_existing_project(
+    application, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Existing", directory=tmp_path / "project")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id,
+    )
+    manual = str(tmp_path / "new-default")
+    dialog.directory_edit.setText(manual)
+    dialog._directory_edited(manual)
+    dialog.assign_directory_checkbox.setChecked(True)
+    dialog.accept()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert repository.project(project.id).directory == manual
+    dialog.close()
+
+
+def test_assignment_only_happens_on_accept_and_never_for_unassigned(
+    application, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Empty")
+    directory = str(tmp_path / "workspace")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id, directory=directory,
+    )
+    dialog.reject()
+    assert repository.project(project.id).directory is None
+    dialog.close()
+
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, directory=directory,
+    )
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    dialog.accept()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert repository.project(project.id).directory is None
+    dialog.close()
+
+
+def test_assign_directory_save_failure_keeps_dialog_open(
+    application, monkeypatch, tmp_path
+):
+    from kkrunner.projects import ProjectRepositoryError
+
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Empty")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id,
+        directory=str(tmp_path / "run"),
+    )
+    warnings = []
+    monkeypatch.setattr(
+        profiles_module.QMessageBox, "warning",
+        lambda _dialog, title, message: warnings.append((title, message)),
+    )
+
+    def fail_save(*_args, **_kwargs):
+        raise ProjectRepositoryError("Changed by another process")
+
+    monkeypatch.setattr(repository, "save", fail_save)
+    dialog.accept()
+    assert dialog.result() == dialog.DialogCode.Rejected
+    assert repository.project(project.id).directory is None
+    assert warnings == [
+        ("Assign Project Directory Failed", "Changed by another process")
+    ]
+    dialog.close()
+
+
+def test_explicit_directory_assignment_choice_survives_project_switches(
+    application, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    without_directory = repository.create("Unset")
+    with_directory = repository.create("Set", directory=tmp_path / "existing")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository,
+        active_project_id=without_directory.id,
+        directory=str(tmp_path / "workspace"),
+    )
+    assert dialog.assign_directory_checkbox.isChecked()
+    dialog.assign_directory_checkbox.click()
+    assert not dialog.assign_directory_checkbox.isChecked()
+    dialog.project_selector.setCurrentIndex(
+        dialog.project_selector.findData(with_directory.id)
+    )
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+    override = str(tmp_path / "override")
+    dialog.directory_edit.setText(override)
+    dialog._directory_edited(override)
+    assert dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+    dialog.assign_directory_checkbox.click()
+    assert dialog.assign_directory_checkbox.isChecked()
+    dialog.project_selector.setCurrentIndex(
+        dialog.project_selector.findData(without_directory.id)
+    )
+    assert not dialog.assign_directory_checkbox.isChecked()
+    dialog.project_selector.setCurrentIndex(
+        dialog.project_selector.findData(with_directory.id)
+    )
+    assert dialog.assign_directory_checkbox.isChecked()
+    dialog.close()
+
+
+def test_assign_directory_disabled_when_same_as_project(
+    application, monkeypatch, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Existing", directory=tmp_path / "assigned")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id,
+        directory=str(tmp_path / "workspace"),
+    )
+
+    assert dialog.directory_name() == project.directory
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+
+    # Changes to the field must update availability immediately.
+    alternate = str(tmp_path / "alternate")
+    dialog.directory_edit.setText(alternate)
+    assert dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+
+    dialog.assign_directory_checkbox.click()
+    assert dialog.assign_directory_checkbox.isChecked()
+
+    # Equivalent paths must not allow a redundant project assignment.
+    dialog.directory_edit.setText(project.directory + "/../assigned")
+    assert dialog.directory_name() == project.directory
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+
+    # The previous user preference is restored if assignment becomes meaningful again.
+    dialog.directory_edit.setText(alternate)
+    assert dialog.assign_directory_checkbox.isEnabled()
+    assert dialog.assign_directory_checkbox.isChecked()
+
+    dialog.directory_edit.setText(project.directory)
+    monkeypatch.setattr(
+        repository, "save",
+        lambda *_args, **_kwargs: pytest.fail("Redundant project save"),
+    )
+    dialog.accept()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    dialog.close()
+
+
+def test_assignment_stays_unavailable_until_working_directory_is_set(
+    application, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Empty")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id,
+        directory=None,
+    )
+
+    assert dialog.directory_name() is None
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    dialog.directory_edit.setText(str(tmp_path / "run"))
+    assert dialog.assign_directory_checkbox.isEnabled()
+    assert dialog.assign_directory_checkbox.isChecked()
+    dialog.close()
+
+
+def test_editing_project_to_current_directory_disables_assignment(
+    application, monkeypatch, tmp_path
+):
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Existing", directory=tmp_path / "old")
+    working = str(tmp_path / "run")
+    dialog = ProfileSelectionDialog(
+        project_repository=repository, active_project_id=project.id
+    )
+    dialog.directory_edit.setText(working)
+    dialog._directory_edited(working)
+    assert dialog.assign_directory_checkbox.isEnabled()
+
+    def edit(project_dialog):
+        project_dialog.directory_edit.setText(working)
+        return project_dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(ProjectEditDialog, "exec", edit)
+    dialog.edit_project_button.click()
+    assert repository.project(project.id).directory == working
+    assert dialog.directory_name() == working
+    assert not dialog.assign_directory_checkbox.isEnabled()
+    assert not dialog.assign_directory_checkbox.isChecked()
+    dialog.close()
