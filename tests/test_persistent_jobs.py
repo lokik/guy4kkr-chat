@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import pytest
-from kkrunner.runs import RunState, FailurePhase, Execution, WorkingDirectory
+from kkrunner.runs import RunState, FailurePhase, ExecutionMetadata, WorkingDirectory
 from kkrunner.client import SshTransport
 from kkrunner.backends import BackendConfig
 from kkrunner.files import FileManifest
@@ -20,7 +20,7 @@ def record(state=RunState.RUNNING, *, backend_id="pid-42", failure_phase=None, r
         return_code=return_code,
         message=None, failure_phase=failure_phase,
         files=FileManifest(),
-        execution=Execution(
+        execution=ExecutionMetadata(
             SshTransport(host="cluster"),
             WorkingDirectory("/tmp/calc", "/remote/calc"), backend_id=backend_id,
             backend=BackendConfig(name="psij", options={"executor_name": "slurm"}),

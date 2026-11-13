@@ -1,7 +1,7 @@
 """Result-file freshness checks for persistent calculation history."""
 from __future__ import annotations
 
-from kkrunner.runs import Execution, WorkingDirectory
+from kkrunner.runs import ExecutionMetadata, WorkingDirectory
 from kkrunner.client import LocalTransport
 from types import SimpleNamespace
 
@@ -16,7 +16,7 @@ def _record(*, result_files=None):
         updated_at="2026-10-13T06:30:00+00:00",
         finished_at="2026-10-13T06:20:00+00:00",
         metadata={"ase2sprkkr": {"task": "DOS", "dataset": "Fe-DOS"}},
-        execution=Execution(LocalTransport(), WorkingDirectory("/tmp/calc")),
+        execution=ExecutionMetadata(LocalTransport(), WorkingDirectory("/tmp/calc")),
         failure_phase=None,
         return_code=0,
         message=None,

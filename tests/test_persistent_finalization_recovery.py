@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 import guy4ase.gui.application.persistent_jobs as module
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
-from kkrunner.runs import RunState, Execution, WorkingDirectory
+from kkrunner.runs import RunState, ExecutionMetadata, WorkingDirectory
 from kkrunner.files import FileManifest
 from kkrunner.client import LocalTransport
 from kkrunner.backends import BackendConfig
@@ -15,7 +15,7 @@ def _record(state=RunState.POSTPROCESSING):
         finished_at=None, metadata={"ase2sprkkr": {"task": "DOS"}},
         return_code=0, message=None, failure_phase=None,
         files=FileManifest(),
-        execution=Execution(LocalTransport(), WorkingDirectory("/tmp/calc"), "pid-42", backend=BackendConfig("process")),
+        execution=ExecutionMetadata(LocalTransport(), WorkingDirectory("/tmp/calc"), "pid-42", backend=BackendConfig("process")),
     )
 
 class Store:

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from kkrunner.runs import Execution, WorkingDirectory, RunState, FailurePhase
+from kkrunner.runs import ExecutionMetadata, WorkingDirectory, RunState, FailurePhase
 from kkrunner.files import FileManifest
 from kkrunner.client import SshTransport
 from kkrunner.backends import BackendConfig
@@ -16,7 +16,7 @@ def record(state=RunState.RUNNING, *, phase=None, code=None, backend_id="backend
         updated_at="2026-10-19T10:01:00+00:00", finished_at=None,
         metadata={"ase2sprkkr": {"task": "DOS"}}, return_code=code, message=None,
         failure_phase=phase, files=FileManifest(),
-        execution=Execution(
+        execution=ExecutionMetadata(
             SshTransport(host="cluster.example"),
             WorkingDirectory("/tmp/project", "/scratch/run"),
             backend_id=backend_id, backend=BackendConfig("process"),

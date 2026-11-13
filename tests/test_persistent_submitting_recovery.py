@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from kkrunner.runs import Execution, WorkingDirectory
+from kkrunner.runs import ExecutionMetadata, WorkingDirectory
 from kkrunner.client import LocalTransport
 from kkrunner.backends import BackendConfig
 from kkrunner.files import FileManifest
@@ -17,7 +17,7 @@ def _record(state: str):
         updated_at="2026-10-17T08:00:00+00:00",
         finished_at=None,
         metadata={"ase2sprkkr": {"task": "SCF"}},
-        execution=Execution(LocalTransport(), WorkingDirectory("/tmp/calc"), backend=BackendConfig("process")),
+        execution=ExecutionMetadata(LocalTransport(), WorkingDirectory("/tmp/calc"), backend=BackendConfig("process")),
         files=FileManifest(), failure_phase=None,
         dataset=None,
 
@@ -49,7 +49,7 @@ def test_refresh_recovers_submitting_before_backend_refresh():
         def recover_submitting(self, record):
             calls.append(("recover", record.state.value))
             recovered = _record("running")
-            recovered.execution = Execution(LocalTransport(), WorkingDirectory("/tmp/calc"), "pid-42", backend=BackendConfig("process"))
+            recovered.execution = ExecutionMetadata(LocalTransport(), WorkingDirectory("/tmp/calc"), "pid-42", backend=BackendConfig("process"))
             self.store.record = recovered
             return recovered
 
