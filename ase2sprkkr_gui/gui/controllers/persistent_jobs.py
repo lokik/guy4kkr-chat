@@ -727,9 +727,25 @@ class PersistentJobsController(QObject):
         job = self._source.job(job_id)
         if not _can_load_result(job, self._source):
             return
+        revision = _result_version(job)
+        pending = self._loads.get(job_id)
+
+        def reread() -> Any:
+            # Selecting a job can already have started a background reread.
+            # Reuse that parse instead of running the same parser twice.
+            if pending is not None and pending[0] == revision:
+                try:
+                    return pending[1].result()
+                except Exception:  # noqa: BLE001 - retry failed/cancelled preload
+                    logger.debug(
+                        "Background preload failed for %s; retrying",
+                        job_id, exc_info=True,
+                    )
+            return self._source.load_result(job_id)
+
         try:
             result = run_modal_task(
-                view, lambda: self._source.load_result(job_id),
+                view, reread,
                 title="Refreshing Calculation Result",
                 label="Reading result files…",
             )

@@ -164,5 +164,13 @@ def test_refresh_reparses_files_without_adopting_but_load_opens_cached_result(mo
     assert parsed == ["first"]  # Load uses already-parsed result.
     assert adopted == [("first", {"name": "first"}, True)]
     assert opened == ["first"]
+
+    # Refresh rereads after a previous result has been cached.
+    controller._refresh_result_requested(view, "first")
+    assert parsed == ["first", "first"]
+    assert adopted == [("first", {"name": "first"}, True)]
+    assert opened == ["first"]
+    controller._load_result_requested(view, "first")
+    assert parsed == ["first", "first"]  # Load uses the refreshed cache.
     view.close()
     controller._executor.shutdown(wait=True, cancel_futures=True)
