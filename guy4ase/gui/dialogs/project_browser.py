@@ -5,14 +5,18 @@ from collections import defaultdict
 from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
-    QHBoxLayout,
+    QGridLayout,
+    QGroupBox,
     QHeaderView,
     QInputDialog,
     QLabel,
     QMessageBox,
     QPushButton,
     QSplitter,
+    QSizePolicy,
+    QStyle,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -90,29 +94,6 @@ class ProjectBrowserDialog(QWidget):
         project_heading.setFont(heading_font)
         project_layout.addWidget(project_heading)
 
-        self.active_project_label = QLabel(project_panel)
-        project_layout.addWidget(self.active_project_label)
-        self.set_active_project_button = QPushButton("Set active", project_panel)
-        self.set_active_project_button.clicked.connect(self._request_selected_active)
-        self.clear_active_project_button = QPushButton("Clear active", project_panel)
-        self.clear_active_project_button.clicked.connect(
-            lambda _checked=False: self.activeProjectRequested.emit(None)
-        )
-
-        self.new_project_button = QPushButton("New", project_panel)
-        self.new_project_button.clicked.connect(self._create_project)
-        self.edit_project_button = QPushButton("Edit", project_panel)
-        self.edit_project_button.clicked.connect(self._edit_project)
-        self.move_project_button = QPushButton("Move", project_panel)
-        self.move_project_button.clicked.connect(self._move_project)
-        self.delete_project_button = QPushButton("Delete", project_panel)
-        self.delete_project_button.clicked.connect(self._delete_project)
-        self.add_result_button = QPushButton("Add result…", project_panel)
-        self.add_result_button.setToolTip(
-            "Import an existing SPR-KKR output file into the selected project."
-        )
-        self.add_result_button.clicked.connect(self._request_add_result)
-
         self.project_tree = QTreeWidget(project_panel)
         self.project_tree.setColumnCount(2)
         self.project_tree.setHeaderLabels(("Project", "Results"))
@@ -122,9 +103,6 @@ class ProjectBrowserDialog(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.project_tree.currentItemChanged.connect(self._project_selection_changed)
-
-        self.refresh_projects_button = QPushButton("Refresh projects", project_panel)
-        self.refresh_projects_button.clicked.connect(self._refresh_projects)
 
         self.jobs = PersistentJobsWidget(
             lambda value, action: execute_value_action(value, action, self),
@@ -137,26 +115,99 @@ class ProjectBrowserDialog(QWidget):
             self._persistent_jobs_controller.supports_reassignment
         )
         self.jobs.moveRunsRequested.connect(self._move_selected_runs)
+        self.jobs.addResultRequested.connect(self._request_add_result)
         self.jobs.jobsChanged.connect(self._refresh_project_projection)
 
-        project_body = QHBoxLayout()
-        project_list = QVBoxLayout()
-        project_list.addWidget(self.project_tree, 1)
-        project_body.addLayout(project_list, 1)
-        project_actions = QVBoxLayout()
-        project_actions.addWidget(self.set_active_project_button)
-        project_actions.addWidget(self.clear_active_project_button)
-        project_actions.addSpacing(12)
-        project_actions.addWidget(self.new_project_button)
-        project_actions.addWidget(self.edit_project_button)
-        project_actions.addWidget(self.move_project_button)
-        project_actions.addWidget(self.delete_project_button)
-        project_actions.addSpacing(12)
-        project_actions.addWidget(self.add_result_button)
-        project_actions.addStretch(1)
-        project_actions.addWidget(self.refresh_projects_button)
-        project_body.addLayout(project_actions)
-        project_layout.addLayout(project_body, 1)
+
+        project_layout.addWidget(self.project_tree, 1)
+
+        # Project management belongs directly below its tree.
+        project_buttons = QGridLayout()
+        project_buttons.setColumnStretch(0, 1)
+        project_buttons.setColumnStretch(1, 1)
+        self.new_project_button = QPushButton("New", project_panel)
+        self.new_project_button.setIcon(QIcon.fromTheme(
+            "document-new",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder),
+        ))
+        self.new_project_button.setToolTip("Create a project under the selected project.")
+        self.new_project_button.clicked.connect(self._create_project)
+        project_buttons.addWidget(self.new_project_button, 0, 0)
+
+        self.edit_project_button = QPushButton("Edit", project_panel)
+        self.edit_project_button.setIcon(QIcon.fromTheme(
+            "document-edit",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView),
+        ))
+        self.edit_project_button.setToolTip("Edit the selected project's name and directory.")
+        self.edit_project_button.clicked.connect(self._edit_project)
+        project_buttons.addWidget(self.edit_project_button, 0, 1)
+
+        self.move_project_button = QPushButton("Move", project_panel)
+        self.move_project_button.setIcon(QIcon.fromTheme(
+            "go-jump", self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowRight),
+        ))
+        self.move_project_button.setToolTip("Move the selected project under another parent.")
+        self.move_project_button.clicked.connect(self._move_project)
+        project_buttons.addWidget(self.move_project_button, 1, 0)
+
+        self.delete_project_button = QPushButton("Delete", project_panel)
+        self.delete_project_button.setIcon(QIcon.fromTheme(
+            "edit-delete", self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon),
+        ))
+        self.delete_project_button.setToolTip("Delete the selected project and its completed run history.")
+        self.delete_project_button.clicked.connect(self._delete_project)
+        project_buttons.addWidget(self.delete_project_button, 1, 1)
+
+        self.refresh_projects_button = QPushButton("Refresh projects", project_panel)
+        self.refresh_projects_button.setIcon(QIcon.fromTheme(
+            "view-refresh", self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload),
+        ))
+        self.refresh_projects_button.setToolTip("Reload the project repository.")
+        self.refresh_projects_button.clicked.connect(self._refresh_projects)
+        project_buttons.addWidget(self.refresh_projects_button, 2, 0)
+        for button in (
+            self.new_project_button,
+            self.edit_project_button,
+            self.move_project_button,
+            self.delete_project_button,
+            self.refresh_projects_button,
+        ):
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+        project_layout.addLayout(project_buttons)
+
+        active_group = QGroupBox("Active project", project_panel)
+        active_layout = QVBoxLayout(active_group)
+        self.active_project_label = QLabel(active_group)
+        self.active_project_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        active_layout.addWidget(self.active_project_label)
+        active_buttons = QGridLayout()
+        active_buttons.setColumnStretch(0, 1)
+        active_buttons.setColumnStretch(1, 1)
+        self.set_active_project_button = QPushButton("Set active", active_group)
+        self.set_active_project_button.setToolTip(
+            "Use the selected project for new calculations."
+        )
+        self.set_active_project_button.clicked.connect(self._request_selected_active)
+        active_buttons.addWidget(self.set_active_project_button, 0, 0)
+        self.clear_active_project_button = QPushButton("Clear active", active_group)
+        self.clear_active_project_button.setToolTip(
+            "Clear the project used by new calculations."
+        )
+        self.clear_active_project_button.clicked.connect(
+            lambda _checked=False: self.activeProjectRequested.emit(None)
+        )
+        active_buttons.addWidget(self.clear_active_project_button, 0, 1)
+        for button in (self.set_active_project_button, self.clear_active_project_button):
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+        active_layout.addLayout(active_buttons)
+        project_layout.addWidget(active_group)
 
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
@@ -175,9 +226,7 @@ class ProjectBrowserDialog(QWidget):
         self._active_project_id = project_id
         project = self._projects_by_id.get(project_id) if project_id is not None else None
         self.active_project_label.setText(
-            "Active project: (none)"
-            if project is None
-            else f"Active project: {project.name}"
+            "(none)" if project is None else project.name
         )
         self.active_project_label.setToolTip("" if project is None else project.id)
         self._refresh_action_availability()
@@ -359,7 +408,7 @@ class ProjectBrowserDialog(QWidget):
         project = self._selected_project()
         self.edit_project_button.setEnabled(project is not None)
         self.move_project_button.setEnabled(project is not None)
-        self.add_result_button.setEnabled(project is not None)
+        self.jobs.set_add_result_available(project is not None)
         self.delete_project_button.setEnabled(project is not None and project.parent_id is not None)
         self.set_active_project_button.setEnabled(
             project is not None and project.id != self._active_project_id

@@ -6,8 +6,8 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QTreeWidgetItem, QWidget
+from PyQt6.QtCore import QPoint, Qt
+from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QSizePolicy, QTreeWidgetItem, QWidget
 from kkrunner.projects import ProjectRepository, ProjectRepositoryError
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob
@@ -292,8 +292,8 @@ def test_project_browser_separates_bulk_actions_from_single_result_detail(tmp_pa
     assert browser.jobs.select_all_jobs_button.isVisible()
     assert browser.jobs.move_jobs_button.isVisible()
     assert not hasattr(browser, "imported_group")
-    assert browser.add_result_button.isVisible()
-    assert browser.jobs.load_result_button.text() == "Load result"
+    assert browser.jobs.add_result_button.isVisible()
+    assert browser.jobs.load_result_button.text() == "Use result"
     assert browser.jobs.refresh_result_button.text() == "Refresh result"
     browser.close()
 
@@ -340,7 +340,7 @@ def test_project_browser_moves_multiple_completed_records_to_another_project(tmp
     monkeypatch.setattr(AssignResultsDialog, "exec", choose_target)
     browser.jobs.select_all_jobs_button.click()
     assert set(browser.jobs.selected_persistent_refs) == {"run-1", "run-2"}
-    browser.jobs.group_by.setCurrentIndex(3)  # Rebuilding grouped rows keeps multiselection.
+    browser.jobs.tree.header().sectionClicked.emit(4)  # Rebuilding grouped rows keeps multiselection.
     assert set(browser.jobs.selected_persistent_refs) == {"run-1", "run-2"}
     assert browser.jobs.move_jobs_button.isEnabled()
     browser.jobs.move_jobs_button.click()
@@ -430,11 +430,234 @@ def test_project_browser_can_request_file_import_for_selected_project(tmp_path):
 
     requested = []
     browser.addResultRequested.connect(requested.append)
-    assert browser.add_result_button.isEnabled()
-    browser.add_result_button.click()
+    assert browser.jobs.add_result_button.isEnabled()
+    browser.jobs.add_result_button.click()
     assert requested == [project.id]
 
     browser.project_tree.clearSelection()
     browser.project_tree.setCurrentItem(None)
-    assert not browser.add_result_button.isEnabled()
+    assert not browser.jobs.add_result_button.isEnabled()
+    browser.close()
+
+
+def test_project_browser_project_actions_are_below_tree(tmp_path):
+    from PyQt6.QtWidgets import QGroupBox
+
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    repository.create("Project")
+    browser = _dialog(repository, _JobSource(()))
+    layout = browser.project_tree.parentWidget().layout()
+
+    assert layout.itemAt(0).widget().text() == "Projects"
+    assert layout.itemAt(1).widget() is browser.project_tree
+    buttons = layout.itemAt(2).layout()
+    assert buttons.itemAtPosition(0, 0).widget() is browser.new_project_button
+    assert buttons.itemAtPosition(0, 1).widget() is browser.edit_project_button
+    assert buttons.itemAtPosition(1, 0).widget() is browser.move_project_button
+    assert buttons.itemAtPosition(1, 1).widget() is browser.delete_project_button
+    assert buttons.itemAtPosition(2, 0).widget() is browser.refresh_projects_button
+    assert buttons.itemAtPosition(2, 1) is None
+
+    for button in (
+        browser.new_project_button, browser.edit_project_button,
+        browser.move_project_button, browser.delete_project_button,
+        browser.refresh_projects_button,
+    ):
+        assert not button.icon().isNull()
+        assert button.toolTip()
+
+    active_group = layout.itemAt(3).widget()
+    assert isinstance(active_group, QGroupBox)
+    assert active_group.title() == "Active project"
+    assert buttons.columnStretch(0) == buttons.columnStretch(1) == 1
+    assert browser.active_project_label.parentWidget() is active_group
+    assert browser.set_active_project_button.parentWidget() is active_group
+    assert browser.clear_active_project_button.parentWidget() is active_group
+    browser.close()
+
+
+def test_job_headers_group_without_losing_bulk_selection(tmp_path):
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Project")
+    source = _JobSource((
+        _job("one", dataset="First", project_id=project.id, profile="local"),
+        _job("two", dataset="Second", project_id=project.id, profile="remote"),
+    ))
+    browser = _dialog(repository, source)
+    jobs = browser.jobs
+    header = jobs.tree.header()
+    assert header.sectionsClickable()
+    assert not hasattr(jobs, "group_by")
+    assert jobs._group_column == 2
+    assert "Group" in jobs.tree.headerItem().toolTip(6)
+
+    jobs.select_all_jobs_button.click()
+    assert set(jobs.selected_persistent_refs) == {"one", "two"}
+    header.sectionClicked.emit(6)  # Profile
+    assert jobs._group_column == 6
+    assert {jobs.tree.topLevelItem(i).text(0)
+            for i in range(jobs.tree.topLevelItemCount())} == {"local", "remote"}
+    assert set(jobs.selected_persistent_refs) == {"one", "two"}
+
+    header.sectionClicked.emit(0)  # Job removes grouping
+    assert jobs._group_column == 0
+    assert jobs.tree.topLevelItemCount() == 2
+    assert all(jobs.tree.topLevelItem(i).childCount() == 0 for i in range(2))
+    assert set(jobs.selected_persistent_refs) == {"one", "two"}
+    assert "without grouping" in jobs.tree.headerItem().toolTip(0)
+    browser.close()
+
+
+def test_bulk_buttons_below_job_tree_and_single_result_actions_share_footer(tmp_path):
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Project")
+    browser = _dialog(
+        repository, _JobSource((_job("run", dataset="Result", project_id=project.id),)),
+    )
+    jobs = browser.jobs
+    job_layout = jobs.tree.parentWidget().layout()
+    assert job_layout.itemAt(0).widget().text() == "Jobs"
+    assert job_layout.itemAt(1).widget() is jobs.backend_notice
+    assert job_layout.itemAt(2).widget() is jobs.tree
+    bulk = job_layout.itemAt(3).layout()
+    assert bulk.itemAtPosition(0, 0).widget() is jobs.select_all_jobs_button
+    assert bulk.itemAtPosition(0, 1).widget() is jobs.move_jobs_button
+    assert bulk.itemAtPosition(0, 2).widget() is jobs.add_result_button
+    assert [bulk.columnStretch(i) for i in range(3)] == [1, 1, 1]
+    assert job_layout.itemAt(4).widget() is jobs.refresh_button
+    assert not jobs.refresh_button.icon().isNull()
+    assert jobs.refresh_button.toolTip()
+
+    result_layout = jobs.result_widget.parentWidget().layout()
+    assert result_layout.itemAt(0).widget().text() == "Result"
+    preview_index = result_layout.indexOf(jobs.result_widget)
+    main_actions = result_layout.itemAt(preview_index + 2).layout()
+    assert main_actions.itemAtPosition(0, 0).widget() is jobs.load_result_button
+    assert main_actions.itemAtPosition(0, 1).widget() is jobs.refresh_result_button
+    assert main_actions.itemAtPosition(0, 2).widget() is jobs.forget_button
+    assert [main_actions.columnStretch(i) for i in range(3)] == [1, 1, 1]
+    assert jobs.load_result_button.text() == "Use result"
+    assert not jobs.load_result_button.icon().isNull()
+    assert not jobs.forget_button.icon().isNull()
+    browser.close()
+
+
+def test_project_job_result_headings_align_and_buttons_expand_equally(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    projects = ProjectRepository(tmp_path / "projects")
+    project = projects.create("Project")
+    browser = _dialog(
+        projects, _JobSource((_job("one", dataset="One", project_id=project.id),)),
+    )
+    browser.resize(1550, 800)
+    browser.show()
+    app.processEvents()
+
+    project_layout = browser.project_tree.parentWidget().layout()
+    jobs = browser.jobs
+    job_layout = jobs.tree.parentWidget().layout()
+    result_layout = jobs.result_widget.parentWidget().layout()
+    headings = (
+        project_layout.itemAt(0).widget(),
+        job_layout.itemAt(0).widget(),
+        result_layout.itemAt(0).widget(),
+    )
+    offsets = [heading.mapTo(browser, QPoint(0, 0)).y() for heading in headings]
+    assert offsets[0] == offsets[1] == offsets[2]
+    assert result_layout.contentsMargins().top() == 0
+
+    # Even an unavailable backend must not displace the Jobs/Result headings.
+    jobs.backend_notice.setText("Backend unavailable")
+    jobs.backend_notice.show()
+    app.processEvents()
+    assert [
+        heading.mapTo(browser, QPoint(0, 0)).y() for heading in headings
+    ] == offsets
+
+    project_buttons = project_layout.itemAt(2).layout()
+    new = project_buttons.itemAtPosition(0, 0).widget()
+    edit = project_buttons.itemAtPosition(0, 1).widget()
+    assert abs(new.width() - edit.width()) <= 2
+
+    active = project_layout.itemAt(3).widget()
+    active_buttons = active.layout().itemAt(1).layout()
+    assert active_buttons.columnStretch(0) == active_buttons.columnStretch(1) == 1
+    assert all(
+        button.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Expanding
+        for button in (
+            browser.new_project_button,
+            browser.edit_project_button,
+            browser.move_project_button,
+            browser.delete_project_button,
+            browser.set_active_project_button,
+            browser.clear_active_project_button,
+            jobs.select_all_jobs_button,
+            jobs.move_jobs_button,
+            jobs.add_result_button,
+            jobs.load_result_button,
+            jobs.refresh_result_button,
+            jobs.forget_button,
+        )
+    )
+    assert abs(
+        browser.set_active_project_button.width()
+        - browser.clear_active_project_button.width()
+    ) <= 2
+
+    bulk = job_layout.itemAt(3).layout()
+    widths = [bulk.itemAtPosition(0, i).widget().width() for i in range(3)]
+    assert max(widths) - min(widths) <= 2
+    browser.close()
+
+
+def test_add_result_is_disabled_for_unassigned_and_enabled_for_project(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    projects = ProjectRepository(tmp_path / "projects")
+    project = projects.create("Project")
+    browser = _dialog(
+        projects, _JobSource((
+            _job("external-job", dataset="Unassigned", project_id=None),
+        )),
+    )
+    browser.show()
+    app.processEvents()
+
+    assert browser.jobs.add_result_button.isEnabled()
+    browser.project_tree.setCurrentItem(_find_project_item(browser, "Unassigned"))
+    assert not browser.jobs.add_result_button.isEnabled()
+    browser.project_tree.setCurrentItem(_find_project_item(browser, "Project"))
+    assert browser.jobs.add_result_button.isEnabled()
+    browser.close()
+
+
+def test_imported_result_groups_by_estimated_finish_time(tmp_path):
+    from datetime import datetime
+
+    app = QApplication.instance() or QApplication([])
+    projects = ProjectRepository(tmp_path / "projects")
+    project = projects.create("Project")
+    finished = "2025-07-18T13:42:25+00:00"
+    imported = replace(
+        _job("external:result", dataset="old.out", project_id=project.id),
+        imported_path=str(tmp_path / "old.out"),
+        state="imported",
+        finished_at=finished,
+        return_code=None,
+    )
+    browser = _dialog(projects, _JobSource((imported,)))
+    browser.show()
+    app.processEvents()
+
+    jobs = browser.jobs
+    jobs.tree.header().sectionClicked.emit(3)
+    expected_date = datetime.fromisoformat(finished).astimezone().strftime("%Y-%m-%d")
+    assert jobs.tree.topLevelItem(0).text(0) == expected_date
+    item = jobs.tree.topLevelItem(0).child(0)
+    assert item.text(3) == datetime.fromisoformat(finished).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    assert "last modification time" in item.toolTip(3)
+    assert jobs.finished_value.text() == item.text(3)
+    assert jobs.finished_value.toolTip() == item.toolTip(3)
     browser.close()
