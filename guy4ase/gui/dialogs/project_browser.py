@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
-from pathlib import Path
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
@@ -22,7 +21,6 @@ from PyQt6.QtWidgets import (
 from kkrunner.projects import Project, ProjectConflictError, ProjectDeleteError, ProjectRepository, ProjectRepositoryError
 
 from guy4ase.gui.application.window_geometry import manage_window_geometry
-from guy4ase.gui.application.imported_project_results import assignments
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.assign_results import AssignResultsDialog
 from guy4ase.gui.dialogs.object_view import execute_value_action
@@ -41,6 +39,7 @@ class ProjectBrowserDialog(QWidget):
     """Non-modal window for projects and their immutable run history."""
 
     activeProjectRequested = pyqtSignal(object)
+    addResultRequested = pyqtSignal(str)
 
     def __init__(
         self,
@@ -103,6 +102,11 @@ class ProjectBrowserDialog(QWidget):
         self.move_project_button.clicked.connect(self._move_project)
         self.delete_project_button = QPushButton("Delete", project_panel)
         self.delete_project_button.clicked.connect(self._delete_project)
+        self.add_result_button = QPushButton("Add result…", project_panel)
+        self.add_result_button.setToolTip(
+            "Import an existing SPR-KKR output file into the selected project."
+        )
+        self.add_result_button.clicked.connect(self._request_add_result)
 
         self.project_tree = QTreeWidget(project_panel)
         self.project_tree.setColumnCount(2)
@@ -130,23 +134,9 @@ class ProjectBrowserDialog(QWidget):
         self.jobs.moveRunsRequested.connect(self._move_selected_runs)
         self.jobs.jobsChanged.connect(self._refresh_project_projection)
 
-        self.imported_group = QWidget(project_panel)
-        imported_layout = QVBoxLayout(self.imported_group)
-        imported_layout.setContentsMargins(0, 6, 0, 0)
-        imported_label = QLabel("Imported results (external files)", self.imported_group)
-        imported_label.setToolTip(
-            "Output files imported separately from tracked jobs and associated with this project."
-        )
-        imported_layout.addWidget(imported_label)
-        self.imported_results = QTreeWidget(self.imported_group)
-        self.imported_results.setHeaderHidden(True)
-        imported_layout.addWidget(self.imported_results)
-        self.imported_group.hide()
-
         project_body = QHBoxLayout()
         project_list = QVBoxLayout()
         project_list.addWidget(self.project_tree, 1)
-        project_list.addWidget(self.imported_group)
         project_body.addLayout(project_list, 1)
         project_actions = QVBoxLayout()
         project_actions.addWidget(self.set_active_project_button)
@@ -156,6 +146,8 @@ class ProjectBrowserDialog(QWidget):
         project_actions.addWidget(self.edit_project_button)
         project_actions.addWidget(self.move_project_button)
         project_actions.addWidget(self.delete_project_button)
+        project_actions.addSpacing(12)
+        project_actions.addWidget(self.add_result_button)
         project_actions.addStretch(1)
         project_actions.addWidget(self.refresh_projects_button)
         project_body.addLayout(project_actions)
@@ -299,7 +291,6 @@ class ProjectBrowserDialog(QWidget):
 
     def _apply_project_selection(self) -> None:
         project_id = self._selected_project_id
-        self._show_imported_results(project_id)
         if project_id is None:
             refs = ()
         elif project_id == _UNASSIGNED:
@@ -318,29 +309,6 @@ class ProjectBrowserDialog(QWidget):
             job.id for job in self.jobs.visible_jobs
         )
         self.project_notice.hide()
-
-    def _show_imported_results(self, project_id: str | None) -> None:
-        """Display historical output references without calling them tracked jobs."""
-        self.imported_results.clear()
-        self.imported_group.hide()
-        if project_id is None:
-            return
-        try:
-            mapping = assignments(self._repository)
-        except (OSError, ValueError) as exc:
-            self.project_notice.setText(f"Imported-result associations unavailable: {exc}")
-            self.project_notice.show()
-            return
-        for key, assigned_id in sorted(mapping.items()):
-            if assigned_id != project_id and not (
-                project_id == _UNASSIGNED and assigned_id not in self._projects_by_id
-            ):
-                continue
-            path = key.split("::", 1)[0]
-            item = QTreeWidgetItem([Path(path).name])
-            item.setToolTip(0, path)
-            self.imported_results.addTopLevelItem(item)
-        self.imported_group.setVisible(self.imported_results.topLevelItemCount() > 0)
 
     def _selected_project(self) -> Project | None:
         project_id = self._selected_project_id
@@ -372,6 +340,11 @@ class ProjectBrowserDialog(QWidget):
         self._selected_project_id = _UNASSIGNED if destination is None else destination
         self.reload_projects()
 
+    def _request_add_result(self) -> None:
+        project = self._selected_project()
+        if project is not None:
+            self.addResultRequested.emit(project.id)
+
     def _request_selected_active(self) -> None:
         project = self._selected_project()
         if project is not None:
@@ -381,6 +354,7 @@ class ProjectBrowserDialog(QWidget):
         project = self._selected_project()
         self.edit_project_button.setEnabled(project is not None)
         self.move_project_button.setEnabled(project is not None)
+        self.add_result_button.setEnabled(project is not None)
         self.delete_project_button.setEnabled(project is not None and project.parent_id is not None)
         self.set_active_project_button.setEnabled(
             project is not None and project.id != self._active_project_id
