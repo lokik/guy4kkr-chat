@@ -51,8 +51,8 @@ jobs:
       - name: Checkout KKRunner
         uses: actions/checkout@v7
         with:
-          repository: ase2sprkkr/kkrunner
-          ref: master
+          repository: lokik/kkrunner-chat
+          ref: chatgpt-remote-file-cleanup
           path: .ci/kkrunner
 
       # The frontend tests target the new historical-result API.
