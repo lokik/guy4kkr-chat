@@ -1,0 +1,138 @@
+# Set up PyPI Trusted Publishing for the official repository:
+#   owner: ase2sprkkr
+#   repository: ase2sprkkr-gui
+#   workflow: publish-pypi.yml
+#   environment: pypi
+# Protect the pypi environment using tag restrictions and optional reviewers.
+# Forks run package validation, but do not publish to the official PyPI project.
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Validate tag and build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Check tag, version and master ancestry
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          git fetch --no-tags origin +refs/heads/master:refs/remotes/origin/master
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/master; then
+            echo 'Release tags must point to a commit on master.' >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          project = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]
+          if project["name"] != "ase2sprkkr-gui":
+              raise SystemExit("Wrong distribution name")
+          version = project["version"]
+          expected = f"v{version}"
+          if os.environ["RELEASE_TAG"] != expected:
+              raise SystemExit(f"Release tag must be {expected}")
+          PY
+
+      - name: Install build tools
+        run: python -m pip install --upgrade build twine
+
+      - name: Build source and wheel distributions
+        run: python -m build
+
+      - name: Validate distribution metadata and wheel version
+        run: |
+          python -m twine check --strict dist/*
+          python - <<'PY'
+          import pathlib
+          import tomllib
+          import zipfile
+          from email.parser import Parser
+
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          wheels = list(pathlib.Path("dist").glob("*.whl"))
+          sdists = list(pathlib.Path("dist").glob("*.tar.gz"))
+          if len(wheels) != 1 or len(sdists) != 1:
+              raise SystemExit("Expected one wheel and one sdist")
+          with zipfile.ZipFile(wheels[0]) as archive:
+              metadata_file, = (path for path in archive.namelist() if path.endswith(".dist-info/METADATA"))
+              metadata = Parser().parsestr(archive.read(metadata_file).decode("utf-8"))
+          if metadata["Name"] != "ase2sprkkr-gui" or metadata["Version"] != version:
+              raise SystemExit("Built wheel metadata does not match the release")
+          PY
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: github.repository == 'ase2sprkkr/ase2sprkkr-gui'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ase2sprkkr-gui/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download validated distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist/
+
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Create GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create release from published tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists"
+            exit 0
+          fi
+          flags=()
+          case "$RELEASE_TAG" in
+            *a[0-9]*|*b[0-9]*|*rc[0-9]*) flags+=(--prerelease) ;;
+          esac
+          gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --verify-tag --generate-notes "${flags[@]}"

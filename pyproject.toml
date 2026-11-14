@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase2sprkkr-gui"
-version = "0.1.0"
+version = "0.2.0b1"
 description = "PyQt6 GUI for building/editing ASE structures and running SPR-KKR via ase2sprkkr."
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-  "kkrunner>=0.2.0b1,<0.3",
+  "kkrunner>=0.2.0b2,<0.3",
   "PyQt6",
   "qonsole>=3.3,<4",
   "matplotlib",
@@ -16,7 +17,7 @@ dependencies = [
   "ase",
   "platformdirs",
   "pyxtal",
-  "ase2sprkkr>=4.0.0b2",
+  "ase2sprkkr>=4.0.0b3,<5",
 ]
 
 [project.scripts]
