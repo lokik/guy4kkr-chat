@@ -137,13 +137,14 @@ def test_history_groups_jobs_and_shows_selected_metadata():
     view = _view(dialog)
 
     assert dialog.windowTitle() == "Calculation Jobs"
-    assert [view.group_by.itemText(i) for i in range(view.group_by.count())] == [
-        "Started date",
-        "Finished date",
-        "Status",
-        "Task",
-        "Execution target",
+    # Grouping is controlled by clicking the tree's column headers, not by
+    # the removed group-by combobox.
+    header = view.tree.header()
+    assert header.sectionsClickable()
+    assert [view.tree.headerItem().text(i) for i in range(view.tree.columnCount())] == [
+        "Job", "Status", "Started", "Finished", "Task", "Target", "Profile",
     ]
+    assert "(current grouping)" in view.tree.headerItem().toolTip(2)
     assert view.tree.headerItem().text(2) == "Started"
     assert view.tree.headerItem().text(3) == "Finished"
     assert view.tree.topLevelItem(0).text(0) == "2026-10-13"
@@ -156,10 +157,11 @@ def test_history_groups_jobs_and_shows_selected_metadata():
     assert not view.monitor_button.isHidden()
     assert view.load_result_button.isHidden()
 
-    view.group_by.setCurrentText("Finished date")
+    header.sectionClicked.emit(3)  # Finished
+    assert "(current grouping)" in view.tree.headerItem().toolTip(3)
     assert view.tree.topLevelItem(0).text(0) == "Not finished"
     assert view.tree.topLevelItem(1).text(0) == "2026-10-12"
-    view.group_by.setCurrentText("Task")
+    header.sectionClicked.emit(4)  # Task
     assert view.tree.topLevelItem(0).text(0) == "SCF"
     dialog.close()
 
@@ -261,7 +263,7 @@ def test_source_change_rebuilds_view_without_widget_owned_recovery():
     dialog.close()
 
 
-def test_nonattachable_active_job_does_not_offer_monitor():
+def test_nonattachable_active_job_explains_why_monitor_is_unavailable():
     _application = QApplication.instance() or QApplication([])
     source = _Source(
         (
@@ -276,7 +278,10 @@ def test_nonattachable_active_job_does_not_offer_monitor():
         )
     )
     dialog = _dialog(source)
-    assert _view(dialog).monitor_button.isHidden()
+    monitor = _view(dialog).monitor_button
+    assert not monitor.isHidden()
+    assert not monitor.isEnabled()
+    assert monitor.toolTip() == "Reattachment is not available for this calculation."
     dialog.close()
 
 
