@@ -62,14 +62,14 @@ jobs:
       - name: Checkout ASE2SPRKKR
         uses: actions/checkout@v7
         with:
-          repository: ase2sprkkr/ase2sprkkr
+          repository: lokik/ase2sprkkr-chat
           ref: ${{ inputs.ase2sprkkr_ref || 'develop' }}
           path: ase2sprkkr
 
       - name: Checkout KKRunner
         uses: actions/checkout@v7
         with:
-          repository: ase2sprkkr/kkrunner
+          repository: lokik/kkrunner-chat
           ref: master
           path: kkrunner
 
