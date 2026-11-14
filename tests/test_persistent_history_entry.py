@@ -56,7 +56,7 @@ def test_workflow_project_entry_is_separate_from_workspace_results(tmp_path):
     window = gui.create_workflow_window()
 
     assert not gui.controller.result_store.results
-    assert window.browser_panel.project_browser_button.text() == "Project Browser…"
+    assert window._project_browser_button.text() == "Project Browser"
     window.close()
 
 
@@ -90,6 +90,7 @@ def test_project_browser_lifecycle_belongs_to_application(monkeypatch, tmp_path)
             self.active_project_id = active_project_id
             self.destroyed = _Signal()
             self.activeProjectRequested = _Signal()
+            self.addResultRequested = _Signal()
             self.delete_on_close = False
             type(self).instances.append(self)
 
@@ -123,7 +124,7 @@ def test_project_browser_lifecycle_belongs_to_application(monkeypatch, tmp_path)
     workflow = gui.create_workflow_window()
     expert = gui.create_main_window()
 
-    workflow.browser_panel.project_browser_button.click()
+    workflow._project_browser_button.click()
     first_dialog = FakeProjectBrowserDialog.instances[0]
     expert.browser_panel.project_browser_button.click()
 
@@ -143,7 +144,7 @@ def test_project_browser_lifecycle_belongs_to_application(monkeypatch, tmp_path)
     assert all(dialog is first_dialog for _name, dialog in events)
 
     first_dialog.close()
-    workflow.browser_panel.project_browser_button.click()
+    workflow._project_browser_button.click()
 
     assert len(FakeProjectBrowserDialog.instances) == 2
     second_dialog = FakeProjectBrowserDialog.instances[1]
