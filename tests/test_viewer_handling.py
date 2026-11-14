@@ -124,9 +124,11 @@ def test_visualize_missing_executable_offers_ase_fallback(monkeypatch):
         if name == "vmd" else None,
     )
     calls = []
+    # The built-in ASE viewer runs in its own Tk subprocess, not via
+    # ase.visualize.view. Stub that subprocess boundary in this GUI test.
     monkeypatch.setattr(
-        visualization, "ase_view",
-        lambda atoms, *, viewer: calls.append((atoms, viewer)),
+        visualization, "launch_ase_gui",
+        lambda atoms: calls.append((atoms, "ase")),
     )
     messages = []
     monkeypatch.setattr(
@@ -152,8 +154,8 @@ def test_visualize_fallback_declined_does_not_launch(monkeypatch):
     )
     opened = []
     monkeypatch.setattr(
-        visualization, "ase_view",
-        lambda atoms, *, viewer: opened.append(viewer),
+        visualization, "launch_ase_gui",
+        lambda atoms: opened.append("ase"),
     )
     monkeypatch.setattr(
         visualization.QMessageBox, "warning",
@@ -176,6 +178,10 @@ def test_visualize_launch_exception_is_visible_and_can_fallback(monkeypatch):
             raise OSError("Cannot launch requested viewer")
 
     monkeypatch.setattr(visualization, "ase_view", fake_view)
+    monkeypatch.setattr(
+        visualization, "launch_ase_gui",
+        lambda atoms: opened.append("ase"),
+    )
     errors = []
     monkeypatch.setattr(
         visualization.QMessageBox, "warning",
@@ -201,10 +207,10 @@ def test_visualize_fallback_failure_is_reported(monkeypatch):
         lambda *_args: QMessageBox.StandardButton.Yes,
     )
 
-    def failing_ase(atoms, *, viewer):
+    def failing_ase(atoms):
         raise RuntimeError("Cannot open display")
 
-    monkeypatch.setattr(visualization, "ase_view", failing_ase)
+    monkeypatch.setattr(visualization, "launch_ase_gui", failing_ase)
     critical = []
     monkeypatch.setattr(
         visualization.QMessageBox, "critical",
