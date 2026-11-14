@@ -218,3 +218,95 @@ def test_file_changed_since_confirmation_cannot_be_deleted(tmp_path):
         )
     assert output.read_text() == "contents replaced after dialog opened"
     assert "run" in store.records
+
+
+
+def test_partial_selection_removes_only_checked_files(tmp_path):
+    one = tmp_path / "one.dos"
+    two = tmp_path / "two.pot"
+    for file in (one, two):
+        file.write_text(file.name)
+    run = _record(
+        "run", tmp_path,
+        FileManifest(outputs=(
+            FileEntry(local_path=str(one)), FileEntry(local_path=str(two)),
+        )),
+    )
+    source, store = _source(run)
+    plan = source.referenced_file_deletion(run.id)
+    selected = (str(one),)
+    source.forget(
+        run.id,
+        delete_files=True,
+        expected_files=selected,
+        expected_file_snapshots=tuple(
+            snapshot for snapshot in plan.snapshots if snapshot.path in selected
+        ),
+    )
+    assert not one.exists()
+    assert two.exists()
+    assert "run" not in store.records
+
+
+def test_shared_file_requires_explicit_override_and_matching_references(tmp_path):
+    shared = tmp_path / "shared.pot"
+    shared.write_text("shared")
+    first = _record(
+        "first", tmp_path, FileManifest(outputs=(FileEntry(local_path=str(shared)),)),
+    )
+    second = _record(
+        "second", tmp_path, FileManifest(inputs=(FileEntry(local_path=str(shared)),)),
+    )
+    source, store = _source(first, second)
+    plan = source.referenced_file_deletion(first.id)
+    assert plan.files == ()
+    assert plan.shared == (str(shared),)
+    assert plan.referrers(str(shared)) and "second" in plan.referrers(str(shared))[0]
+
+    with pytest.raises(RuntimeError, match="explicit confirmation"):
+        source.forget(
+            first.id, delete_files=True, expected_files=(str(shared),),
+            expected_file_snapshots=plan.shared_snapshots,
+            expected_shared_files=(str(shared),),
+        )
+    assert shared.exists() and "first" in store.records
+
+    source.forget(
+        first.id, delete_files=True, expected_files=(str(shared),),
+        expected_file_snapshots=plan.shared_snapshots,
+        expected_shared_files=(str(shared),), allow_shared_files=True,
+    )
+    assert not shared.exists()
+    assert "first" not in store.records
+    assert "second" in store.records
+
+
+def test_new_other_run_reference_after_preview_forces_review(tmp_path):
+    file = tmp_path / "output.dos"
+    file.write_text("original")
+    first = _record(
+        "first", tmp_path, FileManifest(stdout=FileEntry(local_path=str(file))),
+    )
+    source, store = _source(first)
+    plan = source.referenced_file_deletion(first.id)
+    store.records["another"] = _record(
+        "another", tmp_path,
+        FileManifest(inputs=(FileEntry(local_path=str(file)),)),
+    )
+    with pytest.raises(RuntimeError, match="Shared file references changed"):
+        source.forget(
+            first.id, delete_files=True, expected_files=plan.files,
+            expected_file_snapshots=plan.snapshots,
+            allow_shared_files=True,
+        )
+    assert file.exists() and "first" in store.records
+
+
+def test_symlink_cannot_be_selected_even_when_other_run_references_it(tmp_path):
+    target = tmp_path / "result.dos"
+    target.write_text("target")
+    link = tmp_path / "alias.dos"
+    link.symlink_to(target)
+    plan = plan_file_deletion((str(link),), other_references=(str(link),))
+    assert plan.selectable_files == ()
+    assert plan.unsafe == (str(link),)

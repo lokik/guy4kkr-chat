@@ -476,12 +476,17 @@ class PersistentJobsController(QObject):
         dialog = DeleteRunRecordDialog(job, plan, view)
         if dialog.exec() != dialog.DialogCode.Accepted:
             return
-        delete_files = dialog.delete_files
+        selected_files = dialog.selected_files
+        delete_files = bool(selected_files)
         kwargs = {"force": active}
         if delete_files:
+            shared_files = dialog.selected_shared_files
             kwargs.update(
-                delete_files=True, expected_files=plan.files,
-                expected_file_snapshots=plan.snapshots,
+                delete_files=True,
+                expected_files=selected_files,
+                expected_file_snapshots=dialog.selected_file_snapshots,
+                expected_shared_files=shared_files,
+                allow_shared_files=bool(shared_files),
             )
         try:
             run_modal_task(

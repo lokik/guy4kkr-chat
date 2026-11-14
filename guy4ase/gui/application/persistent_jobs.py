@@ -482,8 +482,9 @@ class PersistentJobSource:
     def referenced_file_deletion(self, job_id: str) -> FileDeletionPlan:
         """Preview explicit local-file cleanup using authoritative persisted refs.
 
-        Another run or import referencing a physical file always protects it.
-        This includes references belonging to other applications in the store.
+        Other saved records are detected regardless of project or application.
+        Shared local files may only be deleted through explicit selection and
+        an additional GUI warning.
         """
         job_id = str(job_id)
         job = self.job(job_id)
@@ -514,25 +515,41 @@ class PersistentJobSource:
             ignored_key = None
             ignored_run_id = job_id
 
-        other_paths = [
-            path
-            for record in runs if str(record.id) != ignored_run_id
+        other_paths: list[str] = []
+        reference_details: dict[str, set[str]] = {}
+        for record in runs:
+            if str(record.id) == ignored_run_id:
+                continue
+            metadata = record.metadata.get("ase2sprkkr", {})
+            label = (
+                f"Run {record.id} ({metadata.get('dataset') or 'unknown dataset'}, "
+                f"project {getattr(record, 'project_id', None) or 'unassigned'})"
+            )
             for path in referenced_local_paths(
                 record.files, str(record.execution.directory.local)
+            ):
+                other_paths.append(path)
+                reference_details.setdefault(path, set()).add(label)
+
+        for key, project_id in imported.items():
+            if key == ignored_key:
+                continue
+            path = key.split("::", 1)[0]
+            other_paths.append(path)
+            reference_details.setdefault(path, set()).add(
+                f"Imported result (project {project_id or 'unassigned'})"
             )
-        ]
-        other_paths.extend(
-            key.split("::", 1)[0]
-            for key in imported if key != ignored_key
-        )
         return plan_file_deletion(
             candidates, other_references=other_paths, remote_references=remote,
+            reference_details=reference_details,
         )
 
     def forget(
         self, job_id: str, *, force: bool = False, delete_files: bool = False,
         expected_files: tuple[str, ...] | None = None,
         expected_file_snapshots: tuple | None = None,
+        expected_shared_files: tuple[str, ...] = (),
+        allow_shared_files: bool = False,
     ) -> Any:
         """Remove a history/reference entry; optionally delete reviewed local files.
 
@@ -544,19 +561,36 @@ class PersistentJobSource:
         if delete_files:
             if expected_files is None:
                 raise ValueError("File deletion requires a confirmed file preview")
+            selected = tuple(expected_files)
+            if not selected or len(selected) != len(set(selected)):
+                raise ValueError("File deletion requires a nonempty, unique selection")
             plan = self.referenced_file_deletion(job_id)
-            if tuple(expected_files) != plan.files:
+            if not set(selected).issubset(plan.selectable_files):
                 raise RuntimeError(
                     "Referenced files changed since confirmation; review them again"
                 )
+            shared = tuple(sorted(set(selected).intersection(plan.shared)))
+            if shared != tuple(sorted(expected_shared_files)):
+                raise RuntimeError(
+                    "Shared file references changed since confirmation; review them again"
+                )
+            if shared and not allow_shared_files:
+                raise RuntimeError(
+                    "Deletion of files referenced by other runs requires an "
+                    "additional explicit confirmation"
+                )
+            selected_snapshots = tuple(
+                snapshot for snapshot in plan.selectable_snapshots
+                if snapshot.path in selected
+            )
             if expected_file_snapshots is None or (
-                tuple(expected_file_snapshots) != plan.snapshots
+                tuple(expected_file_snapshots) != selected_snapshots
             ):
                 raise RuntimeError(
                     "A file changed since the displayed last-modified times; "
                     "review the deletion list again"
                 )
-            delete_local_files(plan.files)
+            delete_local_files(selected, snapshots=selected_snapshots)
 
         if job is not None and job.imported_path is not None:
             if self._projects is None:
