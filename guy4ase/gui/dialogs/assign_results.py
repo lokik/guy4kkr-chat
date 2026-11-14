@@ -70,7 +70,15 @@ class AssignResultsDialog(QDialog):
         super().accept()
 
 
-def assign_results_to_project(projects, result_store, result_ids, parent=None) -> bool:
+def assign_results_to_project(
+    projects, result_store, result_ids, parent=None, *, run_source=None
+) -> bool:
+    """Assign results via their real run records or external file references.
+
+    A tracked result changes its existing KKRunner project; an external result
+    creates or updates a file reference. Never duplicate an executed run as an
+    "imported" entry in the project history.
+    """
     records = []
     for result_id in result_ids:
         try:
@@ -79,16 +87,49 @@ def assign_results_to_project(projects, result_store, result_ids, parent=None) -
             continue
     if not records:
         return False
+
     dialog = AssignResultsDialog(projects, len(records), parent)
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return False
+    destination = dialog.project.currentData()
+    tracked_ids = set()
+    external = []
+    for record in records:
+        ref_id = record.persistent_ref
+        job = (
+            run_source.job(ref_id)
+            if ref_id is not None and run_source is not None else None
+        )
+        if job is not None and job.imported_path is None:
+            tracked_ids.add(ref_id)
+        else:
+            external.append(record)
+    if any(record.output_path is None for record in external):
+        QMessageBox.warning(
+            parent, "Cannot assign results",
+            "Some selected results have no output file. Only file-backed "
+            "results can be assigned without a tracked calculation record.",
+        )
+        return False
+
     try:
-        assigned = assign(projects, records, dialog.project.currentData())
-    except (OSError, ValueError, KeyError) as exc:
+        if tracked_ids:
+            run_source.reassign_runs(
+                projects, tuple(sorted(tracked_ids)), destination,
+                expected_project_ids={
+                    ref_id: run_source.job(ref_id).project_id
+                    for ref_id in tracked_ids
+                },
+            )
+        assigned = assign(projects, external, destination) if external else 0
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
         QMessageBox.warning(parent, "Cannot assign results", str(exc))
+        return False
+    if not assigned and not tracked_ids:
+        QMessageBox.warning(parent, "Cannot assign results", "No file-backed results selected.")
         return False
     QMessageBox.information(
         parent, "Project assignment",
-        f"Assigned {assigned} result(s) to {dialog.project.currentText()}.",
+        f"Assigned {assigned + len(tracked_ids)} result(s) to {dialog.project.currentText()}.",
     )
     return True
