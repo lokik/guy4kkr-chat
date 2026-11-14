@@ -469,13 +469,21 @@ class PersistentJobsController(QObject):
             "will NOT stop it, even if its status is Unknown.\n\n"
             if active else ""
         )
+        imported = job.imported_path is not None
+        question = (
+            f"Remove the reference to {job.imported_path} from the project?\n\n"
+            "The external file will NOT be deleted."
+            if imported else (
+                f"{warning}Permanently remove the saved run record for "
+                f"{job.dataset or job.id} ({job.id})?\n\n"
+                "This removes the history entry only. Calculation output files "
+                "and result files will NOT be deleted."
+            )
+        )
         answer = QMessageBox.warning(
             view,
-            "Dangerous: delete calculation history?",
-            f"{warning}Permanently remove the saved run record for "
-            f"{job.dataset or job.id} ({job.id})?\n\n"
-            "This removes the history entry only. Calculation output files "
-            "and result files will NOT be deleted.",
+            "Remove imported result?" if imported else "Dangerous: delete calculation history?",
+            question,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
