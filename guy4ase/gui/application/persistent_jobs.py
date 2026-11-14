@@ -24,6 +24,10 @@ from guy4ase.gui.application.imported_project_results import (
     assignments, reference_id, reassign_references, remove_reference,
 )
 from guy4ase.gui.application.result_loading import load_result_file
+from guy4ase.gui.application.run_file_deletion import (
+    FileDeletionPlan, delete_local_files, plan_file_deletion,
+    referenced_local_paths, referenced_remote_paths,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -475,9 +479,85 @@ class PersistentJobSource:
             self.job_changed(str(job_id))
         return self.job(str(job_id))
 
-    def forget(self, job_id: str, *, force: bool = False) -> Any:
-        """Forget history only: never delete output files or kill processes."""
-        job = self.job(str(job_id))
+    def referenced_file_deletion(self, job_id: str) -> FileDeletionPlan:
+        """Preview explicit local-file cleanup using authoritative persisted refs.
+
+        Another run or import referencing a physical file always protects it.
+        This includes references belonging to other applications in the store.
+        """
+        job_id = str(job_id)
+        job = self.job(job_id)
+        if job is None:
+            raise KeyError(job_id)
+        if not job.is_final:
+            raise RuntimeError("Files of active or unknown calculations cannot be deleted")
+
+        runs = tuple(self._manager.store.runs())
+        imported = assignments(self._projects) if self._projects is not None else {}
+        remote: tuple[str, ...] = ()
+        if job.imported_path is not None:
+            if job.imported_key not in imported:
+                raise RuntimeError("The imported result reference has changed; refresh first")
+            candidates = (job.imported_path,)
+            ignored_key = job.imported_key
+            ignored_run_id = None
+        else:
+            record = self._manager.store.get(job_id)
+            if _value(record.state) not in _FINAL_STATES:
+                raise RuntimeError("The calculation is no longer in a final state")
+            directory = str(record.execution.directory.local)
+            candidates = referenced_local_paths(record.files, directory)
+            remote = (
+                referenced_remote_paths(record.files)
+                if not record.execution.transport.is_local else ()
+            )
+            ignored_key = None
+            ignored_run_id = job_id
+
+        other_paths = [
+            path
+            for record in runs if str(record.id) != ignored_run_id
+            for path in referenced_local_paths(
+                record.files, str(record.execution.directory.local)
+            )
+        ]
+        other_paths.extend(
+            key.split("::", 1)[0]
+            for key in imported if key != ignored_key
+        )
+        return plan_file_deletion(
+            candidates, other_references=other_paths, remote_references=remote,
+        )
+
+    def forget(
+        self, job_id: str, *, force: bool = False, delete_files: bool = False,
+        expected_files: tuple[str, ...] | None = None,
+        expected_file_snapshots: tuple | None = None,
+    ) -> Any:
+        """Remove a history/reference entry; optionally delete reviewed local files.
+
+        File cleanup is strictly opt-in and happens before removing the record so
+        a file-removal failure leaves a retriable history entry.
+        """
+        job_id = str(job_id)
+        job = self.job(job_id)
+        if delete_files:
+            if expected_files is None:
+                raise ValueError("File deletion requires a confirmed file preview")
+            plan = self.referenced_file_deletion(job_id)
+            if tuple(expected_files) != plan.files:
+                raise RuntimeError(
+                    "Referenced files changed since confirmation; review them again"
+                )
+            if expected_file_snapshots is None or (
+                tuple(expected_file_snapshots) != plan.snapshots
+            ):
+                raise RuntimeError(
+                    "A file changed since the displayed last-modified times; "
+                    "review the deletion list again"
+                )
+            delete_local_files(plan.files)
+
         if job is not None and job.imported_path is not None:
             if self._projects is None:
                 raise RuntimeError("Imported project repository is unavailable")
@@ -486,8 +566,8 @@ class PersistentJobSource:
             return job
         if not self.supports_forget:
             raise NotImplementedError("This runner cannot remove persistent history")
-        removed = self._manager.forget(str(job_id), force=force)
-        self.job_changed(str(job_id))
+        removed = self._manager.forget(job_id, force=force)
+        self.job_changed(job_id)
         return removed
 
     def retry_postprocessing(self, job_id: str) -> Any:

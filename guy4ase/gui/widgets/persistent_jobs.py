@@ -6,15 +6,17 @@ from datetime import datetime
 from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QFormLayout,
-    QHBoxLayout,
+    QGridLayout,
     QHeaderView,
     QLabel,
     QPushButton,
     QSplitter,
+    QSizePolicy,
+    QStyle,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -80,13 +82,23 @@ def _profile_label(job: PersistentJob) -> str:
     return job.profile or "—"
 
 
-_GROUPS: tuple[tuple[str, Callable[[PersistentJob], str]], ...] = (
-    ("Started date", _started_date),
-    ("Finished date", _finished_date),
-    ("Status", lambda job: _status_label(job.state)),
-    ("Task", lambda job: job.task or "Unknown task"),
-    ("Execution target", lambda job: job.target),
-    ("Run profile", _profile_label),
+# Group using the relevant column header; Job (column 0) displays a flat list.
+_GROUP_BY_COLUMN: dict[int, Callable[[PersistentJob], str]] = {
+    1: lambda job: _status_label(job.state),
+    2: _started_date,
+    3: _finished_date,
+    4: lambda job: job.task or "Unknown task",
+    5: lambda job: job.target,
+    6: _profile_label,
+}
+_GROUP_TOOLTIPS = (
+    "Show all jobs and results without grouping.",
+    "Group jobs and results by status.",
+    "Group jobs and results by start date.",
+    "Group jobs and results by finish date.",
+    "Group jobs and results by task.",
+    "Group jobs and results by execution target.",
+    "Group jobs and results by run profile.",
 )
 
 
@@ -106,6 +118,7 @@ class PersistentJobsWidget(QWidget):
     loadResultRequested = pyqtSignal(str)
     refreshResultRequested = pyqtSignal(str)
     moveRunsRequested = pyqtSignal(object)
+    addResultRequested = pyqtSignal()
     cancelRequested = pyqtSignal(str)
     forgetRequested = pyqtSignal(str)
 
@@ -124,6 +137,7 @@ class PersistentJobsWidget(QWidget):
         self._jobs_by_id: dict[str, PersistentJob] = {}
         self._visible_refs: frozenset[str] | None = None
         self._selected_job_id: str | None = None
+        self._group_column = 2  # Initially group by start date as before.
         self._supports_results = False
         self._supports_attach = False
         self._supports_retry_download = False
@@ -134,29 +148,6 @@ class PersistentJobsWidget(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        heading = QLabel("Jobs and results", self)
-        heading_font = heading.font()
-        heading_font.setBold(True)
-        heading.setFont(heading_font)
-        root.addWidget(heading)
-        controls = QHBoxLayout()
-        controls.addWidget(QLabel("Group by:"))
-        self.group_by = QComboBox(self)
-        for label, _group in _GROUPS:
-            self.group_by.addItem(label)
-        self.group_by.currentIndexChanged.connect(self._populate_tree)
-        controls.addWidget(self.group_by)
-        controls.addStretch(1)
-        self.refresh_button = QPushButton("Refresh statuses", self)
-        self.refresh_button.setEnabled(False)
-        self.refresh_button.clicked.connect(self.refreshRequested.emit)
-        controls.addWidget(self.refresh_button)
-        root.addLayout(controls)
-
-        self.backend_notice = QLabel(self)
-        self.backend_notice.setWordWrap(True)
-        self.backend_notice.hide()
-        root.addWidget(self.backend_notice)
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.splitter.setChildrenCollapsible(False)
@@ -165,6 +156,16 @@ class PersistentJobsWidget(QWidget):
         job_list_panel = QWidget(self.splitter)
         job_list_layout = QVBoxLayout(job_list_panel)
         job_list_layout.setContentsMargins(0, 0, 0, 0)
+        heading = QLabel("Jobs", job_list_panel)
+        heading_font = heading.font()
+        heading_font.setBold(True)
+        heading.setFont(heading_font)
+        job_list_layout.addWidget(heading)
+        # Status notices belong to the Jobs pane, below the common heading line.
+        self.backend_notice = QLabel(job_list_panel)
+        self.backend_notice.setWordWrap(True)
+        self.backend_notice.hide()
+        job_list_layout.addWidget(self.backend_notice)
         self.tree = QTreeWidget(job_list_panel)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setColumnCount(7)
@@ -177,31 +178,72 @@ class PersistentJobsWidget(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in range(1, 7):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionsClickable(True)
+        header.sectionClicked.connect(self._group_by_header)
+        self._update_group_header()
         self.tree.currentItemChanged.connect(self._selection_changed)
         self.tree.itemDoubleClicked.connect(self._item_double_clicked)
         self.tree.itemSelectionChanged.connect(self._update_project_actions)
         job_list_layout.addWidget(self.tree, 1)
 
         self.select_all_jobs_button = QPushButton("Select all", job_list_panel)
+        self.select_all_jobs_button.setToolTip("Select every job and imported result shown in the table.")
         self.select_all_jobs_button.clicked.connect(self.tree.selectAll)
-        self.move_jobs_button = QPushButton("Move to project…", job_list_panel)
+        self.move_jobs_button = QPushButton("Assign to project…", job_list_panel)
+        self.move_jobs_button.setIcon(QIcon.fromTheme(
+            "go-jump", self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowRight),
+        ))
         self.move_jobs_button.clicked.connect(self._request_move_runs)
+
+        self.add_result_button = QPushButton("Add result…", job_list_panel)
+        self.add_result_button.setIcon(QIcon.fromTheme(
+            "document-open",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
+        ))
+        self.add_result_button.setToolTip(
+            "Import an existing SPR-KKR output into the selected project."
+        )
+        self.add_result_button.setEnabled(False)
+        self.add_result_button.clicked.connect(
+            lambda _checked=False: self.addResultRequested.emit()
+        )
+
         if show_project_actions:
-            project_actions = QHBoxLayout()
-            project_actions.addWidget(self.select_all_jobs_button)
-            project_actions.addWidget(self.move_jobs_button)
-            project_actions.addStretch(1)
+            project_actions = QGridLayout()
+            for column, button in enumerate((
+                self.select_all_jobs_button,
+                self.move_jobs_button,
+                self.add_result_button,
+            )):
+                project_actions.addWidget(button, 0, column)
+                project_actions.setColumnStretch(column, 1)
+                button.setSizePolicy(
+                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+                )
             job_list_layout.addLayout(project_actions)
         else:
             self.select_all_jobs_button.hide()
             self.move_jobs_button.hide()
+            self.add_result_button.hide()
+
+        self.refresh_button = QPushButton("Refresh statuses", job_list_panel)
+        self.refresh_button.setIcon(QIcon.fromTheme(
+            "view-refresh", self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload),
+        ))
+        self.refresh_button.setToolTip("Check saved calculations for status updates.")
+        self.refresh_button.setEnabled(False)
+        self.refresh_button.clicked.connect(self.refreshRequested.emit)
+        job_list_layout.addWidget(self.refresh_button)
 
         details = QWidget(self.splitter)
-        details_layout = QHBoxLayout(details)
-        detail_contents = QVBoxLayout()
-        details_layout.addLayout(detail_contents, 1)
-        action_column = QVBoxLayout()
-        details_layout.addLayout(action_column)
+        detail_contents = QVBoxLayout(details)
+        # Match the zero top margins of the Projects and Jobs panes.
+        detail_contents.setContentsMargins(0, 0, 0, 0)
+        result_heading = QLabel("Result", details)
+        heading_font = result_heading.font()
+        heading_font.setBold(True)
+        result_heading.setFont(heading_font)
+        detail_contents.addWidget(result_heading)
         self.detail_title = QLabel("Select a calculation job", details)
         font = self.detail_title.font()
         font.setBold(True)
@@ -244,52 +286,65 @@ class PersistentJobsWidget(QWidget):
         self.message_value.hide()
         detail_contents.addWidget(self.message_value)
 
-        self.load_result_button = QPushButton("Load result", details)
+        self.load_result_button = QPushButton("Use result", details)
+        self.load_result_button.setIcon(QIcon.fromTheme(
+            "document-open", self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
+        ))
         self.load_result_button.setToolTip(
             "Add this calculation result to the main window and select it."
         )
         self.load_result_button.clicked.connect(self._request_result)
         self.load_result_button.hide()
-        action_column.addWidget(self.load_result_button)
 
         self.refresh_result_button = QPushButton("Refresh result", details)
+        self.refresh_result_button.setIcon(QIcon.fromTheme(
+            "view-refresh", self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload),
+        ))
         self.refresh_result_button.setToolTip(
             "Read the output files again and update the preview without selecting it in the main window."
         )
         self.refresh_result_button.clicked.connect(self._request_refresh_result)
         self.refresh_result_button.hide()
-        action_column.addWidget(self.refresh_result_button)
 
         self.monitor_button = QPushButton("Reattach / monitor", details)
+        self.monitor_button.setIcon(QIcon.fromTheme(
+            "network-connect", self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton),
+        ))
         self.monitor_button.setToolTip(
             "Reconnect to this calculation without submitting it again."
         )
         self.monitor_button.clicked.connect(self._request_monitor)
         self.monitor_button.hide()
-        action_column.addWidget(self.monitor_button)
 
         self.retry_postprocessing_button = QPushButton("Retry postprocessing", details)
+        self.retry_postprocessing_button.setIcon(QIcon.fromTheme(
+            "view-refresh", self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload),
+        ))
         self.retry_postprocessing_button.clicked.connect(self._request_retry_postprocessing)
         self.retry_postprocessing_button.hide()
-        action_column.addWidget(self.retry_postprocessing_button)
 
         self.retry_download_button = QPushButton("Retry download", details)
+        self.retry_download_button.setIcon(QIcon.fromTheme(
+            "go-down", self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown),
+        ))
         self.retry_download_button.clicked.connect(self._request_retry_download)
         self.retry_download_button.hide()
-        action_column.addWidget(self.retry_download_button)
 
         self.reattach_notice = QLabel(details)
         self.reattach_notice.setWordWrap(True)
         self.reattach_notice.hide()
         detail_contents.addWidget(self.reattach_notice)
 
-        action_column.addStretch(1)
         self.cancel_button = QPushButton("Cancel process", details)
+        self.cancel_button.setIcon(QIcon.fromTheme(
+            "process-stop", self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton),
+        ))
         self.cancel_button.clicked.connect(self._request_cancel)
-        action_column.addWidget(self.cancel_button)
         self.forget_button = QPushButton("Delete run record…", details)
+        self.forget_button.setIcon(QIcon.fromTheme(
+            "edit-delete", self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon),
+        ))
         self.forget_button.clicked.connect(self._request_forget)
-        action_column.addWidget(self.forget_button)
 
         self.result_widget = ResultActionsWidget(
             value_action,
@@ -300,6 +355,33 @@ class PersistentJobsWidget(QWidget):
             parent=details,
         )
         detail_contents.addWidget(self.result_widget, 1)
+
+        # All single-result operations share a footer, separated from bulk job actions.
+        supplementary_actions = QGridLayout()
+        for index, button in enumerate((
+            self.monitor_button, self.retry_download_button,
+            self.retry_postprocessing_button, self.cancel_button,
+        )):
+            supplementary_actions.addWidget(button, index // 2, index % 2)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+        supplementary_actions.setColumnStretch(0, 1)
+        supplementary_actions.setColumnStretch(1, 1)
+        detail_contents.addLayout(supplementary_actions)
+
+        main_actions = QGridLayout()
+        for column, button in enumerate((
+            self.load_result_button,
+            self.refresh_result_button,
+            self.forget_button,
+        )):
+            main_actions.addWidget(button, 0, column)
+            main_actions.setColumnStretch(column, 1)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+        detail_contents.addLayout(main_actions)
 
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 1)
@@ -330,6 +412,10 @@ class PersistentJobsWidget(QWidget):
         self._supports_reassignment = available
         self._update_project_actions()
 
+    def set_add_result_available(self, available: bool) -> None:
+        """Allow external-result import only when a real project is selected."""
+        self.add_result_button.setEnabled(available)
+
     def _update_project_actions(self) -> None:
         selected = self.selected_persistent_refs
         self.select_all_jobs_button.setEnabled(bool(self._jobs))
@@ -337,7 +423,7 @@ class PersistentJobsWidget(QWidget):
         if not self._supports_reassignment:
             reason = "This kkrunner version cannot reassign calculation records."
         else:
-            reason = "Move selected records to another project without interrupting running jobs or moving output files."
+            reason = "Move selected jobs or imported results to another project without changing their files or processes."
         self.move_jobs_button.setToolTip(reason)
 
     def _request_move_runs(self) -> None:
@@ -438,8 +524,30 @@ class PersistentJobsWidget(QWidget):
     def _clear_loaded_result(self) -> None:
         self.result_widget.set_result(None)
 
-    def _group_for(self, job: PersistentJob) -> str:
-        return _GROUPS[self.group_by.currentIndex()][1](job)
+    def _group_by_header(self, column: int) -> None:
+        if column == self._group_column or column not in range(7):
+            return
+        self._group_column = column
+        self._update_group_header()
+        self._populate_tree()
+
+    def _update_group_header(self) -> None:
+        header_item = self.tree.headerItem()
+        selected_icon = QIcon.fromTheme(
+            "emblem-default",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton),
+        )
+        for column, description in enumerate(_GROUP_TOOLTIPS):
+            selected = column == self._group_column
+            header_item.setIcon(column, selected_icon if selected else QIcon())
+            header_item.setToolTip(
+                column,
+                description + (" (current grouping)" if selected else "") + " Click to choose.",
+            )
+
+    def _group_for(self, job: PersistentJob) -> str | None:
+        grouper = _GROUP_BY_COLUMN.get(self._group_column)
+        return None if grouper is None else grouper(job)
 
     def _populate_tree(self) -> None:
         selected = self._selected_job_id
@@ -448,56 +556,50 @@ class PersistentJobsWidget(QWidget):
         try:
             self.tree.clear()
             groups: dict[str, QTreeWidgetItem] = {}
-            selected_item: QTreeWidgetItem | None = None
+            items_by_id: dict[str, QTreeWidgetItem] = {}
             for job in self._jobs:
                 group_name = self._group_for(job)
-                group = groups.get(group_name)
-                if group is None:
-                    group = QTreeWidgetItem([group_name])
-                    group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-                    self.tree.addTopLevelItem(group)
-                    groups[group_name] = group
+                group = None
+                if group_name is not None:
+                    group = groups.get(group_name)
+                    if group is None:
+                        group = QTreeWidgetItem([group_name])
+                        group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+                        self.tree.addTopLevelItem(group)
+                        groups[group_name] = group
 
-                title = job.dataset or job.id[:12]
-                item = QTreeWidgetItem(
-                    [
-                        title,
-                        _status_label(job.state),
-                        _timestamp_label(None if job.imported_path else job.started_at),
-                        _timestamp_label(job.finished_at),
-                        job.task,
-                        job.target,
-                        _profile_label(job),
-                    ]
-                )
+                item = QTreeWidgetItem([
+                    job.dataset or job.id[:12],
+                    _status_label(job.state),
+                    _timestamp_label(None if job.imported_path else job.started_at),
+                    _timestamp_label(job.finished_at),
+                    job.task,
+                    job.target,
+                    _profile_label(job),
+                ])
                 item.setData(0, _JOB_ID_ROLE, job.id)
-                item.setToolTip(0, job.id)
+                item.setToolTip(0, job.id if job.imported_path is None else job.imported_path)
                 item.setToolTip(3, _finished_tooltip(job))
-                group.addChild(item)
-                if job.id == selected:
-                    selected_item = item
+                if group is None:
+                    self.tree.addTopLevelItem(item)
+                else:
+                    group.addChild(item)
+                items_by_id[job.id] = item
 
             self.tree.expandAll()
-            if selected_item is None and self._jobs:
-                selected_item = self._first_job_item()
-            if selected_item is not None:
-                self.tree.setCurrentItem(selected_item)
-            for group in groups.values():
-                for index in range(group.childCount()):
-                    item = group.child(index)
-                    if item.data(0, _JOB_ID_ROLE) in selected_refs:
-                        item.setSelected(True)
+            current = items_by_id.get(selected)
+            if current is None and self._jobs:
+                current = items_by_id[self._jobs[0].id]
+            if current is not None:
+                self.tree.setCurrentItem(current)
+            for job_id in selected_refs:
+                if job_id in items_by_id:
+                    items_by_id[job_id].setSelected(True)
         finally:
             self.tree.blockSignals(False)
 
         self._update_project_actions()
         self._show_job(self._job_for_item(self.tree.currentItem()))
-
-    def _first_job_item(self) -> QTreeWidgetItem | None:
-        if self.tree.topLevelItemCount() == 0:
-            return None
-        group = self.tree.topLevelItem(0)
-        return group.child(0) if group.childCount() else None
 
     def _job_for_item(self, item: QTreeWidgetItem | None) -> PersistentJob | None:
         if item is None:
@@ -612,12 +714,12 @@ class PersistentJobsWidget(QWidget):
         if job.imported_path is not None:
             self.forget_button.setText("Remove result reference…")
             self.forget_button.setToolTip(
-                "Remove this project reference without deleting the external output file."
+                "Remove this project reference. Optionally delete its external output file after review."
             )
         else:
             self.forget_button.setText("Delete run record…")
             self.forget_button.setToolTip(
-                "Remove only this calculation's history entry; keep the process and output files."
+                "Remove this calculation's history entry; optionally delete reviewed local input/output files. The process is never stopped."
             )
         self.reattach_notice.setText(reason or "")
         self.reattach_notice.setVisible(not job.is_final and bool(reason))

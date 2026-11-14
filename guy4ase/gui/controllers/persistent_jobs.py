@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QMessageBox
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 from guy4ase.gui.application.result_cache import ResultLRU
 from guy4ase.gui.dialogs.attached_run import create_attached_run_monitor_window
+from guy4ase.gui.dialogs.delete_run_record import DeleteRunRecordDialog
 from guy4ase.gui.dialogs.run_calculation import SprkkrRunWindow
 from guy4ase.gui.dialogs.run_monitor import RunMonitorWindow
 from guy4ase.gui.misc.modal_task import run_modal_task
@@ -459,44 +460,40 @@ class PersistentJobsController(QObject):
             QMessageBox.warning(view, "Cancellation Failed", str(exc))
 
     def _forget_requested(self, view: PersistentJobsWidget, job_id: str) -> None:
-        """Allow removal of unresolved history without claiming its job ended."""
+        """Show every referenced file and its modification date before deletion."""
         job = self._source.job(job_id)
         if job is None or not self._source.supports_forget:
             return
         active = not job.is_final
-        warning = (
-            "WARNING: The process may still be running. Removing its record "
-            "will NOT stop it, even if its status is Unknown.\n\n"
-            if active else ""
-        )
-        imported = job.imported_path is not None
-        question = (
-            f"Remove the reference to {job.imported_path} from the project?\n\n"
-            "The external file will NOT be deleted."
-            if imported else (
-                f"{warning}Permanently remove the saved run record for "
-                f"{job.dataset or job.id} ({job.id})?\n\n"
-                "This removes the history entry only. Calculation output files "
-                "and result files will NOT be deleted."
-            )
-        )
-        answer = QMessageBox.warning(
-            view,
-            "Remove imported result?" if imported else "Dangerous: delete calculation history?",
-            question,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
+        plan = None
+        if not active:
+            try:
+                plan = self._source.referenced_file_deletion(job_id)
+            except (OSError, RuntimeError, ValueError, KeyError) as exc:
+                QMessageBox.warning(view, "Cannot Review Referenced Files", str(exc))
+                return
+
+        dialog = DeleteRunRecordDialog(job, plan, view)
+        if dialog.exec() != dialog.DialogCode.Accepted:
             return
+        delete_files = dialog.delete_files
+        kwargs = {"force": active}
+        if delete_files:
+            kwargs.update(
+                delete_files=True, expected_files=plan.files,
+                expected_file_snapshots=plan.snapshots,
+            )
         try:
             run_modal_task(
                 view,
-                lambda: self._source.forget(job_id, force=active),
+                lambda: self._source.forget(job_id, **kwargs),
                 title="Removing Calculation Record",
-                label="Removing saved calculation history…",
+                label=(
+                    "Removing referenced local files and saved calculation history…"
+                    if delete_files else "Removing saved calculation history…"
+                ),
             )
-        except Exception as exc:  # noqa: BLE001 - persistent storage boundary
+        except Exception as exc:  # noqa: BLE001 - filesystem/persistent storage boundary
             QMessageBox.warning(view, "Delete Run Record Failed", str(exc))
 
     @staticmethod
