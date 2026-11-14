@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import QEvent, QObject, Qt
-from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QWidget
 from kkrunner.projects import ProjectRepository
 from guy4ase.gui.application.persistent_jobs import project_run_manager
 
 from guy4ase.gui.application.console_interrupt import ConsoleInterrupt
+from guy4ase.gui.application.imported_project_results import assign
 from guy4ase.gui.application.persistent_jobs import PersistentJobSource
 from guy4ase.gui.application.potential_version import PotentialFileVersion
 from guy4ase.gui.application.recent_files import RecentFiles
@@ -73,7 +74,7 @@ class GuiApplication(QObject):
         self.persistent_jobs = (
             persistent_jobs
             if persistent_jobs is not None
-            else PersistentJobSource(self.execution_manager)
+            else PersistentJobSource(self.execution_manager, projects=self.projects)
         )
         self.persistent_jobs_controller = PersistentJobsController(
             self.persistent_jobs,
@@ -200,9 +201,35 @@ class GuiApplication(QObject):
 
     def _assign_results_to_project(self, result_ids, parent: QWidget) -> None:
         from guy4ase.gui.dialogs.assign_results import assign_results_to_project
-        assign_results_to_project(
-            self.projects, self.controller.result_store, result_ids, parent
+        if assign_results_to_project(
+            self.projects, self.controller.result_store, result_ids, parent,
+            run_source=self.persistent_jobs,
+        ):
+            self.persistent_jobs.reload()
+
+    def _add_result_to_project(self, project_id: str) -> None:
+        """Import an external output into one project without inventing a run."""
+        browser = self._project_browser
+        if browser is None:
+            return
+        filename, _ = QFileDialog.getOpenFileName(
+            browser, "Add SPR-KKR result to project", "",
+            "SPR-KKR Output Files (*.out *.log *.txt);;All Files (*)",
         )
+        if not filename:
+            return
+        if not file_flows.load_output(
+            self.controller, self.recent_files, filename, browser
+        ):
+            return
+        record = self.controller.result_store.results[0]
+        try:
+            if assign(self.projects, (record,), project_id) != 1:
+                raise ValueError("The imported output has no usable file reference.")
+        except (OSError, ValueError, KeyError) as exc:
+            QMessageBox.warning(browser, "Cannot Add Result", str(exc))
+            return
+        self.persistent_jobs.reload()
 
     def _adopt_persistent_result(
         self,
@@ -279,6 +306,7 @@ class GuiApplication(QObject):
                 active_project_id=self.controller.active_project_id,
             )
             dialog.activeProjectRequested.connect(self.set_active_project)
+            dialog.addResultRequested.connect(self._add_result_to_project)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             dialog.destroyed.connect(self._project_browser_closed)
             self._project_browser = dialog
