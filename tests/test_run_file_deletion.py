@@ -85,6 +85,7 @@ def test_plan_skips_shared_symlinks_directories_and_missing_files(tmp_path):
         (str(own), str(shared), str(link), str(directory), str(missing)),
         other_references=(str(shared),),
         remote_references=("/remote/own.out",),
+        expected_kinds={str(directory): "directory"},
     )
     assert plan.files == (str(own),)
     assert plan.shared == (str(shared),)
@@ -436,7 +437,7 @@ def test_declared_local_directory_is_deleted_recursively(tmp_path):
     outside.write_text("keep")
     run = _record(
         "run", tmp_path,
-        FileManifest(outputs=(FileEntry(local_path=str(taudir)),)),
+        FileManifest(outputs=(FileEntry(local_path=str(taudir), kind="directory"),)),
     )
     source, store = _source(run)
     plan = source.referenced_file_deletion("run")
@@ -502,7 +503,7 @@ def test_directory_changed_after_confirmation_is_not_deleted(tmp_path):
 def test_remote_directory_review_and_recursive_delete_identity(tmp_path):
     taudir = "/remote/path/TAUDIR"
     record = _record(
-        "run", tmp_path, FileManifest(outputs=(FileEntry(remote_path=taudir),)),
+        "run", tmp_path, FileManifest(outputs=(FileEntry(remote_path=taudir, kind="directory"),)),
     )
     source, store = _source(record)
     children = [{
@@ -534,3 +535,23 @@ def test_remote_directory_review_and_recursive_delete_identity(tmp_path):
     assert response[0]["status"] == "deleted"
     assert recorded[0][taudir]["kind"] == "directory"
     assert recorded[0][taudir]["contents"] == children
+
+
+
+def test_cleanup_rejects_declared_kind_mismatch(tmp_path):
+    declared_file = tmp_path / "misleading.dir"
+    declared_file.mkdir()
+    declared_directory = tmp_path / "TAUDIR"
+    declared_directory.write_text("ordinary data")
+    run = _record(
+        "run", tmp_path,
+        FileManifest(outputs=(
+            FileEntry(local_path=str(declared_file), kind="file"),
+            FileEntry(local_path=str(declared_directory), kind="directory"),
+        )),
+    )
+    source, _store = _source(run)
+    plan = source.referenced_file_deletion(run.id)
+    assert plan.selectable_files == ()
+    assert set(plan.unsafe) == {str(declared_file), str(declared_directory)}
+    assert declared_file.is_dir() and declared_directory.is_file()

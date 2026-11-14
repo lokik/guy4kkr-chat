@@ -127,6 +127,29 @@ def referenced_local_paths(manifest, directory: str) -> tuple[str, ...]:
     return tuple(sorted(set(paths)))
 
 
+def declared_local_kinds(manifest, directory: str) -> dict[str, str]:
+    """Expected filesystem kinds from persisted entries, not filesystem observations."""
+    if manifest is None:
+        return {}
+    entries = (
+        *manifest.inputs, *manifest.outputs, *(cache.file for cache in manifest.caches),
+        manifest.stdin, manifest.stdout, manifest.stderr,
+    )
+    result = {}
+    for entry in entries:
+        if entry is None or entry.local_path is None:
+            continue
+        path = _absolute(entry.local_path, directory)
+        kind = entry.kind
+        if path in result and result[path] != kind:
+            raise ValueError(f"Conflicting file/directory declarations: {path}")
+        result[path] = kind
+    for version in (*manifest.input_versions, *manifest.output_versions):
+        path = _absolute(version.path, directory)
+        result.setdefault(path, "file")
+    return result
+
+
 def referenced_remote_paths(manifest) -> tuple[str, ...]:
     """Collect exact target-side manifest paths for an optional SSH cleanup."""
     if manifest is None:
@@ -166,6 +189,7 @@ def plan_file_deletion(
     other_references: Iterable[str],
     remote_references: Iterable[str] = (),
     reference_details: Mapping[str, Iterable[str]] | None = None,
+    expected_kinds: Mapping[str, str] | None = None,
 ) -> FileDeletionPlan:
     """Preview manifest files and directories, including complete directory trees."""
     other_references = tuple(other_references)
@@ -196,7 +220,14 @@ def plan_file_deletion(
             missing.append(path)
             continue
         is_dir = stat.S_ISDIR(info.st_mode)
-        if not (stat.S_ISREG(info.st_mode) or is_dir):
+        expected_kind = ("file" if expected_kinds is None
+                         else expected_kinds.get(path, "file"))
+        if expected_kind not in ("file", "directory"):
+            unsafe.append(path)
+            continue
+        if (is_dir and expected_kind != "directory"
+                or stat.S_ISREG(info.st_mode) and expected_kind != "file"
+                or not (stat.S_ISREG(info.st_mode) or is_dir)):
             unsafe.append(path)
             continue
         # A symlink on the path to a declared directory could redirect
@@ -205,7 +236,9 @@ def plan_file_deletion(
             unsafe.append(path)
             continue
         if is_dir:
-            reviewed = remote_file_cleanup((path,))[0]
+            reviewed = remote_file_cleanup(
+                (path,), kinds={path: "directory"},
+            )[0]
             if reviewed["status"] != "ok":
                 unsafe.append(path)
                 continue
@@ -261,7 +294,9 @@ def delete_local_files(
 
     # Verify *all* selected trees before deleting anything.
     for path in selected:
-        observed = remote_file_cleanup((path,))[0]
+        observed = remote_file_cleanup(
+            (path,), kinds={path: expected[path].kind},
+        )[0]
         snapshot = expected[path]
         if (observed["status"] != "ok"
                 or expected_identity(snapshot) != {
@@ -284,7 +319,10 @@ def delete_local_files(
         )
     )
     approved = {path: expected_identity(expected[path]) for path in roots}
-    outcomes = remote_file_cleanup(roots, expected=approved)
+    outcomes = remote_file_cleanup(
+        roots, expected=approved,
+        kinds={path: expected[path].kind for path in roots},
+    )
     for result in outcomes:
         if result["status"] != "deleted":
             raise OSError(

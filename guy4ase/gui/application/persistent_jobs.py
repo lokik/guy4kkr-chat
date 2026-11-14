@@ -27,7 +27,7 @@ from guy4ase.gui.application.imported_project_results import (
 from guy4ase.gui.application.result_loading import load_result_file
 from guy4ase.gui.application.run_file_deletion import (
     FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
-    delete_local_files, expected_identity, plan_file_deletion,
+    declared_local_kinds, delete_local_files, expected_identity, plan_file_deletion,
     snapshot_from_review,
     referenced_local_paths, referenced_remote_paths,
 )
@@ -503,6 +503,7 @@ class PersistentJobSource:
             if job.imported_key not in imported:
                 raise RuntimeError("The imported result reference has changed; refresh first")
             candidates = (job.imported_path,)
+            candidate_kinds = {job.imported_path: "file"}
             ignored_key = job.imported_key
             ignored_run_id = None
         else:
@@ -511,6 +512,7 @@ class PersistentJobSource:
                 raise RuntimeError("The calculation is no longer in a final state")
             directory = str(record.execution.directory.local)
             candidates = referenced_local_paths(record.files, directory)
+            candidate_kinds = declared_local_kinds(record.files, directory)
             remote = (
                 referenced_remote_paths(record.files)
                 if not record.execution.transport.is_local else ()
@@ -544,7 +546,7 @@ class PersistentJobSource:
             )
         return plan_file_deletion(
             candidates, other_references=other_paths, remote_references=remote,
-            reference_details=reference_details,
+            reference_details=reference_details, expected_kinds=candidate_kinds,
         )
 
     def _remote_reference_details(self, record: Any) -> dict[str, tuple[str, ...]]:

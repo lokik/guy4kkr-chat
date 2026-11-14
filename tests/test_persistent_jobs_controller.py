@@ -886,7 +886,7 @@ def test_local_directory_shows_children_and_requires_recursive_confirmation(
     taudir = tmp_path / "tau"
     (taudir / "nested").mkdir(parents=True)
     (taudir / "nested" / "Fe.tau").write_text("tau")
-    plan = plan_file_deletion((str(taudir),), other_references=())
+    plan = plan_file_deletion((str(taudir),), other_references=(), expected_kinds={str(taudir): "directory"})
     dialog = DeleteRunRecordDialog(_job("done", state="finished"), plan)
     root = dialog.file_table.topLevelItem(0)
     assert root.text(0) == str(taudir)
