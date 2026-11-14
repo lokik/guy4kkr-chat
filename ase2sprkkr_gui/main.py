@@ -337,8 +337,10 @@ class GuiApplication(QObject):
                 )
             )
         ):
-            # request_exit closes every window only after the user approves
-            # saving or discarding changes. Consume the original close event.
+            # Consuming a QCloseEvent alone is not sufficient: Qt may still
+            # hide the widget if the event remains accepted. Ignore the
+            # original close; request_exit closes windows after approval.
+            event.ignore()
             self.request_exit()
             return True
         return super().eventFilter(watched, event)
