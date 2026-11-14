@@ -98,7 +98,7 @@ def plan_file_deletion(
             unsafe.append(path)
         else:
             try:
-                stat = item.stat(follow_symlinks=False)
+                stat = os.stat(item, follow_symlinks=False)
             except FileNotFoundError:
                 missing.append(path)
                 continue
