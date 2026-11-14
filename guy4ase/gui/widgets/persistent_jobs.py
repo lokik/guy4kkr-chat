@@ -47,11 +47,15 @@ def _timestamp_label(value: str | None) -> str:
 
 
 def _started_date(job: PersistentJob) -> str:
+    if job.imported_path is not None:
+        return "Not recorded"
     parsed = _local_datetime(job.started_at)
     return parsed.strftime("%Y-%m-%d") if parsed is not None else "Unknown date"
 
 
 def _finished_date(job: PersistentJob) -> str:
+    if job.imported_path is not None:
+        return "Not recorded"
     if job.finished_at is None:
         return "Not finished"
     parsed = _local_datetime(job.finished_at)
@@ -444,7 +448,7 @@ class PersistentJobsWidget(QWidget):
                     [
                         title,
                         _status_label(job.state),
-                        _timestamp_label(job.started_at),
+                        _timestamp_label(None if job.imported_path else job.started_at),
                         _timestamp_label(job.finished_at),
                         job.task,
                         job.target,
@@ -543,7 +547,9 @@ class PersistentJobsWidget(QWidget):
         self.directory_value.setText(job.directory or "—")
         self.directory_value.setToolTip(job.directory or "")
         self.dataset_value.setText(job.dataset or "—")
-        self.started_value.setText(_timestamp_label(job.started_at))
+        self.started_value.setText(
+            _timestamp_label(None if job.imported_path else job.started_at)
+        )
         self.finished_value.setText(_timestamp_label(job.finished_at))
         self.updated_value.setText(_timestamp_label(job.updated_at))
         self.return_code_value.setText(
@@ -586,9 +592,16 @@ class PersistentJobsWidget(QWidget):
         )
         self.forget_button.setVisible(self._supports_forget)
         self.forget_button.setEnabled(self._supports_forget)
-        self.forget_button.setToolTip(
-            "Remove only this calculation's history entry; keep the process and output files."
-        )
+        if job.imported_path is not None:
+            self.forget_button.setText("Remove result reference…")
+            self.forget_button.setToolTip(
+                "Remove this project reference without deleting the external output file."
+            )
+        else:
+            self.forget_button.setText("Delete run record…")
+            self.forget_button.setToolTip(
+                "Remove only this calculation's history entry; keep the process and output files."
+            )
         self.reattach_notice.setText(reason or "")
         self.reattach_notice.setVisible(not job.is_final and bool(reason))
         self.retry_download_button.setVisible(
