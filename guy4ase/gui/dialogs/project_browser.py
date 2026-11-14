@@ -84,6 +84,11 @@ class ProjectBrowserDialog(QWidget):
         project_panel = QWidget(splitter)
         project_layout = QVBoxLayout(project_panel)
         project_layout.setContentsMargins(0, 0, 0, 0)
+        project_heading = QLabel("Projects", project_panel)
+        heading_font = project_heading.font()
+        heading_font.setBold(True)
+        project_heading.setFont(heading_font)
+        project_layout.addWidget(project_heading)
 
         self.active_project_label = QLabel(project_panel)
         project_layout.addWidget(self.active_project_label)
@@ -110,7 +115,7 @@ class ProjectBrowserDialog(QWidget):
 
         self.project_tree = QTreeWidget(project_panel)
         self.project_tree.setColumnCount(2)
-        self.project_tree.setHeaderLabels(("Project", "Runs"))
+        self.project_tree.setHeaderLabels(("Project", "Results"))
         self.project_tree.setRootIsDecorated(True)
         self.project_tree.setAlternatingRowColors(True)
         header = self.project_tree.header()
