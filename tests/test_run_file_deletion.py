@@ -310,3 +310,115 @@ def test_symlink_cannot_be_selected_even_when_other_run_references_it(tmp_path):
     plan = plan_file_deletion((str(link),), other_references=(str(link),))
     assert plan.selectable_files == ()
     assert plan.unsafe == (str(link),)
+
+
+
+def test_ssh_preview_uses_manifest_and_detects_shared_remote_references(tmp_path):
+    path = "/remote/directory/shared.pot"
+    solo = "/remote/directory/unique.out"
+    first = _record(
+        "first", tmp_path,
+        FileManifest(outputs=(
+            FileEntry(remote_path=path),
+            FileEntry(remote_path=solo),
+        )),
+    )
+    second = _record(
+        "second", tmp_path,
+        FileManifest(inputs=(FileEntry(remote_path=path),)),
+    )
+    source, _store = _source(first, second)
+
+    class Client:
+        def inspect_remote_files(self, record, paths):
+            assert set(paths) == {path, solo}
+            return (
+                {"path": path, "status": "ok", "mtime_ns": 5,
+                 "size": 12, "device": 1, "inode": 8},
+                {"path": solo, "status": "ok", "mtime_ns": 7,
+                 "size": 22, "device": 1, "inode": 9},
+            )
+
+    source._manager.client_for = lambda _record: Client()
+    review = source.remote_file_review(first.id)
+    assert {item.path for item in review.snapshots} == {path, solo}
+    assert review.shared == (path,)
+    assert "second" in review.referrers_for(path)[0]
+
+
+def test_ssh_cleanup_failure_does_not_prevent_local_or_history_deletion(tmp_path):
+    local = tmp_path / "local.out"
+    local.write_text("data")
+    remote = "/remote/directory/output.out"
+    run = _record(
+        "run", tmp_path,
+        FileManifest(outputs=(
+            FileEntry(local_path=str(local), remote_path=remote),
+        )),
+    )
+    source, store = _source(run)
+
+    class OfflineClient:
+        def inspect_remote_files(self, record, paths):
+            return ({"path": remote, "status": "ok", "mtime_ns": 5,
+                     "size": 12, "device": 1, "inode": 8},)
+
+        def delete_remote_files(self, record, expected):
+            raise ConnectionError("SSH unreachable")
+
+    source._manager.client_for = lambda _record: OfflineClient()
+    review = source.remote_file_review(run.id)
+    plan = source.referenced_file_deletion(run.id)
+    record = source.capture_remote_cleanup(run.id)
+    source.forget(
+        run.id, delete_files=True, expected_files=plan.files,
+        expected_file_snapshots=plan.snapshots,
+    )
+    assert not local.exists()
+    assert run.id not in store.records
+
+    replies = source.cleanup_remote_files(record, review, (remote,))
+    assert replies[0]["status"] == "skipped"
+    assert "SSH unreachable" in replies[0]["message"]
+
+
+def test_ssh_cleanup_skips_newly_shared_file_without_affecting_other_files(tmp_path):
+    first_path = "/remote/directory/first.out"
+    second_path = "/remote/directory/second.out"
+    run = _record(
+        "run", tmp_path,
+        FileManifest(outputs=(
+            FileEntry(remote_path=first_path),
+            FileEntry(remote_path=second_path),
+        )),
+    )
+    source, store = _source(run)
+    calls = []
+
+    class Client:
+        def inspect_remote_files(self, record, paths):
+            return tuple(
+                {"path": path, "status": "ok", "mtime_ns": 5,
+                 "size": 12, "device": 1, "inode": 8}
+                for path in paths
+            )
+
+        def delete_remote_files(self, record, expected):
+            calls.append(expected)
+            return tuple(
+                {"path": path, "status": "deleted"} for path in expected
+            )
+
+    source._manager.client_for = lambda _record: Client()
+    review = source.remote_file_review(run.id)
+    record = source.capture_remote_cleanup(run.id)
+    store.records["later"] = _record(
+        "later", tmp_path,
+        FileManifest(inputs=(FileEntry(remote_path=first_path),)),
+    )
+    source.forget(run.id)
+    results = source.cleanup_remote_files(
+        record, review, (first_path, second_path),
+    )
+    assert len(calls) == 1 and tuple(calls[0]) == (second_path,)
+    assert {item["status"] for item in results} == {"skipped", "deleted"}

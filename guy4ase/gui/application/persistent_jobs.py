@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import posixpath
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,7 +26,8 @@ from guy4ase.gui.application.imported_project_results import (
 )
 from guy4ase.gui.application.result_loading import load_result_file
 from guy4ase.gui.application.run_file_deletion import (
-    FileDeletionPlan, delete_local_files, plan_file_deletion,
+    FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
+    delete_local_files, plan_file_deletion,
     referenced_local_paths, referenced_remote_paths,
 )
 
@@ -543,6 +545,119 @@ class PersistentJobSource:
             candidates, other_references=other_paths, remote_references=remote,
             reference_details=reference_details,
         )
+
+    def _remote_reference_details(self, record: Any) -> dict[str, tuple[str, ...]]:
+        """Other persisted runs using paths on the same configured SSH host."""
+        references: dict[str, set[str]] = {}
+        for other in self._manager.store.runs():
+            if (
+                str(other.id) == str(record.id)
+                or other.execution.transport.is_local
+                or other.execution.transport.host != record.execution.transport.host
+            ):
+                continue
+            metadata = other.metadata.get("ase2sprkkr", {})
+            label = (
+                f"Run {other.id} ({metadata.get('dataset') or 'unknown dataset'}, "
+                f"project {getattr(other, 'project_id', None) or 'unassigned'})"
+            )
+            for path in referenced_remote_paths(other.files):
+                references.setdefault(posixpath.normpath(path), set()).add(label)
+        return {path: tuple(sorted(labels)) for path, labels in references.items()}
+
+    def remote_file_review(self, job_id: str) -> RemoteFileReview:
+        """Inspect remote files only when SSH is available, on a background thread."""
+        job = self.job(str(job_id))
+        if job is None or job.imported_path is not None or not job.is_final:
+            raise ValueError("Remote deletion is available only for finished tracked SSH runs")
+        record = self._manager.store.get(str(job_id))
+        if record.execution.transport.is_local:
+            raise ValueError("This run has no remote files")
+        candidates = referenced_remote_paths(record.files)
+        referrers = self._remote_reference_details(record)
+        replies = self._manager.client_for(record).inspect_remote_files(record, candidates)
+        snapshots = []
+        unavailable = []
+        for item in replies:
+            if item["status"] == "ok":
+                snapshots.append(FileDeletionSnapshot(
+                    item["path"], item["mtime_ns"], item["size"],
+                    item["device"], item["inode"],
+                ))
+            else:
+                unavailable.append((
+                    item["path"], item.get("message") or item["status"],
+                ))
+        shared = tuple(sorted(
+            snap.path for snap in snapshots
+            if posixpath.normpath(snap.path) in referrers
+        ))
+        details = tuple(
+            (snap.path, referrers[posixpath.normpath(snap.path)])
+            for snap in snapshots if snap.path in shared
+        )
+        return RemoteFileReview(
+            record.execution.transport.host, tuple(snapshots),
+            shared, details, tuple(unavailable),
+        )
+
+    def capture_remote_cleanup(self, job_id: str) -> Any:
+        """Keep the run's connection and manifest after its history is removed."""
+        job = self.job(str(job_id))
+        if job is None or not job.is_final or job.imported_path is not None:
+            raise ValueError("Remote cleanup requires a finished persisted run")
+        record = self._manager.store.get(str(job_id))
+        if record.execution.transport.is_local:
+            raise ValueError("The selected run has no SSH connection")
+        return record
+
+    def cleanup_remote_files(
+        self, record: Any, review: RemoteFileReview,
+        selected_files: tuple[str, ...],
+    ) -> tuple[dict, ...]:
+        """Best-effort *post-forget* SSH cleanup; never used by local-file deletion.
+
+        The caller schedules this outside the blocking deletion workflow.
+        Shared-reference changes since the preview cause only the affected
+        remote path to be skipped. The record is already removed by this point.
+        """
+        snapshots = {snapshot.path: snapshot for snapshot in review.snapshots}
+        references = self._remote_reference_details(record)
+        approved = {}
+        skipped = []
+        for path in selected_files:
+            snapshot = snapshots.get(path)
+            if snapshot is None:
+                skipped.append({"path": path, "status": "skipped",
+                                "message": "Not present in the inspected remote file list"})
+                continue
+            before = review.referrers_for(path)
+            current = references.get(posixpath.normpath(path), ())
+            if before != current:
+                skipped.append({"path": path, "status": "skipped",
+                                "message": "Other run references changed since confirmation"})
+                continue
+            approved[path] = [
+                snapshot.modified_ns, snapshot.size, snapshot.device, snapshot.inode,
+            ]
+        if not approved:
+            return tuple(skipped)
+        try:
+            outcomes = self._manager.client_for(record).delete_remote_files(record, approved)
+        except Exception as exc:  # noqa: BLE001 - background SSH I/O boundary
+            logger.warning("Remote cleanup failed on %s: %s", review.host, exc)
+            outcomes = tuple(
+                {"path": path, "status": "skipped", "message": str(exc)}
+                for path in approved
+            )
+        result = (*skipped, *outcomes)
+        for item in result:
+            if item["status"] != "deleted":
+                logger.warning(
+                    "Remote cleanup skipped %s on %s: %s",
+                    item["path"], review.host, item.get("message") or item["status"],
+                )
+        return result
 
     def forget(
         self, job_id: str, *, force: bool = False, delete_files: bool = False,

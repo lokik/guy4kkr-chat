@@ -14,7 +14,9 @@ from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
 import guy4ase.gui.controllers.persistent_jobs as controller_module
 from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.application.run_file_deletion import FileDeletionPlan
+from guy4ase.gui.application.run_file_deletion import (
+    FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
+)
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.delete_run_record import DeleteRunRecordDialog
 from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
@@ -627,7 +629,7 @@ def test_delete_file_selection_is_explicit_and_displays_shared_references(monkey
         assert shared_row.text(0) == str(shared)
         assert "Shared" in shared_row.text(2)
         assert "Run other" in shared_row.toolTip(2)
-        assert tree.topLevelItem(2).text(2) == "Remote — keep"
+        assert tree.topLevelItem(2).text(2) == "SSH — checking"
         return dialog.DialogCode.Accepted
 
     monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt_record_only)
@@ -679,7 +681,7 @@ def test_shared_file_requires_second_confirmation(monkeypatch, tmp_path):
         shared_referrers=((str(path), ("Run another-job (DOS, project B)",)),),
     )
     dialog = DeleteRunRecordDialog(_job("done", state="finished"), plan)
-    dialog.select_all_local_files()
+    dialog.select_all_files()
     prompts = []
 
     def cancel_first(_parent, title, question, *_buttons):
@@ -756,3 +758,118 @@ def test_deletion_dialog_lists_all_files_and_last_modified_dates(tmp_path):
     dialog.file_table.topLevelItem(5).setCheckState(0, Qt.CheckState.Checked)
     assert dialog.selected_files == (str(paths[5]),)
     dialog.close()
+
+
+
+def test_ssh_preview_does_not_disable_local_selection(tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtCore import Qt
+
+    local = tmp_path / "local.out"
+    local.write_text("local")
+    remote = "/remote/run/output.out"
+    missing = "/remote/run/missing.out"
+    plan = FileDeletionPlan((str(local),), (), (), (), (remote, missing))
+    dialog = DeleteRunRecordDialog(_job("done", state="finished"), plan)
+    assert dialog.selected_remote_files == ()
+    assert dialog.select_all_button.isEnabled()
+    dialog.select_unshared_button.click()
+    assert dialog.selected_files == (str(local),)
+    assert dialog.selected_remote_files == ()
+    review = RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(remote, 1_700_000_000_000_000_000, 8, 1, 3),),
+        unavailable=((missing, "missing"),),
+    )
+    dialog.set_remote_preview(review)
+    assert dialog.file_table.topLevelItem(1).text(1).startswith("2023")
+    dialog.select_unshared_button.click()
+    assert dialog.selected_files == (str(local),)
+    assert dialog.selected_remote_files == (remote,)
+    assert dialog.file_table.topLevelItem(2).flags() & Qt.ItemFlag.ItemIsUserCheckable == 0
+    dialog.select_none()
+    assert dialog.selected_files == dialog.selected_remote_files == ()
+    dialog.close()
+
+
+def test_shared_ssh_files_are_not_bulk_selected_as_unshared(tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtWidgets import QMessageBox
+    local = tmp_path / "own.out"
+    local.write_text("local")
+    remote = "/remote/Fe.pot"
+    dialog = DeleteRunRecordDialog(
+        _job("done", state="finished"),
+        FileDeletionPlan((str(local),), (), (), (), (remote,)),
+    )
+    dialog.set_remote_preview(RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(remote, 1700000000000000000, 5, 1, 2),),
+        shared=(remote,),
+        referrers=((remote, ("Run second (DOS, project B)",)),),
+    ))
+    dialog.select_unshared_files()
+    assert dialog.selected_files == (str(local),)
+    assert dialog.selected_remote_files == ()
+    dialog.select_all_files()
+    assert dialog.selected_remote_shared_files == (remote,)
+    assert "Run second" in dialog.file_table.topLevelItem(1).toolTip(2)
+    dialog.close()
+
+
+def test_ssh_cleanup_starts_only_after_local_record_removal(monkeypatch, tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    job = _job("finished", state="finished")
+    source = _Source((job,))
+    source.supports_forget = True
+    own = tmp_path / "output.out"
+    own.write_text("local")
+    remote = "/remote/output.out"
+    source.referenced_file_deletion = lambda _id: FileDeletionPlan(
+        (str(own),), (), (), (), (remote,),
+    )
+    remote_review = RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(remote, 1_700_000_000_000_000_000, 5, 2, 3),),
+    )
+    events = []
+    pending = []
+
+    class FakeThread:
+        def __init__(self, *, target, **kwargs):
+            self.target = target
+
+        def start(self):
+            pending.append(self.target)
+
+    source.capture_remote_cleanup = lambda _id: object()
+
+    def forget(_id, **kwargs):
+        assert own.exists()
+        own.unlink()
+        events.append(("local", kwargs))
+
+    def cleanup(*args):
+        assert not own.exists()
+        events.append(("remote", args))
+        raise OSError("SSH disconnected")
+
+    source.forget = forget
+    source.cleanup_remote_files = cleanup
+    controller = PersistentJobsController(source)
+    view = _view()
+    controller.bind_view(view)
+    monkeypatch.setattr(controller_module, "Thread", FakeThread)
+    monkeypatch.setattr(controller_module, "run_modal_task", lambda _view, fn, **kw: fn())
+
+    def prompt(dialog):
+        dialog.set_remote_preview(remote_review)
+        dialog.select_all_files()
+        assert dialog.selected_files == (str(own),)
+        assert dialog.selected_remote_files == (remote,)
+        return dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt)
+    view.forgetRequested.emit(job.id)
+    assert len(pending) == 2  # inspection and deferred deletion
+    assert not own.exists()
+    assert [event[0] for event in events] == ["local"]
+    pending[-1]()  # Failure is reported asynchronously, not raised by local cleanup.
+    assert [event[0] for event in events] == ["local", "remote"]

@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob
 from guy4ase.gui.application.run_file_deletion import (
-    FileDeletionPlan, FileDeletionSnapshot,
+    FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
 )
 
 
@@ -29,7 +29,7 @@ def _last_modified(
     path: str, *, remote: bool = False, modified_ns: int | None = None,
 ) -> str:
     """Display modification date in local time, not inode change time."""
-    if remote:
+    if remote and modified_ns is None:
         return "— (remote)"
     if modified_ns is not None:
         timestamp = modified_ns / 1_000_000_000
@@ -42,12 +42,10 @@ def _last_modified(
 
 
 class DeleteRunRecordDialog(QDialog):
-    """Let the user select individual local files, not an ambiguous global toggle.
+    """Let the user select exact local and inspected SSH files individually.
 
-    No file is checked initially.  Shared files may be deliberately selected,
-    but are never included in the default unshared selection and require an
-    additional explicit warning. Missing, remote and unsafe paths cannot be
-    selected. The backend independently rechecks references and file identities.
+    Remote inspection is asynchronous and optional; an unavailable connection
+    never blocks confirmation, local-file deletion, or history removal.
     """
 
     def __init__(
@@ -88,10 +86,10 @@ class DeleteRunRecordDialog(QDialog):
             root.addWidget(warning)
 
         summary = QLabel(
-            "Check individual local files to delete permanently. Unchecked files "
-            "will be kept. Files shared with other runs are marked; selecting "
-            "them requires another confirmation. Dates are last-modified times "
-            "(local time), since creation dates are not universally available.",
+            "Check individual local or SSH files to delete permanently. SSH "
+            "details load separately; local deletion does not require SSH. "
+            "Shared files require another confirmation. Dates are last-modified "
+            "times (local time), since creation dates are not universally available.",
             self,
         )
         summary.setWordWrap(True)
@@ -115,6 +113,9 @@ class DeleteRunRecordDialog(QDialog):
         root.addWidget(self.file_table, 1)
 
         self._selectable_rows: dict[str, QTreeWidgetItem] = {}
+        self._remote_rows: dict[str, QTreeWidgetItem] = {}
+        self._remote_selectable: dict[str, QTreeWidgetItem] = {}
+        self._remote_review: RemoteFileReview | None = None
         self._shared_files = frozenset(() if plan is None else plan.shared)
         if plan is not None:
             snapshots = {item.path: item for item in plan.selectable_snapshots}
@@ -123,7 +124,7 @@ class DeleteRunRecordDialog(QDialog):
                 (plan.shared, "Shared", "Referenced by other runs or imported results", False, True),
                 (plan.unsafe, "Cannot delete", "Symlink, directory, or other non-regular file", False, False),
                 (plan.missing, "Missing", "File does not exist", False, False),
-                (plan.remote, "Remote — keep", "Remote files cannot be deleted here", True, False),
+                (plan.remote, "SSH — checking", "Checking remote file metadata (local cleanup is available immediately)", True, False),
             )
             for paths, status, reason, remote, selectable in groups:
                 for filename in paths:
@@ -149,10 +150,15 @@ class DeleteRunRecordDialog(QDialog):
                     ])
                     row.setToolTip(0, filename)
                     row.setToolTip(2, tooltip)
+                    # QTreeWidgetItem is user-checkable by default in Qt:
+                    # explicitly disable every unsafe or uninspected row.
+                    row.setFlags(row.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
                     if selectable and job.is_final:
                         row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                         row.setCheckState(0, Qt.CheckState.Unchecked)
                         self._selectable_rows[filename] = row
+                    if remote:
+                        self._remote_rows[filename] = row
                     self.file_table.addTopLevelItem(row)
         if not self.file_table.topLevelItemCount():
             self.file_table.addTopLevelItem(
@@ -174,12 +180,12 @@ class DeleteRunRecordDialog(QDialog):
         self.select_unshared_button.clicked.connect(self.select_unshared_files)
         selection_buttons.addWidget(self.select_unshared_button)
 
-        self.select_all_button = QPushButton("Select all local files", self)
+        self.select_all_button = QPushButton("Select all files", self)
         self.select_all_button.setToolTip(
-            "Check every selectable local file, including files shared with "
-            "other runs. An additional warning is required for shared files."
+            "Check every selectable local and inspected SSH file, including "
+            "files shared with other runs. Shared files require another confirmation."
         )
-        self.select_all_button.clicked.connect(self.select_all_local_files)
+        self.select_all_button.clicked.connect(self.select_all_files)
         selection_buttons.addWidget(self.select_all_button)
         selection_buttons.addStretch(1)
         root.addLayout(selection_buttons)
@@ -225,58 +231,145 @@ class DeleteRunRecordDialog(QDialog):
         ) if self._plan is not None else ()
 
     @property
-    def delete_files(self) -> bool:
-        return bool(self.selected_files)
+    def remote_review(self) -> RemoteFileReview | None:
+        return self._remote_review
 
-    def _select(self, filenames: set[str]) -> None:
+    @property
+    def selected_remote_files(self) -> tuple[str, ...]:
+        return tuple(sorted(
+            name for name, row in self._remote_selectable.items()
+            if row.checkState(0) == Qt.CheckState.Checked
+        ))
+
+    @property
+    def selected_remote_shared_files(self) -> tuple[str, ...]:
+        shared = () if self._remote_review is None else self._remote_review.shared
+        return tuple(sorted(set(self.selected_remote_files).intersection(shared)))
+
+    @property
+    def selected_remote_snapshots(self) -> tuple[FileDeletionSnapshot, ...]:
+        selected = set(self.selected_remote_files)
+        return (
+            tuple(item for item in self._remote_review.snapshots if item.path in selected)
+            if self._remote_review is not None else ()
+        )
+
+    def set_remote_preview(self, review: RemoteFileReview) -> None:
+        """Update remote rows on the Qt thread after background SSH inspection."""
+        self._remote_review = review
+        snapshots = {snapshot.path: snapshot for snapshot in review.snapshots}
+        reasons = dict(review.unavailable)
         self.file_table.blockSignals(True)
         try:
-            for name, row in self._selectable_rows.items():
-                row.setCheckState(
-                    0, Qt.CheckState.Checked if name in filenames
-                    else Qt.CheckState.Unchecked
+            for path, row in self._remote_rows.items():
+                snapshot = snapshots.get(path)
+                if snapshot is None:
+                    row.setText(2, "SSH — " + reasons.get(path, "Unavailable"))
+                    row.setToolTip(2, "Not selectable for deletion")
+                    continue
+                other = review.referrers_for(path)
+                row.setText(
+                    1, _last_modified(path, remote=True, modified_ns=snapshot.modified_ns)
                 )
+                row.setText(
+                    2, f"SSH · shared ({len(other)} other reference(s))"
+                    if other else f"SSH · {review.host} · unshared",
+                )
+                row.setToolTip(
+                    2, ("Referenced by:\n" + "\n".join(other)) if other
+                    else f"On SSH host {review.host}; no other saved references",
+                )
+                row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                row.setCheckState(0, Qt.CheckState.Unchecked)
+                self._remote_selectable[path] = row
+        finally:
+            self.file_table.blockSignals(False)
+        self._update_selection_summary()
+
+    def set_remote_error(self, message: str) -> None:
+        """SSH inspection failure is informational, not a deletion blocker."""
+        for row in self._remote_rows.values():
+            row.setText(2, "SSH unavailable — kept")
+            row.setToolTip(2, message)
+        self._update_selection_summary()
+
+    @property
+    def delete_files(self) -> bool:
+        return bool(self.selected_files or self.selected_remote_files)
+
+    def _select(self, local: set[str], remote: set[str] | None = None) -> None:
+        self.file_table.blockSignals(True)
+        try:
+            for rows, selected in (
+                (self._selectable_rows, local),
+                (self._remote_selectable, remote or set()),
+            ):
+                for name, row in rows.items():
+                    row.setCheckState(
+                        0, Qt.CheckState.Checked if name in selected
+                        else Qt.CheckState.Unchecked
+                    )
         finally:
             self.file_table.blockSignals(False)
         self._update_selection_summary()
 
     def select_none(self) -> None:
-        self._select(set())
+        self._select(set(), set())
 
     def select_unshared_files(self) -> None:
-        self._select(set() if self._plan is None else set(self._plan.files))
+        remote = (
+            set() if self._remote_review is None
+            else {item.path for item in self._remote_review.snapshots}
+                 - set(self._remote_review.shared)
+        )
+        self._select(set() if self._plan is None else set(self._plan.files), remote)
 
-    def select_all_local_files(self) -> None:
-        self._select(set(self._selectable_rows))
+    def select_all_files(self) -> None:
+        self._select(set(self._selectable_rows), set(self._remote_selectable))
 
     def _update_selection_summary(self, *_args) -> None:
-        count = len(self.selected_files)
-        shared = len(self.selected_shared_files)
+        local_count = len(self.selected_files)
+        remote_count = len(self.selected_remote_files)
+        shared = len(self.selected_shared_files) + len(self.selected_remote_shared_files)
+        count = local_count + remote_count
         note = (
-            f"{count} local file(s) selected for permanent deletion."
+            f"{local_count} local and {remote_count} SSH file(s) selected. "
+            "SSH cleanup is best-effort and cannot prevent local deletion."
             if count else "No files selected. Only the record/reference will be removed."
         )
         if shared:
-            note += (
-                f" WARNING: {shared} selected file(s) are also referenced by "
-                "other saved runs or imported results."
-            )
+            note += f" WARNING: {shared} selected file(s) have other saved references."
         self.selection_summary.setText(note)
         self.confirm_button.setText(
             self._action_label + (f" and {count} file(s)" if count else "")
         )
+        enabled = bool(self._selectable_rows or self._remote_selectable)
+        for button in (
+            self.select_none_button, self.select_unshared_button, self.select_all_button,
+        ):
+            button.setEnabled(enabled)
 
     def _confirm_selection(self) -> None:
-        shared = self.selected_shared_files
-        if shared:
-            details = []
-            for path in shared:
-                details.append(
-                    path + "\n  " +
-                    "\n  ".join(self._plan.referrers(path) or ("Other saved record",))
+        shared_local = self.selected_shared_files
+        shared_remote = self.selected_remote_shared_files
+        shared_count = len(shared_local) + len(shared_remote)
+        if shared_count:
+            details = [
+                path + "\n  " +
+                "\n  ".join(self._plan.referrers(path) or ("Other saved record",))
+                for path in shared_local
+            ]
+            if self._remote_review is not None:
+                details.extend(
+                    f"SSH: {path}\n  " +
+                    "\n  ".join(
+                        self._remote_review.referrers_for(path)
+                        or ("Other saved record",)
+                    )
+                    for path in shared_remote
                 )
             warning = (
-                f"{len(shared)} selected file(s) are referenced by other run "
+                f"{shared_count} selected file(s) are referenced by other run "
                 "records or imported results. Deleting them may make those "
                 "results unusable.\n\n"
                 + "\n\n".join(details)

@@ -50,6 +50,20 @@ class FileDeletionPlan:
         return dict(self.shared_referrers).get(path, ())
 
 
+@dataclass(frozen=True)
+class RemoteFileReview:
+    """Remote identities observed asynchronously; no SSH work occurs in the dialog."""
+
+    host: str
+    snapshots: tuple[FileDeletionSnapshot, ...]
+    shared: tuple[str, ...] = ()
+    referrers: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    unavailable: tuple[tuple[str, str], ...] = ()
+
+    def referrers_for(self, path: str) -> tuple[str, ...]:
+        return dict(self.referrers).get(path, ())
+
+
 def _absolute(path: str, directory: str) -> str:
     return os.path.abspath(os.path.join(directory, os.fspath(path)))
 
@@ -75,7 +89,7 @@ def referenced_local_paths(manifest, directory: str) -> tuple[str, ...]:
 
 
 def referenced_remote_paths(manifest) -> tuple[str, ...]:
-    """Report remote references; GUI cleanup does not have remote deletion rights."""
+    """Collect exact target-side manifest paths for an optional SSH cleanup."""
     if manifest is None:
         return ()
     entries = (
