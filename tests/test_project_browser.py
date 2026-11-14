@@ -417,3 +417,50 @@ def test_project_browser_displays_historical_execution_profile(tmp_path):
     }
     assert displayed == {"First": "remote-cluster", "Old": "—"}
     browser.close()
+
+
+def test_imported_files_are_openable_from_project_browser(tmp_path, monkeypatch):
+    """External result associations are useful after restarting the GUI."""
+    from types import SimpleNamespace
+
+    from guy4ase.gui.application.imported_project_results import assign
+
+    application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Project")
+    output = tmp_path / "old-calculation.out"
+    output.write_text("SPR-KKR test output")
+    assert assign(
+        repository,
+        [SimpleNamespace(output_path=output, output_version=None)],
+        project.id,
+    ) == 1
+
+    browser = _dialog(repository, _JobSource(()))
+    browser.show()
+    application.processEvents()
+    assert browser.imported_group.isVisible()
+    assert browser.imported_results.topLevelItemCount() == 1
+    item = browser.imported_results.topLevelItem(0)
+    assert item.text(0) == output.name
+
+    requests = []
+    browser.importedResultRequested.connect(requests.append)
+    browser.open_imported_result_button.click()
+    assert requests == [str(output.resolve())]
+
+    browser.imported_results.itemDoubleClicked.emit(item, 0)
+    assert requests == [str(output.resolve())] * 2
+
+    # Keep the reference, but explain missing external files instead of
+    # silently discarding the project association.
+    output.unlink()
+    warnings = []
+    monkeypatch.setattr(
+        QMessageBox, "warning",
+        lambda _parent, title, message: warnings.append((title, message)),
+    )
+    browser.open_imported_result_button.click()
+    assert len(requests) == 2
+    assert warnings and str(output) in warnings[0][1]
+    browser.close()
