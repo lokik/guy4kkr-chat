@@ -124,6 +124,11 @@ class PersistentJobsWidget(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+        heading = QLabel("Jobs and results", self)
+        heading_font = heading.font()
+        heading_font.setBold(True)
+        heading.setFont(heading_font)
+        root.addWidget(heading)
         controls = QHBoxLayout()
         controls.addWidget(QLabel("Group by:"))
         self.group_by = QComboBox(self)
