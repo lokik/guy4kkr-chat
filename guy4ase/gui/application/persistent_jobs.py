@@ -9,6 +9,7 @@ from threading import RLock
 from typing import Any, Callable
 
 from kkrunner.backends.contracts import BackendCapability
+from kkrunner.files.versions import file_digest
 from kkrunner.projects import ProjectRepository, ProjectRunManager
 from ase2sprkkr.outputs.project_results import (
     attach_project_run,
@@ -132,6 +133,7 @@ class PersistentJob:
     cancelable: bool = False
     cancel_unavailable_reason: str | None = None
     imported_path: str | None = None
+    imported_key: str | None = None
 
     @property
     def started_at(self) -> str:
@@ -214,6 +216,7 @@ class PersistentJob:
             result_files_verified=True,
             project_id=project_id,
             imported_path=str(path),
+            imported_key=key,
         )
 
 
@@ -521,6 +524,12 @@ class PersistentJobSource:
     def load_result(self, job_id: str) -> Any:
         job = self.job(str(job_id))
         if job is not None and job.imported_path is not None:
+            expected_digest = job.imported_key.partition("::")[2]
+            if expected_digest and file_digest(job.imported_path) != expected_digest:
+                raise RuntimeError(
+                    "The imported output file has changed since it was assigned. "
+                    "Add the updated file again to capture its new version."
+                )
             return load_result_file(job.imported_path).result
         if not self.supports_results:
             raise NotImplementedError(
