@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from threading import RLock
 from typing import Any, Callable
 
@@ -17,6 +19,10 @@ from ase2sprkkr.sprkkr.projects import (
     default_project_repository,
     project_execution_manager,
 )
+from guy4ase.gui.application.imported_project_results import (
+    assignments, reference_id, reassign_references, remove_reference,
+)
+from guy4ase.gui.application.result_loading import load_result_file
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +131,7 @@ class PersistentJob:
     profile: str | None = None
     cancelable: bool = False
     cancel_unavailable_reason: str | None = None
+    imported_path: str | None = None
 
     @property
     def started_at(self) -> str:
@@ -132,7 +139,7 @@ class PersistentJob:
 
     @property
     def is_final(self) -> bool:
-        return self.state in _FINAL_STATES
+        return self.state in _FINAL_STATES or self.imported_path is not None
 
     @property
     def can_retry_download(self) -> bool:
@@ -185,6 +192,30 @@ class PersistentJob:
             cancel_unavailable_reason=cancel_unavailable_reason,
         )
 
+    @classmethod
+    def from_external_reference(
+        cls, key: str, project_id: str | None,
+    ) -> "PersistentJob":
+        """Project-visible result backed by a file, not a fabricated run."""
+        path = Path(key.split("::", 1)[0])
+        try:
+            modified = path.stat().st_mtime
+            timestamp = datetime.fromtimestamp(modified, timezone.utc).isoformat()
+            files_state = "current"
+        except OSError:
+            timestamp = "1970-01-01T00:00:00+00:00"
+            files_state = "missing"
+        return cls(
+            id=reference_id(key), state="imported", created_at=timestamp,
+            updated_at=timestamp, task="—", directory=str(path.parent),
+            dataset=path.name, target="External file", return_code=None,
+            message="Imported output: original execution status and settings are unknown.",
+            result_files_state=files_state,
+            result_files_verified=True,
+            project_id=project_id,
+            imported_path=str(path),
+        )
+
 
 class PersistentJobSource:
     """Application-owned persistent-job cache and lifecycle adapter.
@@ -199,8 +230,11 @@ class PersistentJobSource:
     the backend then owns the transfer and postprocessing transitions.
     """
 
-    def __init__(self, manager: Any | None = None) -> None:
+    def __init__(
+        self, manager: Any | None = None, *, projects: ProjectRepository | None = None
+    ) -> None:
         self._manager = manager
+        self._projects = projects
         self.unavailable_reason: str | None = None
         self._lock = RLock()
         self._jobs: dict[str, PersistentJob] = {}
@@ -265,7 +299,9 @@ class PersistentJobSource:
 
     @property
     def supports_reassignment(self) -> bool:
-        return self.available and callable(getattr(ProjectRepository, "reassign_runs", None))
+        return self._projects is not None or (
+            self.available and callable(getattr(ProjectRepository, "reassign_runs", None))
+        )
 
     @property
     def active_recovery_ids(self) -> tuple[str, ...]:
@@ -312,6 +348,10 @@ class PersistentJobSource:
             for record in records
             if "ase2sprkkr" in record.metadata
         }
+        if self._projects is not None:
+            for key, project_id in assignments(self._projects).items():
+                imported = PersistentJob.from_external_reference(key, project_id)
+                loaded[imported.id] = imported
         with self._lock:
             previous = self._jobs
             self._jobs = loaded
@@ -330,6 +370,9 @@ class PersistentJobSource:
         if self._manager is None:
             return None
         job_id = str(job_id)
+        if job_id.startswith("external:") and self._projects is not None:
+            self.reload()
+            return self.job(job_id)
         try:
             record = self._manager.store.get(job_id)
         except FileNotFoundError:
@@ -370,6 +413,13 @@ class PersistentJobSource:
         return jobs
 
     def check_result_files(self, job_id: str) -> PersistentJob:
+        job = self.job(str(job_id))
+        if job is not None and job.imported_path is not None:
+            self.reload()
+            current = self.job(str(job_id))
+            if current is None:
+                raise FileNotFoundError(job_id)
+            return current
         if not self.supports_result_file_check:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot verify persistent result files."
@@ -420,6 +470,13 @@ class PersistentJobSource:
 
     def forget(self, job_id: str, *, force: bool = False) -> Any:
         """Forget history only: never delete output files or kill processes."""
+        job = self.job(str(job_id))
+        if job is not None and job.imported_path is not None:
+            if self._projects is None:
+                raise RuntimeError("Imported project repository is unavailable")
+            remove_reference(self._projects, job.id)
+            self.reload()
+            return job
         if not self.supports_forget:
             raise NotImplementedError("This runner cannot remove persistent history")
         removed = self._manager.forget(str(job_id), force=force)
@@ -439,17 +496,32 @@ class PersistentJobSource:
         self, projects: ProjectRepository, job_ids, project_id: str | None,
         *, expected_project_ids,
     ) -> None:
-        """Reassign completed records through kkrunner, then publish changed jobs."""
+        """Move tracked runs through KKRunner and external references through their store."""
         if not self.supports_reassignment:
-            raise NotImplementedError("The installed kkrunner does not support run reassignment")
-        records = projects.reassign_runs(
-            job_ids, project_id, store=self._manager.store,
-            expected_project_ids=expected_project_ids,
+            raise NotImplementedError("Project reassignment is unavailable")
+        imported_ids = tuple(
+            job_id for job_id in job_ids
+            if (job := self.job(job_id)) is not None and job.imported_path is not None
         )
-        for record in records:
-            self.job_changed(record.id)
+        run_ids = tuple(job_id for job_id in job_ids if job_id not in imported_ids)
+        if run_ids:
+            records = projects.reassign_runs(
+                run_ids, project_id, store=self._manager.store,
+                expected_project_ids={key: expected_project_ids[key] for key in run_ids},
+            )
+            for record in records:
+                self.job_changed(record.id)
+        if imported_ids:
+            reassign_references(
+                projects, imported_ids, project_id,
+                expected_project_ids={key: expected_project_ids[key] for key in imported_ids},
+            )
+            self.reload()
 
     def load_result(self, job_id: str) -> Any:
+        job = self.job(str(job_id))
+        if job is not None and job.imported_path is not None:
+            return load_result_file(job.imported_path).result
         if not self.supports_results:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot load persistent historical results."
