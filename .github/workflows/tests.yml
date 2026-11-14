@@ -68,7 +68,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ./.ci/kkrunner
           python -m pip install -e ./.ci/ase2sprkkr
-          python -m pip install -e . pytest
+          # Package identity tests inspect setuptools' package discovery.
+          # Build isolation does not expose build requirements to pytest.
+          python -m pip install -e . pytest 'setuptools>=61'
 
       - name: Run tests
         run: python -m pytest -q
