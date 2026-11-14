@@ -5,7 +5,7 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase import Atoms
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QFrame, QGroupBox, QToolButton
+from PyQt6.QtWidgets import QApplication, QFrame, QGroupBox, QMessageBox, QToolButton
 
 from ase2sprkkr_gui.gui.widgets.browser_panel import BrowserPanel
 
@@ -44,7 +44,7 @@ def _commands(window):
     )
 
 
-def test_workflow_and_expert_share_one_workspace(tmp_path):
+def test_workflow_and_expert_share_one_workspace(tmp_path, monkeypatch):
     application = QApplication.instance() or QApplication([])
     workspace = WorkspaceState()
     gui, window = _workflow(tmp_path, workspace=workspace)
@@ -63,6 +63,13 @@ def test_workflow_and_expert_share_one_workspace(tmp_path):
     assert workspace.structure.value.atoms is not None
     assert expert.controller.atoms is workspace.structure.value.atoms
     assert RunTask("scf") in _commands(window)
+    # Closing a dirty expert window asks for confirmation. Reply explicitly
+    # rather than leaving an unattended modal dialog blocking the test suite.
+    def discard_unsaved(_parent, title, _message, *_args):
+        assert title == "Unsaved Work"
+        return QMessageBox.StandardButton.Discard
+
+    monkeypatch.setattr(QMessageBox, "question", discard_unsaved)
     expert.close()
     window.close()
 

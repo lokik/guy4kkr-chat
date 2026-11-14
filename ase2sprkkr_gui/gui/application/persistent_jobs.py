@@ -389,7 +389,7 @@ class PersistentJobSource:
             return self.job(job_id)
         try:
             record = self._manager.store.get(job_id)
-        except FileNotFoundError:
+        except (FileNotFoundError, KeyError):
             with self._lock:
                 existed = self._jobs.pop(job_id, None) is not None
             if existed:

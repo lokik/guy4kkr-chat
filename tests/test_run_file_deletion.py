@@ -458,7 +458,7 @@ def test_declared_directory_becomes_shared_when_other_run_uses_descendant(tmp_pa
     used.write_text("in use")
     first = _record(
         "first", tmp_path,
-        FileManifest(outputs=(FileEntry(local_path=str(taudir)),)),
+        FileManifest(outputs=(FileEntry(local_path=str(taudir), kind="directory"),)),
     )
     other = _record(
         "second", tmp_path,
@@ -485,7 +485,7 @@ def test_directory_changed_after_confirmation_is_not_deleted(tmp_path):
     (taudir / "original.tau").write_text("before")
     run = _record(
         "run", tmp_path,
-        FileManifest(outputs=(FileEntry(local_path=str(taudir)),)),
+        FileManifest(outputs=(FileEntry(local_path=str(taudir), kind="directory"),)),
     )
     source, store = _source(run)
     plan = source.referenced_file_deletion("run")
