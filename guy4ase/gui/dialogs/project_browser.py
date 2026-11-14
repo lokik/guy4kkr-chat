@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -14,6 +15,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QStyle,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -30,6 +32,7 @@ from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
 from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
 
 _PROJECT_ID_ROLE = int(Qt.ItemDataRole.UserRole)
+_IMPORTED_PATH_ROLE = int(Qt.ItemDataRole.UserRole)
 _UNASSIGNED = "__unassigned__"
 
 
@@ -41,6 +44,7 @@ class ProjectBrowserDialog(QWidget):
     """Non-modal window for projects and their immutable run history."""
 
     activeProjectRequested = pyqtSignal(object)
+    importedResultRequested = pyqtSignal(str)
 
     def __init__(
         self,
@@ -140,7 +144,29 @@ class ProjectBrowserDialog(QWidget):
         imported_layout.addWidget(imported_label)
         self.imported_results = QTreeWidget(self.imported_group)
         self.imported_results.setHeaderHidden(True)
+        self.imported_results.setToolTip(
+            "External SPR-KKR outputs assigned to this project. Double-click to open."
+        )
+        self.imported_results.currentItemChanged.connect(
+            self._update_imported_result_action
+        )
+        self.imported_results.itemDoubleClicked.connect(self._open_imported_item)
         imported_layout.addWidget(self.imported_results)
+        self.open_imported_result_button = QPushButton(
+            "Open result", self.imported_group
+        )
+        self.open_imported_result_button.setIcon(QIcon.fromTheme(
+            "document-open",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
+        ))
+        self.open_imported_result_button.setToolTip(
+            "Read the selected external output file into the main window's result history."
+        )
+        self.open_imported_result_button.clicked.connect(
+            self._open_selected_imported_result
+        )
+        self.open_imported_result_button.setEnabled(False)
+        imported_layout.addWidget(self.open_imported_result_button)
         self.imported_group.hide()
 
         project_body = QHBoxLayout()
@@ -338,9 +364,37 @@ class ProjectBrowserDialog(QWidget):
                 continue
             path = key.split("::", 1)[0]
             item = QTreeWidgetItem([Path(path).name])
+            item.setData(0, _IMPORTED_PATH_ROLE, path)
             item.setToolTip(0, path)
             self.imported_results.addTopLevelItem(item)
-        self.imported_group.setVisible(self.imported_results.topLevelItemCount() > 0)
+        has_imports = self.imported_results.topLevelItemCount() > 0
+        if has_imports:
+            self.imported_results.setCurrentItem(self.imported_results.topLevelItem(0))
+        self.imported_group.setVisible(has_imports)
+        self._update_imported_result_action()
+
+    def _update_imported_result_action(self, *_args) -> None:
+        item = self.imported_results.currentItem()
+        self.open_imported_result_button.setEnabled(
+            item is not None and item.data(0, _IMPORTED_PATH_ROLE) is not None
+        )
+
+    def _open_selected_imported_result(self) -> None:
+        item = self.imported_results.currentItem()
+        if item is not None:
+            self._open_imported_item(item, 0)
+
+    def _open_imported_item(self, item: QTreeWidgetItem, _column: int) -> None:
+        path = item.data(0, _IMPORTED_PATH_ROLE)
+        if path is None:
+            return
+        if not Path(path).is_file():
+            QMessageBox.warning(
+                self, "Imported Result Unavailable",
+                f"The associated output file no longer exists:\\n{path}",
+            )
+            return
+        self.importedResultRequested.emit(str(path))
 
     def _selected_project(self) -> Project | None:
         project_id = self._selected_project_id
