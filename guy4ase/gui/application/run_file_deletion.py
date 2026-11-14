@@ -13,6 +13,17 @@ from typing import Iterable
 
 
 @dataclass(frozen=True)
+class FileDeletionSnapshot:
+    """File identity and modification state shown to the user at confirmation."""
+
+    path: str
+    modified_ns: int
+    size: int
+    device: int
+    inode: int
+
+
+@dataclass(frozen=True)
 class FileDeletionPlan:
     """A read-only preview; it is recalculated before an actual deletion."""
 
@@ -21,6 +32,7 @@ class FileDeletionPlan:
     unsafe: tuple[str, ...]
     missing: tuple[str, ...]
     remote: tuple[str, ...]
+    snapshots: tuple[FileDeletionSnapshot, ...] = ()
 
 
 def _absolute(path: str, directory: str) -> str:
@@ -70,6 +82,7 @@ def plan_file_deletion(
     """Select only existing, unshared, ordinary files for an explicit cleanup."""
     protected = {os.path.realpath(path) for path in other_references}
     files: list[str] = []
+    snapshots: list[FileDeletionSnapshot] = []
     shared: list[str] = []
     unsafe: list[str] = []
     missing: list[str] = []
@@ -84,10 +97,18 @@ def plan_file_deletion(
         elif not item.is_file():
             unsafe.append(path)
         else:
+            try:
+                stat = item.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                missing.append(path)
+                continue
+            snapshots.append(FileDeletionSnapshot(
+                path, stat.st_mtime_ns, stat.st_size, stat.st_dev, stat.st_ino,
+            ))
             files.append(path)
     return FileDeletionPlan(
         tuple(files), tuple(shared), tuple(unsafe), tuple(missing),
-        tuple(sorted(set(remote_references))),
+        tuple(sorted(set(remote_references))), tuple(snapshots),
     )
 
 

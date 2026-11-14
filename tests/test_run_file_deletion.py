@@ -118,7 +118,10 @@ def test_run_cleanup_keeps_files_referenced_by_other_runs(tmp_path):
     assert plan.shared == (str(shared),)
     assert "/remote/own.dos" in plan.remote
 
-    source.forget("first", delete_files=True, expected_files=plan.files)
+    source.forget(
+        "first", delete_files=True, expected_files=plan.files,
+        expected_file_snapshots=plan.snapshots,
+    )
     assert not own.exists()
     assert shared.exists()
     assert "first" not in store.records
@@ -141,7 +144,10 @@ def test_cleanup_requires_confirmed_current_preview(tmp_path):
         "second", tmp_path, FileManifest(inputs=(FileEntry(local_path=str(output)),)),
     )
     with pytest.raises(RuntimeError, match="changed since confirmation"):
-        source.forget(first.id, delete_files=True, expected_files=plan.files)
+        source.forget(
+            first.id, delete_files=True, expected_files=plan.files,
+            expected_file_snapshots=plan.snapshots,
+        )
     assert output.exists()
     assert "first" in store.records
 
@@ -171,7 +177,10 @@ def test_imported_result_can_delete_its_file_but_not_other_references(tmp_path):
     imported = next(job for job in source.jobs() if job.imported_path is not None)
     plan = source.referenced_file_deletion(imported.id)
     assert plan.files == (str(output),)
-    source.forget(imported.id, delete_files=True, expected_files=plan.files)
+    source.forget(
+        imported.id, delete_files=True, expected_files=plan.files,
+        expected_file_snapshots=plan.snapshots,
+    )
     assert not output.exists()
     assert source.job(imported.id) is None
 
@@ -193,3 +202,19 @@ def test_imported_reference_cannot_delete_a_tracked_runs_file(tmp_path):
     assert plan.shared == (str(output),)
     source.forget(imported.id)
     assert output.exists()
+
+
+def test_file_changed_since_confirmation_cannot_be_deleted(tmp_path):
+    output = tmp_path / "important.out"
+    output.write_text("before")
+    first = _record("run", tmp_path, FileManifest(stdout=FileEntry(local_path=str(output))))
+    source, store = _source(first)
+    old_plan = source.referenced_file_deletion(first.id)
+    output.write_text("contents replaced after dialog opened")
+    with pytest.raises(RuntimeError, match="last-modified times"):
+        source.forget(
+            first.id, delete_files=True, expected_files=old_plan.files,
+            expected_file_snapshots=old_plan.snapshots,
+        )
+    assert output.read_text() == "contents replaced after dialog opened"
+    assert "run" in store.records

@@ -532,6 +532,7 @@ class PersistentJobSource:
     def forget(
         self, job_id: str, *, force: bool = False, delete_files: bool = False,
         expected_files: tuple[str, ...] | None = None,
+        expected_file_snapshots: tuple | None = None,
     ) -> Any:
         """Remove a history/reference entry; optionally delete reviewed local files.
 
@@ -547,6 +548,13 @@ class PersistentJobSource:
             if tuple(expected_files) != plan.files:
                 raise RuntimeError(
                     "Referenced files changed since confirmation; review them again"
+                )
+            if expected_file_snapshots is None or (
+                tuple(expected_file_snapshots) != plan.snapshots
+            ):
+                raise RuntimeError(
+                    "A file changed since the displayed last-modified times; "
+                    "review the deletion list again"
                 )
             delete_local_files(plan.files)
 

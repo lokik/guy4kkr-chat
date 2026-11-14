@@ -8,11 +8,12 @@ from typing import Any
 from weakref import ReferenceType, ref
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QCheckBox, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 from guy4ase.gui.application.result_cache import ResultLRU
 from guy4ase.gui.dialogs.attached_run import create_attached_run_monitor_window
+from guy4ase.gui.dialogs.delete_run_record import DeleteRunRecordDialog
 from guy4ase.gui.dialogs.run_calculation import SprkkrRunWindow
 from guy4ase.gui.dialogs.run_monitor import RunMonitorWindow
 from guy4ase.gui.misc.modal_task import run_modal_task
@@ -459,94 +460,29 @@ class PersistentJobsController(QObject):
             QMessageBox.warning(view, "Cancellation Failed", str(exc))
 
     def _forget_requested(self, view: PersistentJobsWidget, job_id: str) -> None:
-        """Confirm record removal and optionally review all local file deletions."""
+        """Show every referenced file and its modification date before deletion."""
         job = self._source.job(job_id)
         if job is None or not self._source.supports_forget:
             return
         active = not job.is_final
-        imported = job.imported_path is not None
-        warning = (
-            "WARNING: The process may still be running. Removing its record "
-            "will NOT stop it, even if its status is Unknown.\n\n"
-            if active else ""
-        )
-        question = (
-            f"Remove the reference to {job.imported_path} from the project?"
-            if imported else (
-                f"{warning}Permanently remove the saved run record for "
-                f"{job.dataset or job.id} ({job.id})?"
-            )
-        )
-        dialog = QMessageBox(view)
-        dialog.setIcon(QMessageBox.Icon.Warning)
-        dialog.setWindowTitle(
-            "Remove imported result?" if imported
-            else "Dangerous: delete calculation history?"
-        )
-        dialog.setText(question)
-        dialog.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
-        )
-        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
-
-        checkbox = QCheckBox("Also permanently delete referenced local files", dialog)
-        checkbox.setChecked(False)
         plan = None
-        details = ["By default, only the reference or run record is removed. Files stay."]
-        if active:
-            checkbox.setEnabled(False)
-            details.append(
-                "Files cannot be deleted while the calculation is active or its "
-                "status is unknown. The process will not be stopped."
-            )
-        else:
+        if not active:
             try:
                 plan = self._source.referenced_file_deletion(job_id)
             except (OSError, RuntimeError, ValueError, KeyError) as exc:
                 QMessageBox.warning(view, "Cannot Review Referenced Files", str(exc))
                 return
-            checkbox.setEnabled(bool(plan.files))
-            details.append(f"Eligible local files: {len(plan.files)}.")
-            if plan.files:
-                shown = plan.files[:3]
-                details.append("Files that would be deleted:\n" + "\n".join(shown))
-                if len(plan.files) > len(shown):
-                    details.append("See Show Details for the complete list.")
-            if plan.shared:
-                details.append(
-                    f"{len(plan.shared)} shared file(s) will be kept because other "
-                    "run records or imported results still reference them."
-                )
-            if plan.unsafe:
-                details.append(
-                    f"{len(plan.unsafe)} symlink or non-regular path(s) cannot be deleted."
-                )
-            if plan.remote:
-                details.append(
-                    f"{len(plan.remote)} remote file reference(s) will be kept; "
-                    "this action deletes local files only."
-                )
-            if plan.missing:
-                details.append(f"{len(plan.missing)} referenced file(s) are already missing.")
-            groups = (
-                ("DELETE (local files)", plan.files),
-                ("KEEP (shared)", plan.shared),
-                ("KEEP (symlink or non-regular)", plan.unsafe),
-                ("MISSING", plan.missing),
-                ("KEEP (remote files)", plan.remote),
-            )
-            dialog.setDetailedText("\n\n".join(
-                f"{heading}:\n" + "\n".join(paths)
-                for heading, paths in groups if paths
-            ) or "No referenced files to delete.")
-        dialog.setInformativeText("\n\n".join(details))
-        dialog.setCheckBox(checkbox)
-        if dialog.exec() != QMessageBox.StandardButton.Yes:
+
+        dialog = DeleteRunRecordDialog(job, plan, view)
+        if dialog.exec() != dialog.DialogCode.Accepted:
             return
-        delete_files = checkbox.isChecked() and checkbox.isEnabled()
+        delete_files = dialog.delete_files
         kwargs = {"force": active}
         if delete_files:
-            kwargs.update(delete_files=True, expected_files=plan.files)
+            kwargs.update(
+                delete_files=True, expected_files=plan.files,
+                expected_file_snapshots=plan.snapshots,
+            )
         try:
             run_modal_task(
                 view,

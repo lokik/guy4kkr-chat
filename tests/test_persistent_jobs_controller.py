@@ -10,12 +10,13 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QCoreApplication, QEvent, Qt, pyqtSignal
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
 import guy4ase.gui.controllers.persistent_jobs as controller_module
 from guy4ase.gui.application.persistent_jobs import PersistentJob
 from guy4ase.gui.application.run_file_deletion import FileDeletionPlan
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
+from guy4ase.gui.dialogs.delete_run_record import DeleteRunRecordDialog
 from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
 
 
@@ -553,18 +554,17 @@ def test_unknown_run_can_be_forgotten_only_after_dangerous_confirmation(monkeypa
     controller.bind_view(view)
     monkeypatch.setattr(controller_module, "run_modal_task", lambda _view, fn, **_kwargs: fn())
     confirmations = []
-    from PyQt6.QtWidgets import QMessageBox
 
     def prompt(dialog):
-        confirmations.append(dialog.text() + dialog.informativeText())
-        assert not dialog.checkBox().isEnabled()
-        assert not dialog.checkBox().isChecked()
-        return QMessageBox.StandardButton.Yes
+        confirmations.extend(label.text() for label in dialog.findChildren(QLabel))
+        assert not dialog.delete_files_checkbox.isEnabled()
+        assert not dialog.delete_files_checkbox.isChecked()
+        return dialog.DialogCode.Accepted
 
-    monkeypatch.setattr(QMessageBox, "exec", prompt)
+    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt)
     view.forgetRequested.emit(job.id)
     assert calls == [(job.id, True)]
-    assert "may still be running" in confirmations[0]
+    assert any("might still be running" in item for item in confirmations)
     assert view.all_jobs == ()
 
 
@@ -588,15 +588,19 @@ def test_cancel_uses_native_backend_and_keeps_history(monkeypatch):
 
 def test_delete_files_requires_explicit_checkbox_and_displays_exclusions(monkeypatch, tmp_path):
     _app = QApplication.instance() or QApplication([])
-    from PyQt6.QtWidgets import QMessageBox
+    from datetime import datetime
+    import os
 
     job = _job("completed", state="finished")
     source = _Source((job,))
     source.supports_forget = True
-    file = str(tmp_path / "output.dos")
-    shared = str(tmp_path / "shared.pot")
+    file = tmp_path / "output.dos"
+    shared = tmp_path / "shared.pot"
+    file.write_text("output")
+    shared.write_text("shared")
+    os.utime(file, (1_700_000_000, 1_700_000_000))
     source.referenced_file_deletion = lambda _job_id: FileDeletionPlan(
-        (file,), (shared,), (), (), ("/remote/output.dos",),
+        (str(file),), (str(shared),), (), (), ("/remote/output.dos",),
     )
     calls = []
     source.forget = lambda job_id, **kwargs: calls.append((job_id, kwargs))
@@ -605,34 +609,51 @@ def test_delete_files_requires_explicit_checkbox_and_displays_exclusions(monkeyp
     controller.bind_view(view)
     monkeypatch.setattr(controller_module, "run_modal_task", lambda _view, fn, **_kwargs: fn())
 
-    def prompt_record_only(dialog):
-        assert not dialog.checkBox().isChecked()
-        assert dialog.checkBox().isEnabled()
-        assert file in dialog.informativeText()
-        assert shared in dialog.detailedText()
-        assert "remote" in dialog.informativeText()
-        return QMessageBox.StandardButton.Yes
+    def table_values(dialog):
+        tree = dialog.file_table
+        return [
+            tuple(tree.topLevelItem(i).text(col) for col in range(3))
+            for i in range(tree.topLevelItemCount())
+        ]
 
-    monkeypatch.setattr(QMessageBox, "exec", prompt_record_only)
+    def prompt_record_only(dialog):
+        assert not dialog.delete_files_checkbox.isChecked()
+        assert dialog.delete_files_checkbox.isEnabled()
+        rows = table_values(dialog)
+        assert len(rows) == 3
+        assert rows[0] == (
+            str(file), datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+            "Eligible — keep",
+        )
+        assert rows[1][0] == str(shared) and rows[1][2] == "Keep — shared"
+        assert rows[2] == ("/remote/output.dos", "— (remote)", "Keep — remote")
+        return dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt_record_only)
     view.forgetRequested.emit(job.id)
     assert calls == [(job.id, {"force": False})]
 
     def prompt_with_files(dialog):
-        assert not dialog.checkBox().isChecked()
-        dialog.checkBox().setChecked(True)
-        return QMessageBox.StandardButton.Yes
+        assert not dialog.delete_files_checkbox.isChecked()
+        dialog.delete_files_checkbox.setChecked(True)
+        assert table_values(dialog)[0][2] == "Delete permanently"
+        assert dialog.confirm_button.text() == "Delete run record and 1 file(s)"
+        return dialog.DialogCode.Accepted
 
-    monkeypatch.setattr(QMessageBox, "exec", prompt_with_files)
+    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt_with_files)
     view.forgetRequested.emit(job.id)
     assert calls[-1] == (
-        job.id, {"force": False, "delete_files": True, "expected_files": (file,)},
+        job.id, {
+            "force": False,
+            "delete_files": True,
+            "expected_files": (str(file),),
+            "expected_file_snapshots": (),
+        },
     )
 
 
 def test_deletion_dialog_cancel_has_no_effect(monkeypatch):
     _app = QApplication.instance() or QApplication([])
-    from PyQt6.QtWidgets import QMessageBox
-
     job = _job("finished", state="finished")
     source = _Source((job,))
     source.supports_forget = True
@@ -641,8 +662,42 @@ def test_deletion_dialog_cancel_has_no_effect(monkeypatch):
     view = _view()
     controller.bind_view(view)
     monkeypatch.setattr(
-        QMessageBox, "exec",
-        lambda _dialog: QMessageBox.StandardButton.Cancel,
+        DeleteRunRecordDialog, "exec",
+        lambda dialog: dialog.DialogCode.Rejected,
     )
     view.forgetRequested.emit(job.id)
     assert source.job(job.id) is job
+
+
+def test_deletion_dialog_lists_all_files_and_last_modified_dates(tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from datetime import datetime
+    import os
+
+    paths = tuple(tmp_path / f"result_{index:02d}.dos" for index in range(24))
+    for index, path in enumerate(paths):
+        path.write_text(f"result {index}")
+        os.utime(path, (1_700_000_000 + index * 60,) * 2)
+    plan = FileDeletionPlan(tuple(str(path) for path in paths), (), (), (), ())
+    dialog = DeleteRunRecordDialog(_job("complete", state="finished"), plan)
+    assert dialog.file_table.topLevelItemCount() == 24
+    assert not dialog.delete_files
+
+    first = dialog.file_table.topLevelItem(0)
+    last = dialog.file_table.topLevelItem(23)
+    assert first.text(0) == str(paths[0])
+    assert first.text(1) == datetime.fromtimestamp(
+        paths[0].stat().st_mtime
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    assert last.text(0) == str(paths[-1])
+    assert last.text(1) == datetime.fromtimestamp(
+        paths[-1].stat().st_mtime
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    dialog.delete_files_checkbox.setChecked(True)
+    assert dialog.delete_files
+    assert all(
+        dialog.file_table.topLevelItem(i).text(2) == "Delete permanently"
+        for i in range(24)
+    )
+    dialog.close()
