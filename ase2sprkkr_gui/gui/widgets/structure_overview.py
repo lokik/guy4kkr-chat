@@ -172,14 +172,33 @@ class StructureOverviewWidget(QWidget):
         add_button("Create Structure from Prototype Database", create_from_database).setIcon(
             QIcon(str(icon_path("database.svg")))
         )
-        add_button("Download Structure from Online Database", download_structure)
-        add_button("Load from File...", load_structure)
+        add_button("Download Structure from Online Database", download_structure).setIcon(
+            QIcon.fromTheme(
+                "download",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown),
+            )
+        )
+        add_button("Load from File...", load_structure).setIcon(
+            QIcon.fromTheme(
+                "document-open",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
+            )
+        )
         output_button = add_button("Load SPRKKR Output File...", load_output)
         output_button.setIcon(
             self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView)
         )
 
         self._recent_start_button = QToolButton(widget)
+        self._recent_start_button.setIcon(
+            QIcon.fromTheme(
+                "document-open-recent",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView),
+            )
+        )
+        self._recent_start_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
         self._recent_start_button.setMinimumHeight(45)
         self._recent_start_button.setStyleSheet("font-size: 11pt; padding: 8px;")
         self._recent_start_button.setPopupMode(
@@ -228,13 +247,13 @@ class StructureOverviewWidget(QWidget):
         quick_layout.setSpacing(8)
 
         save_button = QToolButton(quick_actions)
-        save_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        save_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         save_button.setDefaultAction(save_action)
         save_button.setMinimumWidth(150)
         quick_layout.addWidget(save_button)
 
         edit_button = QToolButton(quick_actions)
-        edit_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        edit_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         edit_button.setDefaultAction(edit_action)
         quick_layout.addWidget(edit_button)
         quick_layout.addStretch(1)

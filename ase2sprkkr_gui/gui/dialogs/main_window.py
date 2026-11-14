@@ -255,6 +255,9 @@ class MainWindow(QMainWindow):
             parent=splitter,
         )
         self._calculation_setup = self._expert_side_panel.calculation_setup
+        self._expert_side_panel.browser_panel.closeRequested.connect(
+            self.exitRequested.emit
+        )
 
         splitter.addWidget(self._structure_overview)
         splitter.addWidget(self._expert_side_panel)
@@ -293,7 +296,14 @@ class MainWindow(QMainWindow):
         load_action.triggered.connect(self.load_structure)
         structure_menu.addAction(load_action)
 
-        self.save_structure_action = QAction("&Save Structure...", self)
+        self.save_structure_action = QAction(
+            QIcon.fromTheme(
+                "document-save",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton),
+            ),
+            "&Save Structure...",
+            self,
+        )
         self.save_structure_action.triggered.connect(self._on_save_structure)
         structure_menu.addAction(self.save_structure_action)
         self._recent_menus["structure"] = structure_menu.addMenu("Open &Recent")
@@ -340,7 +350,14 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self._open_settings)
         tools_menu.addAction(settings_action)
 
-        self.edit_structure_action = QAction("&Edit the structure...", self)
+        self.edit_structure_action = QAction(
+            QIcon.fromTheme(
+                "document-edit",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView),
+            ),
+            "&Edit the structure...",
+            self,
+        )
         self.edit_structure_action.setShortcut("Ctrl+E")
         self.edit_structure_action.triggered.connect(self._on_assign_elements)
         structure_menu.addAction(self.edit_structure_action)

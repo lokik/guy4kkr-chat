@@ -154,9 +154,21 @@ class ResultActionsWidget(QWidget):
         layout.addWidget(self._selector)
         assignment_row = QHBoxLayout()
         self.select_all_button = QPushButton("Select all", self)
+        self.select_all_button.setIcon(
+            QIcon.fromTheme(
+                "edit-select-all",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton),
+            )
+        )
         self.select_all_button.clicked.connect(self._select_all_results)
         assignment_row.addWidget(self.select_all_button)
         self.assign_project_button = QPushButton("Assign to project…", self)
+        self.assign_project_button.setIcon(
+            QIcon.fromTheme(
+                "folder-move",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon),
+            )
+        )
         self.assign_project_button.clicked.connect(self._request_project_assignment)
         assignment_row.addWidget(self.assign_project_button)
         assignment_row.addStretch(1)
@@ -171,9 +183,21 @@ class ResultActionsWidget(QWidget):
         record_actions_layout = QHBoxLayout(self._record_actions)
         record_actions_layout.setContentsMargins(0, 0, 0, 0)
         self._use_state_button = QPushButton("Use this potential", self._record_actions)
+        self._use_state_button.setIcon(
+            QIcon.fromTheme(
+                "dialog-ok-apply",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton),
+            )
+        )
         self._use_state_button.clicked.connect(self._use_selected_state)
         record_actions_layout.addWidget(self._use_state_button)
         self._recompute_button = QPushButton("Recompute", self._record_actions)
+        self._recompute_button.setIcon(
+            QIcon.fromTheme(
+                "view-refresh",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload),
+            )
+        )
         self._recompute_button.clicked.connect(self._recompute_selected)
         record_actions_layout.addWidget(self._recompute_button)
         record_actions_layout.addStretch(1)

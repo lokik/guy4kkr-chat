@@ -7,8 +7,9 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase import Atoms
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QApplication, QMenu, QPushButton
+from PyQt6.QtWidgets import QApplication, QGroupBox, QMenu, QPushButton, QToolButton
 
 from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
 from ase2sprkkr_gui.gui.application.settings import ApplicationSettings
@@ -104,6 +105,13 @@ def test_calculation_setup_panel_renders_supplied_presentation():
     assert panel.input_preview_text == "TASK SCF"
     assert panel.save_input_enabled
     assert panel.potential_path_text == "/tmp/run/Fe.pot"
+    assert all(not button.icon().isNull() for button in panel.findChildren(QPushButton))
+    run_button = next(
+        button for button in panel.findChildren(QToolButton)
+        if button.defaultAction() is run_action
+    )
+    assert run_button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+    assert not run_button.icon().isNull()
     assert panel.findChild(BrowserPanel) is None
     assert panel.findChild(ResultActionsWidget) is None
     panel.close()
@@ -124,6 +132,24 @@ def test_expert_side_panel_composes_independent_views():
     assert panel.findChild(CalculationSetupPanel) is panel.calculation_setup
     assert panel.findChild(BrowserPanel) is panel.browser_panel
     assert panel.findChild(ResultActionsWidget) is panel.result_actions_widget
+    layout = panel.layout()
+    result_group = panel.result_actions_widget.parentWidget()
+    assert isinstance(result_group, QGroupBox)
+    assert layout.indexOf(result_group) < layout.indexOf(panel.browser_panel)
+    assert not isinstance(panel.browser_panel, QGroupBox)
+
+    events = []
+    panel.browser_panel.projectBrowserRequested.connect(
+        lambda: events.append("project")
+    )
+    panel.browser_panel.closeRequested.connect(lambda: events.append("close"))
+    panel.browser_panel.project_browser_button.click()
+    panel.browser_panel.close_button.click()
+    assert events == ["project", "close"]
+    assert not panel.browser_panel.project_browser_button.icon().isNull()
+    assert not panel.browser_panel.close_button.icon().isNull()
+    assert not panel.result_actions_widget.select_all_button.icon().isNull()
+    assert not panel.result_actions_widget.assign_project_button.icon().isNull()
     panel.close()
 
 
@@ -145,6 +171,10 @@ def test_main_window_wires_controller_state_to_child_presentations(tmp_path):
     assert setup is not None
     assert window.result_actions_widget is side_panel.result_actions_widget
     assert window.browser_panel is side_panel.browser_panel
+    exit_signals = []
+    window.exitRequested.connect(lambda: exit_signals.append(True))
+    window.browser_panel.close_button.click()
+    assert exit_signals == [True]
 
     controller.replace_structure(Atoms("Fe", cell=[2.0, 2.0, 2.0], pbc=True))
     parameters = InputParameters.create("scf")

@@ -37,9 +37,6 @@ class ExpertSidePanel(QWidget):
         )
         layout.addWidget(self.calculation_setup)
 
-        self.browser_panel = BrowserPanel(self)
-        layout.addWidget(self.browser_panel)
-
         result_group = QGroupBox("Calculation Result", self)
         result_layout = QVBoxLayout(result_group)
         self.result_actions_widget = ResultActionsWidget(
@@ -50,5 +47,8 @@ class ExpertSidePanel(QWidget):
         )
         result_layout.addWidget(self.result_actions_widget, 1)
         layout.addWidget(result_group, 1)
+
+        self.browser_panel = BrowserPanel(self)
+        layout.addWidget(self.browser_panel)
 
         self.setMaximumWidth(350)

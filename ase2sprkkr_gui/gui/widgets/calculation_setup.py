@@ -3,16 +3,19 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QMouseEvent
+from PyQt6.QtGui import QAction, QIcon, QMouseEvent
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
     QPushButton,
+    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
+
+from ase2sprkkr_gui.gui.misc.resources import icon_path
 
 
 class _InputPreview(QPlainTextEdit):
@@ -101,14 +104,32 @@ class CalculationSetupPanel(QWidget):
         layout.addWidget(label)
 
         self._create_input_btn = QPushButton("Create SPRKKR Input File...")
+        self._create_input_btn.setIcon(
+            QIcon.fromTheme(
+                "document-edit",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView),
+            )
+        )
         self._create_input_btn.clicked.connect(edit_input)
         layout.addWidget(self._create_input_btn)
 
         load_button = QPushButton("Load SPRKKR Input File...")
+        load_button.setIcon(
+            QIcon.fromTheme(
+                "document-open",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
+            )
+        )
         load_button.clicked.connect(load_input)
         layout.addWidget(load_button)
 
         self._save_input_btn = QPushButton("Save SPRKKR Input File...")
+        self._save_input_btn.setIcon(
+            QIcon.fromTheme(
+                "document-save",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton),
+            )
+        )
         self._save_input_btn.setEnabled(False)
         self._save_input_btn.clicked.connect(save_input)
         layout.addWidget(self._save_input_btn)
@@ -141,11 +162,23 @@ class CalculationSetupPanel(QWidget):
         potential_layout.addWidget(self._potential_path_label, 1)
         layout.addWidget(potential_row)
 
+        if run_calculation_action.icon().isNull():
+            run_calculation_action.setIcon(
+                QIcon.fromTheme(
+                    "system-run", QIcon(str(icon_path("system-run.svg")))
+                )
+            )
         run_button = QToolButton()
-        run_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         run_button.setDefaultAction(run_calculation_action)
+        run_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         layout.addWidget(run_button)
 
         load_output_button = QPushButton("Load SPRKKR Output File...")
+        load_output_button.setIcon(
+            QIcon.fromTheme(
+                "document-open",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
+            )
+        )
         load_output_button.clicked.connect(load_output)
         layout.addWidget(load_output_button)
