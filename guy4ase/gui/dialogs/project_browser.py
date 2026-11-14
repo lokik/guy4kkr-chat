@@ -391,7 +391,7 @@ class ProjectBrowserDialog(QWidget):
         if not Path(path).is_file():
             QMessageBox.warning(
                 self, "Imported Result Unavailable",
-                f"The associated output file no longer exists:\\n{path}",
+                f"The associated output file no longer exists:\n{path}",
             )
             return
         self.importedResultRequested.emit(str(path))
