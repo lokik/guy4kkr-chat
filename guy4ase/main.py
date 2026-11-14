@@ -31,6 +31,7 @@ from guy4ase.gui.dialogs.main_window import MainWindow
 from guy4ase.gui.dialogs.project_browser import ProjectBrowserDialog
 from guy4ase.gui.dialogs.run_calculation import SprkkrRunWindow
 from guy4ase.gui.dialogs.workflow_window import WorkflowWindow
+from guy4ase.gui.misc.icons import application_icon
 from guy4ase.gui.flows import calculation as calculation_flow
 from guy4ase.gui.flows import files as file_flows
 from guy4ase.gui.presenters.result_actions import ResultActionsPresenter
@@ -89,6 +90,7 @@ class GuiApplication(QObject):
         self._exit_approved = False
         app = QApplication.instance()
         if app is not None:
+            app.setWindowIcon(application_icon())
             app.aboutToQuit.connect(self._close_project_browser)
 
     @property
