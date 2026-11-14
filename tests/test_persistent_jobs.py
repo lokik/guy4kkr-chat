@@ -217,3 +217,67 @@ def test_source_cancel_and_forget_delegate_to_manager():
     source.forget(item.id, force=True)
     assert source.job(item.id) is None
     assert calls == [("cancel", item.id), ("forget", item.id, True)]
+
+
+def test_file_only_results_join_project_history_without_fake_run(tmp_path, monkeypatch):
+    from kkrunner.projects import ProjectRepository
+    from guy4ase.gui.application.imported_project_results import assign
+
+    projects = ProjectRepository(tmp_path / "projects")
+    first = projects.create("First")
+    second = projects.create("Second")
+    output = tmp_path / "old-calculation.out"
+    output.write_text("external calculation")
+    assert assign(
+        projects, [SimpleNamespace(output_path=output, output_version=None)], first.id
+    ) == 1
+
+    manager = SimpleNamespace(store=Store(record(RunState.FINISHED)))
+    source = PersistentJobSource(manager, projects=projects)
+    imported = next(job for job in source.jobs() if job.imported_path is not None)
+    assert imported.id.startswith("external:")
+    assert imported.dataset == "old-calculation.out"
+    assert imported.project_id == first.id
+    assert imported.state == "imported"
+    assert imported.is_final
+    assert imported.return_code is None
+    assert not imported.attachable
+    assert not imported.cancelable
+
+    expected_result = object()
+    monkeypatch.setattr(
+        module, "load_result_file",
+        lambda path: SimpleNamespace(result=expected_result),
+    )
+    assert source.load_result(imported.id) is expected_result
+
+    source.reassign_runs(
+        projects, (imported.id,), second.id,
+        expected_project_ids={imported.id: first.id},
+    )
+    assert source.job(imported.id).project_id == second.id
+
+    source.forget(imported.id)
+    assert source.job(imported.id) is None
+    assert output.exists()
+
+
+def test_missing_imported_file_remains_visible_for_removal(tmp_path):
+    from kkrunner.projects import ProjectRepository
+    from guy4ase.gui.application.imported_project_results import assign
+
+    projects = ProjectRepository(tmp_path / "projects")
+    project = projects.create("Project")
+    path = tmp_path / "missing.out"
+    path.write_text("temporary")
+    assign(projects, [SimpleNamespace(output_path=path, output_version=None)], project.id)
+    path.unlink()
+
+    source = PersistentJobSource(
+        SimpleNamespace(store=Store(record(RunState.FINISHED))), projects=projects,
+    )
+    imported = next(job for job in source.jobs() if job.imported_path is not None)
+    assert imported.result_files_state == "missing"
+    assert imported.is_final
+    source.forget(imported.id)
+    assert all(job.imported_path is None for job in source.jobs())
