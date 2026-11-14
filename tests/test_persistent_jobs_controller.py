@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import QApplication, QWidget
 
 import guy4ase.gui.controllers.persistent_jobs as controller_module
 from guy4ase.gui.application.persistent_jobs import PersistentJob
+from guy4ase.gui.application.run_file_deletion import FileDeletionPlan
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
 
@@ -66,6 +67,9 @@ class _Source:
 
     def job(self, job_id):
         return self._jobs.get(job_id)
+
+    def referenced_file_deletion(self, job_id):
+        return FileDeletionPlan((), (), (), (), ())
 
     def publish(self, job: PersistentJob) -> None:
         self._jobs[job.id] = job
@@ -549,11 +553,15 @@ def test_unknown_run_can_be_forgotten_only_after_dangerous_confirmation(monkeypa
     controller.bind_view(view)
     monkeypatch.setattr(controller_module, "run_modal_task", lambda _view, fn, **_kwargs: fn())
     confirmations = []
-    def prompt(*args, **kwargs):
-        confirmations.append(args[2])
-        return QMessageBox.StandardButton.Yes
     from PyQt6.QtWidgets import QMessageBox
-    monkeypatch.setattr(QMessageBox, "warning", prompt)
+
+    def prompt(dialog):
+        confirmations.append(dialog.text() + dialog.informativeText())
+        assert not dialog.checkBox().isEnabled()
+        assert not dialog.checkBox().isChecked()
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "exec", prompt)
     view.forgetRequested.emit(job.id)
     assert calls == [(job.id, True)]
     assert "may still be running" in confirmations[0]
@@ -576,3 +584,65 @@ def test_cancel_uses_native_backend_and_keeps_history(monkeypatch):
     view.cancelRequested.emit(job.id)
     assert calls == [job.id]
     assert view.all_jobs == (job,)
+
+
+def test_delete_files_requires_explicit_checkbox_and_displays_exclusions(monkeypatch, tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtWidgets import QMessageBox
+
+    job = _job("completed", state="finished")
+    source = _Source((job,))
+    source.supports_forget = True
+    file = str(tmp_path / "output.dos")
+    shared = str(tmp_path / "shared.pot")
+    source.referenced_file_deletion = lambda _job_id: FileDeletionPlan(
+        (file,), (shared,), (), (), ("/remote/output.dos",),
+    )
+    calls = []
+    source.forget = lambda job_id, **kwargs: calls.append((job_id, kwargs))
+    controller = PersistentJobsController(source)
+    view = _view()
+    controller.bind_view(view)
+    monkeypatch.setattr(controller_module, "run_modal_task", lambda _view, fn, **_kwargs: fn())
+
+    def prompt_record_only(dialog):
+        assert not dialog.checkBox().isChecked()
+        assert dialog.checkBox().isEnabled()
+        assert file in dialog.informativeText()
+        assert shared in dialog.detailedText()
+        assert "remote" in dialog.informativeText()
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "exec", prompt_record_only)
+    view.forgetRequested.emit(job.id)
+    assert calls == [(job.id, {"force": False})]
+
+    def prompt_with_files(dialog):
+        assert not dialog.checkBox().isChecked()
+        dialog.checkBox().setChecked(True)
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "exec", prompt_with_files)
+    view.forgetRequested.emit(job.id)
+    assert calls[-1] == (
+        job.id, {"force": False, "delete_files": True, "expected_files": (file,)},
+    )
+
+
+def test_deletion_dialog_cancel_has_no_effect(monkeypatch):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtWidgets import QMessageBox
+
+    job = _job("finished", state="finished")
+    source = _Source((job,))
+    source.supports_forget = True
+    source.forget = lambda *_args, **_kwargs: pytest.fail("must not forget")
+    controller = PersistentJobsController(source)
+    view = _view()
+    controller.bind_view(view)
+    monkeypatch.setattr(
+        QMessageBox, "exec",
+        lambda _dialog: QMessageBox.StandardButton.Cancel,
+    )
+    view.forgetRequested.emit(job.id)
+    assert source.job(job.id) is job

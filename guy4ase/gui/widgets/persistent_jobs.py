@@ -714,12 +714,12 @@ class PersistentJobsWidget(QWidget):
         if job.imported_path is not None:
             self.forget_button.setText("Remove result reference…")
             self.forget_button.setToolTip(
-                "Remove this project reference without deleting the external output file."
+                "Remove this project reference. Optionally delete its external output file after review."
             )
         else:
             self.forget_button.setText("Delete run record…")
             self.forget_button.setToolTip(
-                "Remove only this calculation's history entry; keep the process and output files."
+                "Remove this calculation's history entry; optionally delete reviewed local input/output files. The process is never stopped."
             )
         self.reattach_notice.setText(reason or "")
         self.reattach_notice.setVisible(not job.is_final and bool(reason))

@@ -8,7 +8,7 @@ from typing import Any
 from weakref import ReferenceType, ref
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QCheckBox, QMessageBox
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 from guy4ase.gui.application.result_cache import ResultLRU
@@ -459,44 +459,105 @@ class PersistentJobsController(QObject):
             QMessageBox.warning(view, "Cancellation Failed", str(exc))
 
     def _forget_requested(self, view: PersistentJobsWidget, job_id: str) -> None:
-        """Allow removal of unresolved history without claiming its job ended."""
+        """Confirm record removal and optionally review all local file deletions."""
         job = self._source.job(job_id)
         if job is None or not self._source.supports_forget:
             return
         active = not job.is_final
+        imported = job.imported_path is not None
         warning = (
             "WARNING: The process may still be running. Removing its record "
             "will NOT stop it, even if its status is Unknown.\n\n"
             if active else ""
         )
-        imported = job.imported_path is not None
         question = (
-            f"Remove the reference to {job.imported_path} from the project?\n\n"
-            "The external file will NOT be deleted."
+            f"Remove the reference to {job.imported_path} from the project?"
             if imported else (
                 f"{warning}Permanently remove the saved run record for "
-                f"{job.dataset or job.id} ({job.id})?\n\n"
-                "This removes the history entry only. Calculation output files "
-                "and result files will NOT be deleted."
+                f"{job.dataset or job.id} ({job.id})?"
             )
         )
-        answer = QMessageBox.warning(
-            view,
-            "Remove imported result?" if imported else "Dangerous: delete calculation history?",
-            question,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+        dialog = QMessageBox(view)
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle(
+            "Remove imported result?" if imported
+            else "Dangerous: delete calculation history?"
         )
-        if answer != QMessageBox.StandardButton.Yes:
+        dialog.setText(question)
+        dialog.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+        )
+        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+
+        checkbox = QCheckBox("Also permanently delete referenced local files", dialog)
+        checkbox.setChecked(False)
+        plan = None
+        details = ["By default, only the reference or run record is removed. Files stay."]
+        if active:
+            checkbox.setEnabled(False)
+            details.append(
+                "Files cannot be deleted while the calculation is active or its "
+                "status is unknown. The process will not be stopped."
+            )
+        else:
+            try:
+                plan = self._source.referenced_file_deletion(job_id)
+            except (OSError, RuntimeError, ValueError, KeyError) as exc:
+                QMessageBox.warning(view, "Cannot Review Referenced Files", str(exc))
+                return
+            checkbox.setEnabled(bool(plan.files))
+            details.append(f"Eligible local files: {len(plan.files)}.")
+            if plan.files:
+                shown = plan.files[:3]
+                details.append("Files that would be deleted:\n" + "\n".join(shown))
+                if len(plan.files) > len(shown):
+                    details.append("See Show Details for the complete list.")
+            if plan.shared:
+                details.append(
+                    f"{len(plan.shared)} shared file(s) will be kept because other "
+                    "run records or imported results still reference them."
+                )
+            if plan.unsafe:
+                details.append(
+                    f"{len(plan.unsafe)} symlink or non-regular path(s) cannot be deleted."
+                )
+            if plan.remote:
+                details.append(
+                    f"{len(plan.remote)} remote file reference(s) will be kept; "
+                    "this action deletes local files only."
+                )
+            if plan.missing:
+                details.append(f"{len(plan.missing)} referenced file(s) are already missing.")
+            groups = (
+                ("DELETE (local files)", plan.files),
+                ("KEEP (shared)", plan.shared),
+                ("KEEP (symlink or non-regular)", plan.unsafe),
+                ("MISSING", plan.missing),
+                ("KEEP (remote files)", plan.remote),
+            )
+            dialog.setDetailedText("\n\n".join(
+                f"{heading}:\n" + "\n".join(paths)
+                for heading, paths in groups if paths
+            ) or "No referenced files to delete.")
+        dialog.setInformativeText("\n\n".join(details))
+        dialog.setCheckBox(checkbox)
+        if dialog.exec() != QMessageBox.StandardButton.Yes:
             return
+        delete_files = checkbox.isChecked() and checkbox.isEnabled()
+        kwargs = {"force": active}
+        if delete_files:
+            kwargs.update(delete_files=True, expected_files=plan.files)
         try:
             run_modal_task(
                 view,
-                lambda: self._source.forget(job_id, force=active),
+                lambda: self._source.forget(job_id, **kwargs),
                 title="Removing Calculation Record",
-                label="Removing saved calculation history…",
+                label=(
+                    "Removing referenced local files and saved calculation history…"
+                    if delete_files else "Removing saved calculation history…"
+                ),
             )
-        except Exception as exc:  # noqa: BLE001 - persistent storage boundary
+        except Exception as exc:  # noqa: BLE001 - filesystem/persistent storage boundary
             QMessageBox.warning(view, "Delete Run Record Failed", str(exc))
 
     @staticmethod
