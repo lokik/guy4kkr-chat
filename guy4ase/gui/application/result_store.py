@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from kkrunner.files import FileState, FileVersion
+from ase2sprkkr.outputs.task_result import TaskResult
 from guy4ase.gui.application.potential_version import PotentialFileVersion
 from guy4ase.gui.application.result_contract import ResultCapabilities
 from guy4ase.gui.application.result_files import capture_result_files
@@ -113,6 +114,7 @@ class ResultRecord:
     output_version: FileVersion | None = None
     potential_path: Path | None = None
     imported: bool = False
+    file_manifest: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -575,6 +577,10 @@ class ResultStore:
         imported: bool,
     ) -> ResultRecord:
         """Snapshot one result record completely before anything is committed."""
+        result_files = capture_result_files(result)
+        output_version = (
+            FileVersion.capture(output_path) if output_path is not None else None
+        )
         return ResultRecord(
             id=self._next_result_id,
             result=result,
@@ -584,15 +590,21 @@ class ResultStore:
             output_state_id=output_state_id,
             input_parameters=_snapshot_input_parameters(input_parameters),
             directory=directory,
-            result_files=capture_result_files(result),
+            result_files=result_files,
             persistent_ref=persistent_ref,
             restart_scf=restart_scf,
             output_path=output_path,
-            output_version=(
-                FileVersion.capture(output_path) if output_path is not None else None
-            ),
+            output_version=output_version,
             potential_path=potential_path,
             imported=imported,
+            file_manifest=(
+                result.to_file_manifest(
+                    output_path=output_path, potential_path=potential_path,
+                    result_files=result_files, output_version=output_version,
+                )
+                if imported and output_path is not None and isinstance(result, TaskResult)
+                else None
+            ),
         )
 
     def add_result(

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
@@ -21,7 +21,7 @@ from ase2sprkkr.sprkkr.projects import (
     project_execution_manager,
 )
 from guy4ase.gui.application.imported_project_results import (
-    assignments, reference_id, reassign_references, remove_reference,
+    assignments, references, reference_id, reassign_references, remove_reference,
 )
 from guy4ase.gui.application.result_loading import load_result_file
 from guy4ase.gui.application.run_file_deletion import (
@@ -200,7 +200,7 @@ class PersistentJob:
 
     @classmethod
     def from_external_reference(
-        cls, key: str, project_id: str | None,
+        cls, key: str, project_id: str | None, *, task: str | None = None,
     ) -> "PersistentJob":
         """Project-visible result backed by a file, not a fabricated run."""
         path = Path(key.split("::", 1)[0])
@@ -213,7 +213,7 @@ class PersistentJob:
             files_state = "missing"
         return cls(
             id=reference_id(key), state="imported", created_at=timestamp,
-            updated_at=timestamp, task="—", directory=str(path.parent),
+            updated_at=timestamp, task=task or "—", directory=str(path.parent),
             dataset=path.name, target="External file", return_code=None,
             message=(
                 "Imported output: original execution status and settings are unknown. "
@@ -360,8 +360,10 @@ class PersistentJobSource:
             if "ase2sprkkr" in record.metadata
         }
         if self._projects is not None:
-            for key, project_id in assignments(self._projects).items():
-                imported = PersistentJob.from_external_reference(key, project_id)
+            for key, ref in references(self._projects).items():
+                imported = PersistentJob.from_external_reference(
+                    key, ref.project_id, task=ref.task,
+                )
                 loaded[imported.id] = imported
         with self._lock:
             previous = self._jobs
@@ -430,7 +432,14 @@ class PersistentJobSource:
             current = self.job(str(job_id))
             if current is None:
                 raise FileNotFoundError(job_id)
-            return current
+            ref = references(self._projects)[current.imported_key]
+            state = _value(ref.files.state) if ref.files is not None else current.result_files_state
+            checked = replace(
+                current, result_files_state=state, result_files_verified=True,
+            )
+            if self._replace_cached_job(checked):
+                self._notify(checked.id)
+            return checked
         if not self.supports_result_file_check:
             raise NotImplementedError(
                 "This ASE2SPRKKR version cannot verify persistent result files."
@@ -493,12 +502,16 @@ class PersistentJobSource:
             raise RuntimeError("Files of active or unknown calculations cannot be deleted")
 
         runs = tuple(self._manager.store.runs())
-        imported = assignments(self._projects) if self._projects is not None else {}
+        imported = references(self._projects) if self._projects is not None else {}
         remote: tuple[str, ...] = ()
         if job.imported_path is not None:
             if job.imported_key not in imported:
                 raise RuntimeError("The imported result reference has changed; refresh first")
-            candidates = (job.imported_path,)
+            manifest = imported[job.imported_key].files
+            candidates = (
+                referenced_local_paths(manifest, str(Path(job.imported_path).parent))
+                if manifest is not None else (job.imported_path,)
+            )
             ignored_key = job.imported_key
             ignored_run_id = None
         else:
@@ -521,10 +534,14 @@ class PersistentJobSource:
                 record.files, str(record.execution.directory.local)
             )
         ]
-        other_paths.extend(
-            key.split("::", 1)[0]
-            for key in imported if key != ignored_key
-        )
+        for key, ref in imported.items():
+            if key == ignored_key:
+                continue
+            path = key.split("::", 1)[0]
+            other_paths.extend(
+                referenced_local_paths(ref.files, str(Path(path).parent))
+                if ref.files is not None else (path,)
+            )
         return plan_file_deletion(
             candidates, other_references=other_paths, remote_references=remote,
         )
