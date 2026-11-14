@@ -200,9 +200,16 @@ class GuiApplication(QObject):
 
     def _assign_results_to_project(self, result_ids, parent: QWidget) -> None:
         from guy4ase.gui.dialogs.assign_results import assign_results_to_project
-        assign_results_to_project(
+        if assign_results_to_project(
             self.projects, self.controller.result_store, result_ids, parent
-        )
+        ) and self._project_browser is not None:
+            self._project_browser.reload_projects()
+
+    def _open_imported_result(self, path: str) -> None:
+        """Reopen an assigned external file through the normal result workflow."""
+        parent = self._project_browser or QApplication.activeWindow()
+        if file_flows.load_output(self.controller, self.recent_files, path, parent):
+            self._show_loaded_result()
 
     def _adopt_persistent_result(
         self,
@@ -263,7 +270,7 @@ class GuiApplication(QObject):
         """Show and activate the expert view, creating it lazily."""
         self._show_window(self.create_main_window())
 
-    def _show_loaded_result(self, _job_id: str) -> None:
+    def _show_loaded_result(self, _job_id: str | None = None) -> None:
         """Bring the selected result into the primary workspace view."""
         if self._main_window is not None and self._main_window.isVisible():
             self._show_window(self._main_window)
@@ -279,6 +286,7 @@ class GuiApplication(QObject):
                 active_project_id=self.controller.active_project_id,
             )
             dialog.activeProjectRequested.connect(self.set_active_project)
+            dialog.importedResultRequested.connect(self._open_imported_result)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             dialog.destroyed.connect(self._project_browser_closed)
             self._project_browser = dialog
