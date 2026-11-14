@@ -291,7 +291,8 @@ def test_project_browser_separates_bulk_actions_from_single_result_detail(tmp_pa
     assert browser.jobs.result_widget.assign_project_button.isHidden()
     assert browser.jobs.select_all_jobs_button.isVisible()
     assert browser.jobs.move_jobs_button.isVisible()
-    assert browser.imported_group.isHidden()
+    assert not hasattr(browser, "imported_group")
+    assert browser.add_result_button.isVisible()
     assert browser.jobs.load_result_button.text() == "Load result"
     assert browser.jobs.refresh_result_button.text() == "Refresh result"
     browser.close()
@@ -416,4 +417,24 @@ def test_project_browser_displays_historical_execution_profile(tmp_path):
         for row in (group.child(i) for i in range(group.childCount()))
     }
     assert displayed == {"First": "remote-cluster", "Old": "—"}
+    browser.close()
+
+
+def test_project_browser_can_request_file_import_for_selected_project(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Project")
+    browser = _dialog(repository, _JobSource(()))
+    browser.show()
+    app.processEvents()
+
+    requested = []
+    browser.addResultRequested.connect(requested.append)
+    assert browser.add_result_button.isEnabled()
+    browser.add_result_button.click()
+    assert requested == [project.id]
+
+    browser.project_tree.clearSelection()
+    browser.project_tree.setCurrentItem(None)
+    assert not browser.add_result_button.isEnabled()
     browser.close()
