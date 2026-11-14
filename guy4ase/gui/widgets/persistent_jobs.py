@@ -54,12 +54,22 @@ def _started_date(job: PersistentJob) -> str:
 
 
 def _finished_date(job: PersistentJob) -> str:
-    if job.imported_path is not None:
-        return "Not recorded"
     if job.finished_at is None:
-        return "Not finished"
+        return "Not recorded" if job.imported_path is not None else "Not finished"
     parsed = _local_datetime(job.finished_at)
     return parsed.strftime("%Y-%m-%d") if parsed is not None else "Unknown date"
+
+
+def _finished_tooltip(job: PersistentJob) -> str:
+    """Imported results have a file timestamp, not a recorded process end."""
+    if job.imported_path is None:
+        return ""
+    if job.finished_at is None:
+        return "The output file is missing; its modification time is unavailable."
+    return (
+        "Estimated from the output file's last modification time; "
+        "the actual calculation finish time was not recorded."
+    )
 
 
 def _status_label(state: str) -> str:
@@ -462,6 +472,7 @@ class PersistentJobsWidget(QWidget):
                 )
                 item.setData(0, _JOB_ID_ROLE, job.id)
                 item.setToolTip(0, job.id)
+                item.setToolTip(3, _finished_tooltip(job))
                 group.addChild(item)
                 if job.id == selected:
                     selected_item = item
@@ -556,6 +567,7 @@ class PersistentJobsWidget(QWidget):
             _timestamp_label(None if job.imported_path else job.started_at)
         )
         self.finished_value.setText(_timestamp_label(job.finished_at))
+        self.finished_value.setToolTip(_finished_tooltip(job))
         self.updated_value.setText(_timestamp_label(job.updated_at))
         self.return_code_value.setText(
             "—" if job.return_code is None else str(job.return_code)

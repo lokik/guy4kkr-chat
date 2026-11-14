@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime, timezone
+import os
 from types import SimpleNamespace
 import pytest
 from kkrunner.runs import RunState, FailurePhase, ExecutionMetadata, WorkingDirectory
@@ -228,6 +230,8 @@ def test_file_only_results_join_project_history_without_fake_run(tmp_path, monke
     second = projects.create("Second")
     output = tmp_path / "old-calculation.out"
     output.write_text("external calculation")
+    finished = datetime(2025, 7, 18, 13, 42, 25, tzinfo=timezone.utc)
+    os.utime(output, (finished.timestamp(), finished.timestamp()))
     assert assign(
         projects, [SimpleNamespace(output_path=output, output_version=None)], first.id
     ) == 1
@@ -239,6 +243,8 @@ def test_file_only_results_join_project_history_without_fake_run(tmp_path, monke
     assert imported.dataset == "old-calculation.out"
     assert imported.project_id == first.id
     assert imported.state == "imported"
+    assert imported.finished_at == finished.isoformat()
+    assert imported.created_at == finished.isoformat()
     assert imported.is_final
     assert imported.return_code is None
     assert not imported.attachable
@@ -278,6 +284,7 @@ def test_missing_imported_file_remains_visible_for_removal(tmp_path):
     )
     imported = next(job for job in source.jobs() if job.imported_path is not None)
     assert imported.result_files_state == "missing"
+    assert imported.finished_at is None
     assert imported.is_final
     source.forget(imported.id)
     assert all(job.imported_path is None for job in source.jobs())

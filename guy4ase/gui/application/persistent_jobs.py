@@ -211,7 +211,11 @@ class PersistentJob:
             id=reference_id(key), state="imported", created_at=timestamp,
             updated_at=timestamp, task="—", directory=str(path.parent),
             dataset=path.name, target="External file", return_code=None,
-            message="Imported output: original execution status and settings are unknown.",
+            message=(
+                "Imported output: original execution status and settings are unknown. "
+                "Finish time is estimated from the file's last modification time."
+            ),
+            finished_at=timestamp if files_state == "current" else None,
             result_files_state=files_state,
             result_files_verified=True,
             project_id=project_id,
