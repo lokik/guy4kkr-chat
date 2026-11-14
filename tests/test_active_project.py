@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -65,12 +66,18 @@ def test_active_project_is_explicit_not_current_browser_selection(tmp_path):
     second = repository.create("Second")
     source = _JobSource()
     dialog = ProjectBrowserDialog(repository, PersistentJobsController(source))
+    dialog.show()
+    deadline = time.monotonic() + 5
+    while not dialog._initial_load_complete and time.monotonic() < deadline:
+        _application.processEvents()
+        time.sleep(0.002)
+    assert dialog._initial_load_complete
     requested = []
     dialog.activeProjectRequested.connect(requested.append)
 
     dialog.set_active_project(first.id)
     assert dialog.active_project_id == first.id
-    assert dialog.active_project_label.text() == "Active project: First"
+    assert dialog.active_project_label.text() == "First"
 
     # Browsing another project does not silently change calculation ownership.
     second_item = dialog.project_tree.topLevelItem(1)

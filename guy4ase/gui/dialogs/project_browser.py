@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 
-from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QIcon, QPaintEvent
 from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
@@ -37,6 +38,7 @@ _UNASSIGNED = "__unassigned__"
 
 class _RepositorySignals(QObject):
     changed = pyqtSignal(str)
+    initialLoaded = pyqtSignal(object)
 
 
 class ProjectBrowserDialog(QWidget):
@@ -56,6 +58,9 @@ class ProjectBrowserDialog(QWidget):
         super().__init__(parent, Qt.WindowType.Window)
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.setWindowTitle("Project Browser")
+        # Paint the native window with its palette rather than exposing an
+        # uninitialized surface while the first project snapshot is loading.
+        self.setAutoFillBackground(True)
         manage_window_geometry(
             self,
             "project-browser",
@@ -67,9 +72,30 @@ class ProjectBrowserDialog(QWidget):
         self._projects_by_id: dict[str, Project] = {}
         self._selected_project_id: str | None = None
         self._active_project_id = active_project_id
+        self._initial_load_complete = False
+        self._initial_paint_seen = False
+        self._initial_load_timer = QTimer(self)
+        self._initial_load_timer.setSingleShot(True)
+        # Allow the compositor to present the placeholder before doing any
+        # potentially expensive initial tree projection on the GUI thread.
+        self._initial_load_timer.setInterval(50)
+        self._initial_load_timer.timeout.connect(self._start_initial_load)
+        self._initial_load_pending = False
+        self._initial_future: Future[tuple[Project, ...]] | None = None
+        self._project_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="guy4ase-project-browser"
+        )
+        self.destroyed.connect(
+            lambda *_args, pool=self._project_executor: pool.shutdown(
+                wait=False, cancel_futures=True
+            )
+        )
 
         self._repository_signals = _RepositorySignals(self)
         self._repository_signals.changed.connect(self._repository_changed)
+        self._repository_signals.initialLoaded.connect(
+            self._initial_projects_loaded, Qt.ConnectionType.QueuedConnection
+        )
         self._unsubscribe_projects = self._repository.subscribe(
             self._repository_signals.changed.emit
         )
@@ -78,7 +104,7 @@ class ProjectBrowserDialog(QWidget):
         root = QVBoxLayout(self)
         self.project_notice = QLabel(self)
         self.project_notice.setWordWrap(True)
-        self.project_notice.hide()
+        self.project_notice.setText("Loading projects and saved calculations…")
         root.addWidget(self.project_notice)
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -103,6 +129,8 @@ class ProjectBrowserDialog(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.project_tree.currentItemChanged.connect(self._project_selection_changed)
+        self.project_tree.addTopLevelItem(QTreeWidgetItem(["Loading projects…", ""]))
+        self.project_tree.setEnabled(False)
 
         self.jobs = PersistentJobsWidget(
             lambda value, action: execute_value_action(value, action, self),
@@ -110,7 +138,9 @@ class ProjectBrowserDialog(QWidget):
             auto_load_results=True,
             show_project_actions=True,
         )
-        self._persistent_jobs_controller.bind_view(self.jobs)
+        self.jobs.backend_notice.setText("Loading saved calculations…")
+        self.jobs.backend_notice.show()
+        self.jobs.tree.setEnabled(False)
         self.jobs.set_project_assignment_available(
             self._persistent_jobs_controller.supports_reassignment
         )
@@ -213,7 +243,14 @@ class ProjectBrowserDialog(QWidget):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([420, 980])
 
-        self.reload_projects()
+        self._refresh_action_availability()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """Start initialization only after Qt has painted the loading placeholder."""
+        super().paintEvent(event)
+        if not self._initial_paint_seen and not self._initial_load_complete:
+            self._initial_paint_seen = True
+            self._initial_load_timer.start()
 
     @property
     def active_project_id(self) -> str | None:
@@ -221,18 +258,83 @@ class ProjectBrowserDialog(QWidget):
 
     def set_active_project(self, project_id: str | None) -> None:
         """Render the application-owned active project selection."""
-        if project_id is not None and project_id not in self._projects_by_id:
+        if (
+            self._initial_load_complete
+            and project_id is not None
+            and project_id not in self._projects_by_id
+        ):
             project_id = None
         self._active_project_id = project_id
         project = self._projects_by_id.get(project_id) if project_id is not None else None
         self.active_project_label.setText(
-            "(none)" if project is None else project.name
+            "Loading…" if not self._initial_load_complete
+            else "(none)" if project is None else project.name
         )
         self.active_project_label.setToolTip("" if project is None else project.id)
         self._refresh_action_availability()
 
+    def _start_initial_load(self) -> None:
+        """Read the project repository off-thread; Qt widgets stay on the GUI thread."""
+        if self._initial_load_complete or self._initial_future is not None:
+            return
+        if not self.isVisible():
+            # The browser may have been closed before its first load began.
+            # A subsequent show/paint will restart the timer.
+            self._initial_paint_seen = False
+            return
+        future = self._project_executor.submit(self._repository.projects)
+        self._initial_future = future
+        signals = self._repository_signals
+
+        def notify(completed: Future[tuple[Project, ...]]) -> None:
+            try:
+                signals.initialLoaded.emit(completed)
+            except RuntimeError:
+                # The window can be deleted while its filesystem read is running.
+                pass
+
+        future.add_done_callback(notify)
+
+    @pyqtSlot(object)
+    def _initial_projects_loaded(self, future: Future[tuple[Project, ...]]) -> None:
+        if future is not self._initial_future:
+            return
+        self._initial_future = None
+        if self._initial_load_pending:
+            # A project changed during the read: take a fresh snapshot instead.
+            self._initial_load_pending = False
+            self._start_initial_load()
+            return
+
+        self._initial_load_complete = True
+        self.project_tree.setEnabled(True)
+        self.jobs.tree.setEnabled(True)
+        try:
+            projects = tuple(future.result())
+        except (ProjectRepositoryError, OSError, ValueError) as exc:
+            error = str(exc)
+            self._projects = ()
+            self._projects_by_id = {}
+        else:
+            error = None
+            self._remember_projects(projects)
+
+        # Binding projects the cached jobs into Qt widgets and triggers the
+        # initial tree projection. Result parsing is already asynchronous.
+        self._persistent_jobs_controller.bind_view(self.jobs)
+        if error is not None:
+            self.project_notice.setText(f"Project repository unavailable: {error}")
+            self.project_notice.show()
+        else:
+            self.project_notice.hide()
+        self.set_active_project(self._active_project_id)
+        self._refresh_action_availability()
+
     @pyqtSlot(str)
     def _repository_changed(self, _project_id: str) -> None:
+        if not self._initial_load_complete:
+            self._initial_load_pending = True
+            return
         self.reload_projects()
 
     def _refresh_projects(self) -> None:
@@ -245,6 +347,9 @@ class ProjectBrowserDialog(QWidget):
 
     def reload_projects(self) -> None:
         """Reload project JSONs, preserving selection when possible."""
+        if not self._initial_load_complete:
+            self._initial_load_pending = True
+            return
         try:
             projects = tuple(self._repository.projects())
         except (ProjectRepositoryError, OSError, ValueError) as exc:
@@ -258,6 +363,11 @@ class ProjectBrowserDialog(QWidget):
             self._refresh_action_availability()
             return
 
+        self._remember_projects(projects)
+        self._refresh_project_projection()
+        self.set_active_project(self._active_project_id)
+
+    def _remember_projects(self, projects: tuple[Project, ...]) -> None:
         self._projects = projects
         self._projects_by_id = {project.id: project for project in projects}
         if (
@@ -266,8 +376,6 @@ class ProjectBrowserDialog(QWidget):
         ):
             self._active_project_id = None
             self.activeProjectRequested.emit(None)
-        self._refresh_project_projection()
-        self.set_active_project(self._active_project_id)
 
     def _refresh_project_projection(self) -> None:
         self._populate_project_tree()
@@ -405,7 +513,10 @@ class ProjectBrowserDialog(QWidget):
             self.activeProjectRequested.emit(project.id)
 
     def _refresh_action_availability(self) -> None:
-        project = self._selected_project()
+        ready = self._initial_load_complete
+        project = self._selected_project() if ready else None
+        self.new_project_button.setEnabled(ready)
+        self.refresh_projects_button.setEnabled(ready)
         self.edit_project_button.setEnabled(project is not None)
         self.move_project_button.setEnabled(project is not None)
         self.jobs.set_add_result_available(project is not None)

@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 import os
+import time
+from threading import Event
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPoint, Qt
+from PyQt6.QtCore import QPoint, Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QSizePolicy, QTreeWidgetItem, QWidget
 from kkrunner.projects import ProjectRepository, ProjectRepositoryError
 
@@ -71,8 +73,30 @@ class _JobSource:
         return self.job(job_id)
 
 
+def _await_initial_load(dialog: ProjectBrowserDialog) -> None:
+    app = QApplication.instance()
+    deadline = time.monotonic() + 5
+    while not dialog._initial_load_complete and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.002)
+    assert dialog._initial_load_complete, "Project Browser did not finish loading"
+    app.processEvents()
+
+
 def _dialog(repository, source):
-    return ProjectBrowserDialog(repository, PersistentJobsController(source))
+    dialog = ProjectBrowserDialog(repository, PersistentJobsController(source))
+    dialog.show()
+    _await_initial_load(dialog)
+    return dialog
+
+
+def _await_background_start(started: Event) -> None:
+    app = QApplication.instance()
+    deadline = time.monotonic() + 5
+    while not started.is_set() and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.002)
+    assert started.is_set(), "Background loading did not begin after the first paint"
 
 
 def _find_project_item(dialog: ProjectBrowserDialog, label: str) -> QTreeWidgetItem:
@@ -86,6 +110,87 @@ def _find_project_item(dialog: ProjectBrowserDialog, label: str) -> QTreeWidgetI
             return item
         pending.extend(item.child(index) for index in range(item.childCount()))
     raise AssertionError(f"Project {label!r} not found")
+
+
+def test_project_browser_paints_loading_state_before_repository_read_finishes(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    started = Event()
+    release = Event()
+    events = []
+
+    class SlowProjects(ProjectRepository):
+        def projects(self):
+            events.append("repository read")
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError("Timed out waiting for the test to release loading")
+            return super().projects()
+
+    class RecordingBrowser(ProjectBrowserDialog):
+        def paintEvent(self, event):
+            events.append("window painted")
+            super().paintEvent(event)
+
+    repository = SlowProjects(tmp_path / "projects")
+    project = repository.create("Project")
+    browser = RecordingBrowser(
+        repository,
+        PersistentJobsController(_JobSource((_job("run", dataset="Result", project_id=project.id),))),
+    )
+    assert browser.project_tree.topLevelItem(0).text(0) == "Loading projects…"
+    assert browser.jobs.backend_notice.text() == "Loading saved calculations…"
+    assert not events  # Creation itself must not attempt to paint or read files.
+    app.processEvents()
+    assert not events  # An unshown window must not start I/O.
+    browser.show()
+    try:
+        _await_background_start(started)
+        assert events.index("window painted") < events.index("repository read")
+        assert not browser._initial_load_complete
+        assert browser.isVisible()
+        assert not browser.project_tree.isEnabled()
+        assert browser.project_notice.isVisible()
+        # The GUI thread must still dispatch events while filesystem I/O waits.
+        dispatched = []
+        QTimer.singleShot(0, lambda: dispatched.append(True))
+        app.processEvents()
+        assert dispatched
+    finally:
+        release.set()
+
+    _await_initial_load(browser)
+    assert browser.project_tree.isEnabled()
+    assert not browser.project_notice.isVisible()
+    assert _find_project_item(browser, "Project").text(1) == "1"
+    assert [job.id for job in browser.jobs.visible_jobs] == ["run"]
+    browser.close()
+
+
+def test_project_browser_reloads_changes_during_initial_load(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    started = Event()
+    release = Event()
+
+    class SlowProjects(ProjectRepository):
+        def projects(self):
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError("Timed out waiting for the test to release loading")
+            return super().projects()
+
+    repository = SlowProjects(tmp_path / "projects")
+    repository.create("First")
+    browser = ProjectBrowserDialog(repository, PersistentJobsController(_JobSource(())))
+    browser.show()
+    try:
+        _await_background_start(started)
+        repository.create("Second")
+    finally:
+        release.set()
+    _await_initial_load(browser)
+    assert _find_project_item(browser, "First")
+    assert _find_project_item(browser, "Second")
+    browser.close()
 
 
 def test_project_browser_uses_parent_hierarchy_and_direct_run_membership(tmp_path):
