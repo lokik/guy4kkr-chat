@@ -11,3 +11,8 @@ def settings_icon() -> QIcon:
     return QIcon.fromTheme(
         "preferences-system", QIcon(str(icon_path("settings-cog.svg")))
     )
+
+
+def application_icon() -> QIcon:
+    """Load the packaged SPR-KKR icon for the application's top-level windows."""
+    return QIcon(str(icon_path("sprkkr.svg")))
