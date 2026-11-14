@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from guy4ase.gui.application.attached_run_execution import AttachedRunExecution
-from guy4ase.gui.application.execution_cancellation import ExecutionCancelled
+from ase2sprkkr_gui.gui.application.attached_run_execution import AttachedRunExecution
+from ase2sprkkr_gui.gui.application.execution_cancellation import ExecutionCancelled
 
 
 class _Cancellation:

@@ -11,11 +11,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from guy4ase.gui.application import viewers
-from guy4ase.gui.application.settings import ApplicationSettings
-from guy4ase.gui.dialogs import settings as settings_dialog
-from guy4ase.gui.flows import visualization
-from guy4ase.gui.widgets.settings import general as general_settings
+from ase2sprkkr_gui.gui.application import viewers
+from ase2sprkkr_gui.gui.application.settings import ApplicationSettings
+from ase2sprkkr_gui.gui.dialogs import settings as settings_dialog
+from ase2sprkkr_gui.gui.flows import visualization
+from ase2sprkkr_gui.gui.widgets.settings import general as general_settings
 
 
 def _app():

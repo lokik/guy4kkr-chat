@@ -6,7 +6,7 @@ from PyQt6 import sip
 from PyQt6.QtCore import QCoreApplication, QEvent
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.dialogs.expert_input import InputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.expert_input import InputParametersDialog
 
 
 def test_deferred_updates_are_owned_by_expert_editor() -> None:

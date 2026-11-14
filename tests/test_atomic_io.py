@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from guy4ase.gui.application import atomic_io
+from ase2sprkkr_gui.gui.application import atomic_io
 
 
 def test_atomic_write_json_replaces_complete_document(tmp_path):

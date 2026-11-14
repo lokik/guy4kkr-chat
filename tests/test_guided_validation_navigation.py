@@ -1,15 +1,15 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 import pytest
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.dialogs import guided_input
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
-from guy4ase.gui.input_parameters.validation import (
+from ase2sprkkr_gui.gui.dialogs import guided_input
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.input_parameters.validation import (
     InputParametersValidationError,
     validate_setup,
 )

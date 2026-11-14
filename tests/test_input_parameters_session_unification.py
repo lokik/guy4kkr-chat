@@ -3,22 +3,22 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 import pytest
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QDialog
 
-from guy4ase.gui.dialogs import guided_input
-from guy4ase.gui.dialogs.expert_input import InputParametersDialog
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
-from guy4ase.gui.input_parameters.bindings import values_equal
-from guy4ase.gui.input_parameters.field_binding import create_field_binding
-from guy4ase.gui.input_parameters.session import create_input_parameters_session
-from guy4ase.gui.input_parameters.specs.schema import field
-from guy4ase.gui.widgets.input_parameters import common as common_editors
-from guy4ase.gui.widgets.input_parameters.energy import EnergyEditor
+from ase2sprkkr_gui.gui.dialogs import guided_input
+from ase2sprkkr_gui.gui.dialogs.expert_input import InputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.input_parameters.bindings import values_equal
+from ase2sprkkr_gui.gui.input_parameters.field_binding import create_field_binding
+from ase2sprkkr_gui.gui.input_parameters.session import create_input_parameters_session
+from ase2sprkkr_gui.gui.input_parameters.specs.schema import field
+from ase2sprkkr_gui.gui.widgets.input_parameters import common as common_editors
+from ase2sprkkr_gui.gui.widgets.input_parameters.energy import EnergyEditor
 
 
 @pytest.fixture

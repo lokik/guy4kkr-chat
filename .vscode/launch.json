@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: guy4ase as package",
+            "name": "Python: Ase2sprkkr as package",
             "type": "debugpy",
             "request": "launch",
-            "module": "guy4ase.main",
+            "module": "ase2sprkkr_gui.main",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "justMyCode": true

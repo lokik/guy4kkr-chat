@@ -7,8 +7,22 @@ from pathlib import Path
 
 import pytest
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.recent_presentation import recent_path_label
+from ase2sprkkr_gui.gui.application.config import config_home
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles, default_recent_files_path
+from ase2sprkkr_gui.gui.recent_presentation import recent_path_label
+
+
+def test_gui_config_paths_are_under_ase2sprkkr(tmp_path, monkeypatch):
+    def config_dir(appname, appauthor):
+        assert (appname, appauthor) == ("ase2sprkkr", "ase2sprkkr")
+        return str(tmp_path / appname)
+
+    monkeypatch.setattr(
+        "ase2sprkkr_gui.gui.application.config.platformdirs.user_config_dir",
+        config_dir,
+    )
+    assert config_home() == tmp_path / "ase2sprkkr" / "gui"
+    assert default_recent_files_path() == config_home() / "recent_files.json"
 
 
 def test_recent_files_store_canonical_absolute_paths(tmp_path, monkeypatch):

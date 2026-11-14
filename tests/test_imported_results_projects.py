@@ -10,11 +10,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 from kkrunner.projects import ProjectRepository
 
-from guy4ase.gui.application.imported_project_results import assign, assignments
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.flows import files as file_flows
+from ase2sprkkr_gui.gui.application.imported_project_results import assign, assignments
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import files as file_flows
 
 
 def _app():
@@ -77,7 +77,7 @@ def test_assigning_tracked_result_moves_existing_run_without_imported_duplicate(
     tmp_path, monkeypatch,
 ):
     from PyQt6.QtWidgets import QDialog, QMessageBox
-    from guy4ase.gui.dialogs.assign_results import (
+    from ase2sprkkr_gui.gui.dialogs.assign_results import (
         AssignResultsDialog, assign_results_to_project,
     )
 
@@ -113,7 +113,7 @@ def test_project_browser_file_import_uses_existing_output_loader(
     tmp_path, monkeypatch,
 ):
     from PyQt6.QtWidgets import QFileDialog, QWidget
-    from guy4ase.main import GuiApplication
+    from ase2sprkkr_gui.main import GuiApplication
 
     _application = _app()
     projects = ProjectRepository(tmp_path / "projects")

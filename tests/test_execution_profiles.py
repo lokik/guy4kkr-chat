@@ -6,9 +6,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.application.execution_profiles import ProfileDraft
-from guy4ase.gui.dialogs import profiles as profiles_dialogs
-from guy4ase.gui.widgets.execution_profiles import ProfileForm
+from ase2sprkkr_gui.gui.application.execution_profiles import ProfileDraft
+from ase2sprkkr_gui.gui.dialogs import profiles as profiles_dialogs
+from ase2sprkkr_gui.gui.widgets.execution_profiles import ProfileForm
 
 
 def _app():
@@ -75,7 +75,7 @@ def test_read_only_profile_cannot_be_deleted_or_edited():
 
 
 def test_standalone_profile_dialog_reuses_run_settings_page():
-    from guy4ase.gui.widgets.settings.run_configurations import RunConfigurationsPage
+    from ase2sprkkr_gui.gui.widgets.settings.run_configurations import RunConfigurationsPage
 
     dialog = profiles_dialogs.ProfilesDialog(store=_ReadOnlyStore())
     assert isinstance(dialog.page, RunConfigurationsPage)

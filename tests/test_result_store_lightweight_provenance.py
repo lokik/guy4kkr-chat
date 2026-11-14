@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import numpy as np
 from ase import Atoms
 
-from guy4ase.gui.application.result_store import ResultStore
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.application.result_store import ResultStore
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
 
 
 def _atoms() -> Atoms:

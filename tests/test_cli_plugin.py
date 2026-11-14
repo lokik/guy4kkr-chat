@@ -1,4 +1,4 @@
-"""The Guy4ASE CLI plug-in has the same contract as native commands."""
+"""The Ase2sprkkr CLI plug-in has the same contract as native commands."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ import pytest
 
 
 def test_gui_command_is_discoverable():
-    command_package = importlib.import_module("guy4ase.cli")
+    command_package = importlib.import_module("ase2sprkkr_gui.cli")
     names = {entry.name for entry in pkgutil.iter_modules(command_package.__path__)}
     assert "gui" in names
 
-    command = importlib.import_module("guy4ase.cli.gui")
+    command = importlib.import_module("ase2sprkkr_gui.cli.gui")
     assert command.help
     assert command.description
     command_parser = argparse.ArgumentParser()
@@ -30,8 +30,8 @@ def test_importing_gui_command_does_not_load_qt():
         [
             sys.executable,
             "-c",
-            "import sys; import guy4ase.cli.gui; "
-            "assert 'guy4ase.main' not in sys.modules; "
+            "import sys; import ase2sprkkr_gui.cli.gui; "
+            "assert 'ase2sprkkr_gui.main' not in sys.modules; "
             "assert 'PyQt6' not in sys.modules",
         ],
         check=True,
@@ -41,15 +41,15 @@ def test_importing_gui_command_does_not_load_qt():
 @pytest.mark.parametrize("exit_code", [0, 3])
 def test_gui_command_invokes_main_with_clean_arguments(monkeypatch, exit_code):
     calls = []
-    fake_main_module = ModuleType("guy4ase.main")
+    fake_main_module = ModuleType("ase2sprkkr_gui.main")
 
     def fake_main(*, argv):
         calls.append(argv)
         return exit_code
 
     fake_main_module.main = fake_main
-    monkeypatch.setitem(sys.modules, "guy4ase.main", fake_main_module)
-    command = importlib.import_module("guy4ase.cli.gui")
+    monkeypatch.setitem(sys.modules, "ase2sprkkr_gui.main", fake_main_module)
+    command = importlib.import_module("ase2sprkkr_gui.cli.gui")
 
     with pytest.raises(SystemExit) as exc:
         command.run(argparse.Namespace(), {"debug": False, "profile": False})

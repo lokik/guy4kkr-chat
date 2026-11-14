@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QApplication, QToolButton, QTreeWidget, QTreeWidgetItem, QWidget
 
-from guy4ase.gui.widgets.input_parameters.expert_tree_runtime import ExpertTreeRuntime
+from ase2sprkkr_gui.gui.widgets.input_parameters.expert_tree_runtime import ExpertTreeRuntime
 
 
 def test_unregister_subtree_removes_cell_widgets_before_items_are_detached() -> None:

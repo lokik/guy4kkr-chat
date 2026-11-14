@@ -12,19 +12,19 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QPlainTextEdit
 
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.dialogs.structures import shell
-from guy4ase.gui.dialogs.structures import source as source_dialog
-from guy4ase.gui.flows import structures
-from guy4ase.gui.workflow.model import CreateStructure, CreateStructureKind, WorkflowSection
-from guy4ase.gui.workflow.planner import WorkflowPlanner
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.dialogs.structures import shell
+from ase2sprkkr_gui.gui.dialogs.structures import source as source_dialog
+from ase2sprkkr_gui.gui.flows import structures
+from ase2sprkkr_gui.gui.workflow.model import CreateStructure, CreateStructureKind, WorkflowSection
+from ase2sprkkr_gui.gui.workflow.planner import WorkflowPlanner
 
 
 
 @pytest.fixture(autouse=True)
 def isolated_shell_history(monkeypatch, tmp_path):
     """GUI tests must never touch the user's real Python command history."""
-    from guy4ase.gui.application import shell_history
+    from ase2sprkkr_gui.gui.application import shell_history
 
     monkeypatch.setattr(
         shell_history, "default_shell_history_path",
@@ -238,7 +238,7 @@ def test_shell_flow_only_publishes_when_selected(monkeypatch):
 
 
 def test_source_dialog_uses_shell_result_as_detached_candidate(monkeypatch, tmp_path):
-    from guy4ase.gui.application.recent_files import RecentFiles
+    from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
 
     _app()
     dialog = source_dialog.StructureSourceDialog(
@@ -261,7 +261,7 @@ def test_guided_initial_plan_exposes_shell_only_without_structure():
     assert CreateStructure(CreateStructureKind.SHELL) in tuple(
         action.command for action in create.actions
     )
-    from guy4ase.gui.application.workspace import WorkspaceState
+    from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
 
     controller = WorkspaceController(WorkspaceState(atoms=Atoms("Fe")))
     active = WorkflowPlanner().for_workspace(controller)

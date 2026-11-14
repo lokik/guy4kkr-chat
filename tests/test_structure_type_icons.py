@@ -8,13 +8,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.misc.resources import icon_path
-from guy4ase.gui.widgets.workflow_actions import WorkflowActionsWidget
-from guy4ase.gui.workflow.model import (
+from ase2sprkkr_gui.gui.misc.resources import icon_path
+from ase2sprkkr_gui.gui.widgets.workflow_actions import WorkflowActionsWidget
+from ase2sprkkr_gui.gui.workflow.model import (
     ActionIcon, Build2D, Build2DKind, CreateStructure, CreateStructureKind,
     WorkflowSection,
 )
-from guy4ase.gui.workflow.planner import WorkflowPlanner
+from ase2sprkkr_gui.gui.workflow.planner import WorkflowPlanner
 
 
 @pytest.mark.parametrize(

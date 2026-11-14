@@ -134,7 +134,7 @@ def test_kpath_waits_for_its_own_window_with_and_without_running_application():
         assert not any("already running" in message for message in messages), messages
     ''')
     env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-    env.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+    env.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
     result = subprocess.run([sys.executable, "-c", script], env=env, capture_output=True,
                             text=True, timeout=45)
     assert result.returncode == 0, result.stdout + result.stderr

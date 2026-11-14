@@ -11,11 +11,11 @@ import pytest
 from ase import Atoms
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.dialogs.profiles import ProfileSelectionDialog, RunIdentification
-from guy4ase.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.dialogs.profiles import ProfileSelectionDialog, RunIdentification
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
 
 
 class _Option:
@@ -153,7 +153,7 @@ def test_cancelling_run_dialog_leaves_workspace_unchanged(application, monkeypat
 def test_execution_dialog_requires_working_directory_and_can_browse(
     application, monkeypatch, tmp_path
 ):
-    from guy4ase.gui.dialogs import profiles
+    from ase2sprkkr_gui.gui.dialogs import profiles
 
     dialog = ProfileSelectionDialog(
         input_parameters=_Parameters(), store=_Profiles()

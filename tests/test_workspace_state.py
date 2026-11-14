@@ -5,7 +5,7 @@ from ase.build import bulk
 from ase2sprkkr import SPRKKRAtoms
 from ase2sprkkr.sprkkr.build import semiinfinite_system
 
-from guy4ase.gui.application.workspace import (
+from ase2sprkkr_gui.gui.application.workspace import (
     Generation,
     OptimisticLocked,
     StructureState,

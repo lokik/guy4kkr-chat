@@ -1,6 +1,6 @@
 from ase import Atoms
 
-from guy4ase.gui.application.workspace_controller import (
+from ase2sprkkr_gui.gui.application.workspace_controller import (
     DocumentChange,
     WorkspaceController,
 )

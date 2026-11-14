@@ -3,7 +3,7 @@ import os
 from types import SimpleNamespace
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-os.environ.setdefault('MPLCONFIGDIR', '/tmp/guy4ase-test-matplotlib')
+os.environ.setdefault('MPLCONFIGDIR', '/tmp/ase2sprkkr_gui-test-matplotlib')
 
 
 import numpy as np
@@ -16,16 +16,16 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QPlainTextEdit
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.dialogs import main_window
-from guy4ase.gui.dialogs.expert_input import InputParametersDialog
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
-from guy4ase.gui.input_parameters.specs import bsf, scf
-from guy4ase.gui.input_parameters.validation import validate_setup
-from guy4ase.gui.widgets.calculation_setup import CalculationSetupPanel
-from guy4ase.gui.widgets.structure_overview import StructureOverviewWidget
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.dialogs import main_window
+from ase2sprkkr_gui.gui.dialogs.expert_input import InputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.input_parameters.specs import bsf, scf
+from ase2sprkkr_gui.gui.input_parameters.validation import validate_setup
+from ase2sprkkr_gui.gui.widgets.calculation_setup import CalculationSetupPanel
+from ase2sprkkr_gui.gui.widgets.structure_overview import StructureOverviewWidget
+from ase2sprkkr_gui.main import GuiApplication
 
 
 @pytest.fixture

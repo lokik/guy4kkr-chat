@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPoint, QRect
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from guy4ase.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
 
 
 def _app():

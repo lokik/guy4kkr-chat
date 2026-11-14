@@ -6,7 +6,7 @@ from kkrunner.client import LocalTransport
 from kkrunner.backends import BackendConfig
 from kkrunner.files import FileManifest
 
-from guy4ase.gui.application.persistent_jobs import PersistentJobSource
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJobSource
 
 
 def _record(state: str):

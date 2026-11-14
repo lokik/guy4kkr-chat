@@ -3,11 +3,11 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from guy4ase.online_databases.models import (
+from ase2sprkkr_gui.online_databases.models import (
     PropertyFilter,
     StructureSearchQuery,
 )
-from guy4ase.online_databases.optimade import (
+from ase2sprkkr_gui.online_databases.optimade import (
     CodOptimadeProvider,
     InvalidProviderRecordError,
     MaterialsCloudMc3dOptimadeProvider,

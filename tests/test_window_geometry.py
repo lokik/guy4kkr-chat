@@ -5,7 +5,7 @@ import json
 from PyQt6.QtCore import QRect, QSize
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.application.window_geometry import (
+from ase2sprkkr_gui.gui.application.window_geometry import (
     WindowGeometryStore,
     adjust_window_geometry,
     restore_window_geometry,

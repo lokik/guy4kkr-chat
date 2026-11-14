@@ -2,7 +2,7 @@ import numpy as np
 
 from ase2sprkkr.common.grammar_types import Array, Integer, Real, Sequence, Table
 
-from guy4ase.gui.widgets.input_parameters.expert_tree_structure import (
+from ase2sprkkr_gui.gui.widgets.input_parameters.expert_tree_structure import (
     ValueShape,
     describe_repeated,
     describe_value,

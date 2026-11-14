@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from guy4ase.gui.widgets.input_parameters.commit import (
+from ase2sprkkr_gui.gui.widgets.input_parameters.commit import (
     EditorCommit,
     EditorValidationError,
 )

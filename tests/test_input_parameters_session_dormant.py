@@ -1,8 +1,8 @@
 """Regressions for transactional input-parameter session state."""
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.input_parameters.session import InputParametersSession
-from guy4ase.gui.input_parameters.single_site_contour import SingleSiteContourPlugin
+from ase2sprkkr_gui.gui.input_parameters.session import InputParametersSession
+from ase2sprkkr_gui.gui.input_parameters.single_site_contour import SingleSiteContourPlugin
 
 _NE = ("ENERGY", "NE")
 _SPLITSS = ("ENERGY", "SPLITSS")

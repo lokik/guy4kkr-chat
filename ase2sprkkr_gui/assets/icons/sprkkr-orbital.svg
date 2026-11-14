@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254" role="img" aria-label="Ase2sprkkr"><title>Ase2sprkkr — SPR-KKR atomic icon</title>
+<defs>
+<radialGradient id="bg" cx="50%" cy="49%" r="74%"><stop offset="0" stop-color="#004449"/><stop offset=".54" stop-color="#003b3d"/><stop offset="1" stop-color="#002729"/></radialGradient>
+<radialGradient id="dot" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#f2ff6a"/><stop offset=".39" stop-color="#efff60"/><stop offset=".47" stop-color="#d7fc32" stop-opacity=".94"/><stop offset=".58" stop-color="#a0e600" stop-opacity=".47"/><stop offset=".76" stop-color="#68c00a" stop-opacity=".12"/><stop offset="1" stop-color="#3b8500" stop-opacity="0"/></radialGradient>
+<radialGradient id="e" cx="34%" cy="28%" r="80%"><stop offset="0" stop-color="#c2dc7b"/><stop offset=".5" stop-color="#9fc361"/><stop offset="1" stop-color="#78a24c"/></radialGradient>
+<radialGradient id="eglow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#8db663" stop-opacity=".28"/><stop offset=".45" stop-color="#6caa62" stop-opacity=".14"/><stop offset="1" stop-color="#3e8a15" stop-opacity="0"/></radialGradient>
+<radialGradient id="nucleus" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#8bc72c" stop-opacity=".49"/><stop offset=".65" stop-color="#7fc124" stop-opacity=".26"/><stop offset="1" stop-color="#528c19" stop-opacity=".02"/></radialGradient>
+
+<!-- Letter dots keep a bright center but have a softer, broader halo. -->
+<filter id="letterBlur" x="-100%" y="-100%" width="300%" height="300%">
+  <feGaussianBlur stdDeviation="4.3"/>
+</filter>
+<!-- Electron markers are deliberately muted relative to the SPR-KKR lettering. -->
+<filter id="electronBlur" x="-100%" y="-100%" width="300%" height="300%">
+  <feGaussianBlur stdDeviation="5.5"/>
+</filter>
+</defs>
+<rect width="1254" height="1254" rx="121" fill="url(#bg)"/>
+<!-- The orbital curves and all 114 lettering dots are individually editable vector shapes. -->
+<g fill="none" stroke="#26cdb3" stroke-linejoin="round"><path d="M 28,582 C 24,485 218,402 467,391 C 721,356 1059,422 1192,513 C 1280,571 1174,660 1033,712 C 816,792 484,830 246,727 C 104,670 31,623 28,582 Z" stroke-width="43" opacity="0.028"/>
+<path d="M 28,582 C 24,485 218,402 467,391 C 721,356 1059,422 1192,513 C 1280,571 1174,660 1033,712 C 816,792 484,830 246,727 C 104,670 31,623 28,582 Z" stroke-width="29" opacity="0.055"/>
+<path d="M 28,582 C 24,485 218,402 467,391 C 721,356 1059,422 1192,513 C 1280,571 1174,660 1033,712 C 816,792 484,830 246,727 C 104,670 31,623 28,582 Z" stroke-width="15" opacity="0.11"/>
+<path d="M 28,582 C 24,485 218,402 467,391 C 721,356 1059,422 1192,513 C 1280,571 1174,660 1033,712 C 816,792 484,830 246,727 C 104,670 31,623 28,582 Z" stroke-width="7" opacity="0.22"/>
+<path d="M 214,172 C 212,65 298,24 374,72 C 590,179 815,530 984,813 C 1102,1011 1086,1129 989,1156 C 847,1216 597,920 416,695 C 262,491 181,306 214,172 Z" stroke-width="43" opacity="0.028"/>
+<path d="M 214,172 C 212,65 298,24 374,72 C 590,179 815,530 984,813 C 1102,1011 1086,1129 989,1156 C 847,1216 597,920 416,695 C 262,491 181,306 214,172 Z" stroke-width="29" opacity="0.055"/>
+<path d="M 214,172 C 212,65 298,24 374,72 C 590,179 815,530 984,813 C 1102,1011 1086,1129 989,1156 C 847,1216 597,920 416,695 C 262,491 181,306 214,172 Z" stroke-width="15" opacity="0.11"/>
+<path d="M 214,172 C 212,65 298,24 374,72 C 590,179 815,530 984,813 C 1102,1011 1086,1129 989,1156 C 847,1216 597,920 416,695 C 262,491 181,306 214,172 Z" stroke-width="7" opacity="0.22"/>
+<path d="M 1043,171 C 1041,65 958,24 876,72 C 652,194 460,535 269,824 C 140,1014 140,1132 263,1156 C 405,1195 623,946 805,690 C 969,456 1071,285 1043,171 Z" stroke-width="43" opacity="0.028"/>
+<path d="M 1043,171 C 1041,65 958,24 876,72 C 652,194 460,535 269,824 C 140,1014 140,1132 263,1156 C 405,1195 623,946 805,690 C 969,456 1071,285 1043,171 Z" stroke-width="29" opacity="0.055"/>
+<path d="M 1043,171 C 1041,65 958,24 876,72 C 652,194 460,535 269,824 C 140,1014 140,1132 263,1156 C 405,1195 623,946 805,690 C 969,456 1071,285 1043,171 Z" stroke-width="15" opacity="0.11"/>
+<path d="M 1043,171 C 1041,65 958,24 876,72 C 652,194 460,535 269,824 C 140,1014 140,1132 263,1156 C 405,1195 623,946 805,690 C 969,456 1071,285 1043,171 Z" stroke-width="7" opacity="0.22"/></g>
+<circle cx="626" cy="616" r="108" fill="url(#nucleus)"/>
+<circle cx="208" cy="170" r="65" fill="url(#eglow)"/><circle cx="208" cy="170" r="34" fill="url(#e)" opacity=".78" filter="url(#electronBlur)"/>
+<circle cx="1146" cy="653" r="65" fill="url(#eglow)"/><circle cx="1146" cy="653" r="34" fill="url(#e)" opacity=".78" filter="url(#electronBlur)"/>
+<circle cx="165" cy="1041" r="65" fill="url(#eglow)"/><circle cx="165" cy="1041" r="34" fill="url(#e)" opacity=".78" filter="url(#electronBlur)"/>
+<circle cx="345" cy="254" r="43" fill="url(#dot)"/><circle cx="345" cy="254" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="390" cy="255" r="43" fill="url(#dot)"/><circle cx="390" cy="255" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="909" cy="256" r="43" fill="url(#dot)"/><circle cx="909" cy="256" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="557" cy="257" r="43" fill="url(#dot)"/><circle cx="557" cy="257" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="601" cy="257" r="43" fill="url(#dot)"/><circle cx="601" cy="257" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="645" cy="257" r="43" fill="url(#dot)"/><circle cx="645" cy="257" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="819" cy="257" r="43" fill="url(#dot)"/><circle cx="819" cy="257" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="863" cy="257" r="43" fill="url(#dot)"/><circle cx="863" cy="257" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="690" cy="261" r="43" fill="url(#dot)"/><circle cx="690" cy="261" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="955" cy="261" r="43" fill="url(#dot)"/><circle cx="955" cy="261" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="300" cy="265" r="43" fill="url(#dot)"/><circle cx="300" cy="265" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="431" cy="266" r="43" fill="url(#dot)"/><circle cx="431" cy="266" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="726" cy="287" r="43" fill="url(#dot)"/><circle cx="726" cy="287" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="992" cy="287" r="43" fill="url(#dot)"/><circle cx="992" cy="287" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="266" cy="293" r="43" fill="url(#dot)"/><circle cx="266" cy="293" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="460" cy="297" r="43" fill="url(#dot)"/><circle cx="460" cy="297" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="818" cy="298" r="43" fill="url(#dot)"/><circle cx="818" cy="298" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="557" cy="299" r="43" fill="url(#dot)"/><circle cx="557" cy="299" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="740" cy="328" r="43" fill="url(#dot)"/><circle cx="740" cy="328" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="1005" cy="328" r="43" fill="url(#dot)"/><circle cx="1005" cy="328" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="255" cy="334" r="43" fill="url(#dot)"/><circle cx="255" cy="334" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="818" cy="343" r="43" fill="url(#dot)"/><circle cx="818" cy="343" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="557" cy="344" r="43" fill="url(#dot)"/><circle cx="557" cy="344" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="279" cy="368" r="43" fill="url(#dot)"/><circle cx="279" cy="368" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="728" cy="369" r="43" fill="url(#dot)"/><circle cx="728" cy="369" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="993" cy="369" r="43" fill="url(#dot)"/><circle cx="993" cy="369" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="320" cy="385" r="43" fill="url(#dot)"/><circle cx="320" cy="385" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="819" cy="388" r="43" fill="url(#dot)"/><circle cx="819" cy="388" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="557" cy="389" r="43" fill="url(#dot)"/><circle cx="557" cy="389" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="364" cy="392" r="43" fill="url(#dot)"/><circle cx="364" cy="392" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="693" cy="396" r="43" fill="url(#dot)"/><circle cx="693" cy="396" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="956" cy="396" r="43" fill="url(#dot)"/><circle cx="956" cy="396" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="407" cy="400" r="43" fill="url(#dot)"/><circle cx="407" cy="400" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="601" cy="401" r="43" fill="url(#dot)"/><circle cx="601" cy="401" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="647" cy="401" r="43" fill="url(#dot)"/><circle cx="647" cy="401" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="862" cy="401" r="43" fill="url(#dot)"/><circle cx="862" cy="401" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="908" cy="401" r="43" fill="url(#dot)"/><circle cx="908" cy="401" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="443" cy="422" r="43" fill="url(#dot)"/><circle cx="443" cy="422" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="819" cy="434" r="43" fill="url(#dot)"/><circle cx="819" cy="434" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="557" cy="435" r="43" fill="url(#dot)"/><circle cx="557" cy="435" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="929" cy="436" r="43" fill="url(#dot)"/><circle cx="929" cy="436" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="462" cy="461" r="43" fill="url(#dot)"/><circle cx="462" cy="461" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="954" cy="471" r="43" fill="url(#dot)"/><circle cx="954" cy="471" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="557" cy="480" r="43" fill="url(#dot)"/><circle cx="557" cy="480" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="819" cy="480" r="43" fill="url(#dot)"/><circle cx="819" cy="480" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="248" cy="484" r="43" fill="url(#dot)"/><circle cx="248" cy="484" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="448" cy="504" r="43" fill="url(#dot)"/><circle cx="448" cy="504" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="980" cy="505" r="43" fill="url(#dot)"/><circle cx="980" cy="505" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="273" cy="518" r="43" fill="url(#dot)"/><circle cx="273" cy="518" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="557" cy="526" r="43" fill="url(#dot)"/><circle cx="557" cy="526" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="818" cy="526" r="43" fill="url(#dot)"/><circle cx="818" cy="526" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="410" cy="531" r="43" fill="url(#dot)"/><circle cx="410" cy="531" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="315" cy="536" r="43" fill="url(#dot)"/><circle cx="315" cy="536" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="1006" cy="538" r="43" fill="url(#dot)"/><circle cx="1006" cy="538" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="363" cy="539" r="43" fill="url(#dot)"/><circle cx="363" cy="539" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="579" cy="621" r="43" fill="url(#dot)"/><circle cx="579" cy="621" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="625" cy="621" r="43" fill="url(#dot)"/><circle cx="625" cy="621" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="672" cy="621" r="43" fill="url(#dot)"/><circle cx="672" cy="621" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="419" cy="708" r="43" fill="url(#dot)"/><circle cx="419" cy="708" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="226" cy="709" r="43" fill="url(#dot)"/><circle cx="226" cy="709" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="535" cy="710" r="43" fill="url(#dot)"/><circle cx="535" cy="710" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="725" cy="710" r="43" fill="url(#dot)"/><circle cx="725" cy="710" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="834" cy="710" r="43" fill="url(#dot)"/><circle cx="834" cy="710" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="879" cy="710" r="43" fill="url(#dot)"/><circle cx="879" cy="710" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="926" cy="710" r="43" fill="url(#dot)"/><circle cx="926" cy="710" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="974" cy="715" r="43" fill="url(#dot)"/><circle cx="974" cy="715" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="387" cy="736" r="43" fill="url(#dot)"/><circle cx="387" cy="736" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="695" cy="740" r="43" fill="url(#dot)"/><circle cx="695" cy="740" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="1012" cy="740" r="43" fill="url(#dot)"/><circle cx="1012" cy="740" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="226" cy="753" r="43" fill="url(#dot)"/><circle cx="226" cy="753" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="535" cy="753" r="43" fill="url(#dot)"/><circle cx="535" cy="753" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="835" cy="753" r="43" fill="url(#dot)"/><circle cx="835" cy="753" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="355" cy="766" r="43" fill="url(#dot)"/><circle cx="355" cy="766" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="662" cy="771" r="43" fill="url(#dot)"/><circle cx="662" cy="771" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="1028" cy="780" r="43" fill="url(#dot)"/><circle cx="1028" cy="780" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="835" cy="797" r="43" fill="url(#dot)"/><circle cx="835" cy="797" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="225" cy="798" r="43" fill="url(#dot)"/><circle cx="225" cy="798" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="322" cy="798" r="43" fill="url(#dot)"/><circle cx="322" cy="798" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="535" cy="799" r="43" fill="url(#dot)"/><circle cx="535" cy="799" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="630" cy="800" r="43" fill="url(#dot)"/><circle cx="630" cy="800" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="1015" cy="822" r="43" fill="url(#dot)"/><circle cx="1015" cy="822" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="288" cy="830" r="43" fill="url(#dot)"/><circle cx="288" cy="830" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="597" cy="830" r="43" fill="url(#dot)"/><circle cx="597" cy="830" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="835" cy="843" r="43" fill="url(#dot)"/><circle cx="835" cy="843" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="225" cy="844" r="43" fill="url(#dot)"/><circle cx="225" cy="844" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="535" cy="844" r="43" fill="url(#dot)"/><circle cx="535" cy="844" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="977" cy="850" r="43" fill="url(#dot)"/><circle cx="977" cy="850" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="879" cy="856" r="43" fill="url(#dot)"/><circle cx="879" cy="856" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="927" cy="856" r="43" fill="url(#dot)"/><circle cx="927" cy="856" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="259" cy="862" r="43" fill="url(#dot)"/><circle cx="259" cy="862" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="569" cy="862" r="43" fill="url(#dot)"/><circle cx="569" cy="862" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="310" cy="869" r="43" fill="url(#dot)"/><circle cx="310" cy="869" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="618" cy="869" r="43" fill="url(#dot)"/><circle cx="618" cy="869" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="835" cy="889" r="43" fill="url(#dot)"/><circle cx="835" cy="889" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="225" cy="891" r="43" fill="url(#dot)"/><circle cx="225" cy="891" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="535" cy="891" r="43" fill="url(#dot)"/><circle cx="535" cy="891" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="948" cy="892" r="43" fill="url(#dot)"/><circle cx="948" cy="892" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="342" cy="900" r="43" fill="url(#dot)"/><circle cx="342" cy="900" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="650" cy="901" r="43" fill="url(#dot)"/><circle cx="650" cy="901" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="976" cy="926" r="43" fill="url(#dot)"/><circle cx="976" cy="926" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="374" cy="931" r="43" fill="url(#dot)"/><circle cx="374" cy="931" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="683" cy="932" r="43" fill="url(#dot)"/><circle cx="683" cy="932" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="835" cy="936" r="43" fill="url(#dot)"/><circle cx="835" cy="936" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="225" cy="937" r="43" fill="url(#dot)"/><circle cx="225" cy="937" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="535" cy="937" r="43" fill="url(#dot)"/><circle cx="535" cy="937" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="1007" cy="959" r="43" fill="url(#dot)"/><circle cx="1007" cy="959" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="404" cy="961" r="43" fill="url(#dot)"/><circle cx="404" cy="961" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="716" cy="961" r="43" fill="url(#dot)"/><circle cx="716" cy="961" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="224" cy="983" r="43" fill="url(#dot)"/><circle cx="224" cy="983" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="535" cy="984" r="43" fill="url(#dot)"/><circle cx="535" cy="984" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="836" cy="984" r="43" fill="url(#dot)"/><circle cx="836" cy="984" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="435" cy="989" r="43" fill="url(#dot)"/><circle cx="435" cy="989" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="749" cy="990" r="43" fill="url(#dot)"/><circle cx="749" cy="990" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+<circle cx="1038" cy="990" r="43" fill="url(#dot)"/><circle cx="1038" cy="990" r="15.2" fill="#f3ff73" filter="url(#letterBlur)"/>
+</svg>

@@ -1,16 +1,16 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase import Atoms
 from PyQt6.QtWidgets import QApplication, QMessageBox, QPushButton
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.flows import structures as structure_flows
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import structures as structure_flows
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def test_controller_exposes_structure_operation_capabilities(monkeypatch):

@@ -5,7 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from ase import Atoms
 
-from guy4ase.gui.widgets.structures.structure_pane import StructurePane
+from ase2sprkkr_gui.gui.widgets.structures.structure_pane import StructurePane
 
 
 def test_structure_pane_tracks_presence_and_emits_actions():

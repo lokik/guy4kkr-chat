@@ -6,8 +6,8 @@ from kkrunner.runs import ExecutionMetadata, WorkingDirectory, RunState, Failure
 from kkrunner.files import FileManifest
 from kkrunner.client import SshTransport
 from kkrunner.backends import BackendConfig
-from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
-from guy4ase.gui.application import persistent_jobs as jobs_module
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
+from ase2sprkkr_gui.gui.application import persistent_jobs as jobs_module
 
 
 def record(state=RunState.RUNNING, *, phase=None, code=None, backend_id="backend-42"):

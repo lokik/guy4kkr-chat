@@ -2,7 +2,7 @@ import pytest
 
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.input_parameters.session import InputParametersSession
+from ase2sprkkr_gui.gui.input_parameters.session import InputParametersSession
 
 
 def test_is_changed_propagates_type_comparator_errors(monkeypatch):

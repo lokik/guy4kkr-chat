@@ -8,7 +8,7 @@ import pytest
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
 
 
 @pytest.fixture

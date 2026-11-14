@@ -5,10 +5,10 @@ from types import SimpleNamespace
 from ase import Atoms
 import pytest
 
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.dialogs.structures import build_2d as build_2d_dialog
-from guy4ase.gui.flows import structure_candidates as candidate_flows
-from guy4ase.gui.flows.structure_candidates import StructureCandidate
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.dialogs.structures import build_2d as build_2d_dialog
+from ase2sprkkr_gui.gui.flows import structure_candidates as candidate_flows
+from ase2sprkkr_gui.gui.flows.structure_candidates import StructureCandidate
 
 
 def test_structure_candidate_load_has_no_workspace_side_effects(tmp_path):

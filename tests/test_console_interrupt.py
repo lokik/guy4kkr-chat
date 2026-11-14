@@ -6,10 +6,10 @@ import signal
 from ase import Atoms
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from guy4ase.gui.application.console_interrupt import ConsoleInterrupt
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.flows import files as file_flows
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.application.console_interrupt import ConsoleInterrupt
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import files as file_flows
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def test_console_interrupt_wakes_qt_once_and_restores_handler():

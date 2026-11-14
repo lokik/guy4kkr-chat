@@ -1,7 +1,7 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 import numpy as np
 import pytest
@@ -12,7 +12,7 @@ from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from ase2sprkkr.input_parameters.definitions.bsf import bsf_mode
 from ase2sprkkr.sprkkr.build import semiinfinite_system
 
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
 
 
 @pytest.fixture
@@ -226,7 +226,7 @@ def test_bsf_bulk_and_layered_integration_fields(application):
 
 
 def test_kpath_choices_use_type_metadata_without_probing_values(application, monkeypatch):
-    import guy4ase.gui.widgets.input_parameters.bsf as editors
+    import ase2sprkkr_gui.gui.widgets.input_parameters.bsf as editors
 
     def unexpected_mode_switch(*args):
         pytest.fail("Building the KPATH menu must not probe choices by changing BSF mode")

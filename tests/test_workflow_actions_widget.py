@@ -7,8 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QToolButton
 
-from guy4ase.gui.widgets.workflow_actions import WorkflowActionsWidget
-from guy4ase.gui.workflow.model import (
+from ase2sprkkr_gui.gui.widgets.workflow_actions import WorkflowActionsWidget
+from ase2sprkkr_gui.gui.workflow.model import (
     ActionIcon,
     ActionMenuGroup,
     ActionMenuItem,

@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 from ase import Atoms
 
-from guy4ase.gui.application.settings import ApplicationSettings
-from guy4ase.gui.application.sprkkr_execution import SprkkrExecution
-from guy4ase.gui.application.workspace_controller import CalculationRequest
-from guy4ase.gui.input_parameters.dataset import (
+from ase2sprkkr_gui.gui.application.settings import ApplicationSettings
+from ase2sprkkr_gui.gui.application.sprkkr_execution import SprkkrExecution
+from ase2sprkkr_gui.gui.application.workspace_controller import CalculationRequest
+from ase2sprkkr_gui.gui.input_parameters.dataset import (
     apply_default_dataset,
     filename_component,
     generated_dataset,
@@ -102,7 +102,7 @@ def test_apply_default_dataset_uses_injected_mode(monkeypatch):
         return "injected"
 
     monkeypatch.setattr(
-        "guy4ase.gui.input_parameters.dataset.generated_dataset",
+        "ase2sprkkr_gui.gui.input_parameters.dataset.generated_dataset",
         generate,
     )
     atoms = Atoms("Fe")

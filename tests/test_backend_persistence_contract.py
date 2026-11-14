@@ -11,9 +11,9 @@ from kkrunner.client import LocalTransport
 from kkrunner.backends import BackendConfig
 from ase2sprkkr.outputs.reader_registry import reader_registry
 
-from guy4ase.gui.application.persistent_jobs import PersistentJobSource
-from guy4ase.gui.application.result_store import ResultStore
-from guy4ase.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJobSource
+from ase2sprkkr_gui.gui.application.result_store import ResultStore
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
 
 
 def test_persistent_task_identity_round_trip_drives_recompute_editor(

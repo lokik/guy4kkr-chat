@@ -11,8 +11,8 @@ from ase import Atoms
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 
-from guy4ase.gui.flows import visualization
-from guy4ase.gui.misc.modal_task import _ModalTaskDialog
+from ase2sprkkr_gui.gui.flows import visualization
+from ase2sprkkr_gui.gui.misc.modal_task import _ModalTaskDialog
 
 
 def _application() -> QApplication:

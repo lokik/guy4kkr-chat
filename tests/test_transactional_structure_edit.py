@@ -1,8 +1,8 @@
 from ase import Atoms
 import pytest
 
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
 
 
 def test_failed_structure_edit_does_not_mutate_workspace():

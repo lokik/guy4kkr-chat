@@ -5,7 +5,7 @@ import numpy as np
 from ase import Atoms
 from ase2sprkkr.sprkkr.atomic_types import AtomicType
 
-from guy4ase.physics.composition import site_composition, structure_formula
+from ase2sprkkr_gui.physics.composition import site_composition, structure_formula
 
 
 def _with_occupancy(symbols, kinds, occupancy):

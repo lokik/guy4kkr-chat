@@ -26,7 +26,7 @@ def _method_calls(path: Path, class_name: str, method_name: str) -> set[str]:
 
 
 def test_gui_application_composes_result_presenter_without_owning_refresh():
-    main_path = ROOT / "guy4ase" / "main.py"
+    main_path = ROOT / "ase2sprkkr_gui" / "main.py"
     calls = _method_calls(main_path, "GuiApplication", "_wire_result_actions")
 
     assert "set_model" not in calls
@@ -40,7 +40,7 @@ def test_gui_application_composes_result_presenter_without_owning_refresh():
 
 
 def test_result_presenter_is_the_authoritative_refresh_owner():
-    path = ROOT / "guy4ase" / "gui" / "presenters" / "result_actions.py"
+    path = ROOT / "ase2sprkkr_gui" / "gui" / "presenters" / "result_actions.py"
     source = path.read_text()
 
     assert "controller.structureChanged.connect(self.refresh)" in source

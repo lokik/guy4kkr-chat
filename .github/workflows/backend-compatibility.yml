@@ -3,25 +3,25 @@ name: backend compatibility
 on:
   workflow_call:
     inputs:
-      guy4ase_repository:
-        description: Guy4ASE repository to test (owner/name)
+      ase2sprkkr_gui_repository:
+        description: Ase2sprkkr repository to test (owner/name)
         required: false
         type: string
-        default: ase2sprkkr/guy4kkr
+        default: ''
       ase2sprkkr_ref:
         description: Exact ase2sprkkr ref to test against
         required: false
         type: string
         default: develop
-      guy4ase_ref:
-        description: Exact Guy4ASE ref to test
+      ase2sprkkr_gui_ref:
+        description: Exact Ase2sprkkr ref to test
         required: false
         type: string
         default: master
   workflow_dispatch:
     inputs:
-      guy4ase_repository:
-        description: Guy4ASE repository to test (owner/name); empty means this repository
+      ase2sprkkr_gui_repository:
+        description: Ase2sprkkr repository to test (owner/name); empty means this repository
         required: false
         type: string
         default: ''
@@ -30,8 +30,8 @@ on:
         required: false
         type: string
         default: develop
-      guy4ase_ref:
-        description: Guy4ASE branch, tag, or commit to test; empty uses the selected workflow branch
+      ase2sprkkr_gui_ref:
+        description: Ase2sprkkr branch, tag, or commit to test; empty uses the selected workflow branch
         required: false
         type: string
         default: ''
@@ -52,12 +52,12 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       MPLBACKEND: Agg
     steps:
-      - name: Checkout Guy4ASE
+      - name: Checkout Ase2sprkkr
         uses: actions/checkout@v7
         with:
-          repository: ${{ inputs.guy4ase_repository || github.repository }}
-          ref: ${{ inputs.guy4ase_ref || (github.event_name == 'workflow_dispatch' && github.ref_name) || 'master' }}
-          path: guy4ase
+          repository: ${{ inputs.ase2sprkkr_gui_repository || github.repository }}
+          ref: ${{ inputs.ase2sprkkr_gui_ref || (github.event_name == 'workflow_dispatch' && github.ref_name) || 'master' }}
+          path: ase2sprkkr_gui
 
       - name: Checkout ASE2SPRKKR
         uses: actions/checkout@v7
@@ -78,7 +78,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
-            guy4ase/pyproject.toml
+            ase2sprkkr_gui/pyproject.toml
             ase2sprkkr/pyproject.toml
             kkrunner/pyproject.toml
 
@@ -91,13 +91,13 @@ jobs:
             libxkbcommon-x11-0 \
             libxcb-cursor0
 
-      - name: Install backend and Guy4ASE
+      - name: Install backend and Ase2sprkkr
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ./kkrunner
           python -m pip install -e ./ase2sprkkr
-          python -m pip install -e ./guy4ase pytest
+          python -m pip install -e ./ase2sprkkr_gui pytest
 
-      - name: Run Guy4ASE against selected backend
-        working-directory: guy4ase
+      - name: Run Ase2sprkkr against selected backend
+        working-directory: ase2sprkkr_gui
         run: python -m pytest -q

@@ -1,7 +1,7 @@
 """Automatic recovery only for interrupted postprocessing and downloads."""
 from types import SimpleNamespace
-import guy4ase.gui.application.persistent_jobs as module
-from guy4ase.gui.application.persistent_jobs import PersistentJobSource
+import ase2sprkkr_gui.gui.application.persistent_jobs as module
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJobSource
 from kkrunner.runs import RunState, ExecutionMetadata, WorkingDirectory
 from kkrunner.files import FileManifest
 from kkrunner.client import LocalTransport

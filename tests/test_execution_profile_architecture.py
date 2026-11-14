@@ -14,10 +14,10 @@ def test_execution_profile_application_module_imports_without_qt_or_dialogs():
             "-c",
             """
 import sys
-import guy4ase.gui.application.execution_profiles
+import ase2sprkkr_gui.gui.application.execution_profiles
 assert not any(name.startswith('PyQt6') for name in sys.modules)
-assert not any(name.startswith('guy4ase.gui.dialogs.') for name in sys.modules)
-assert not any(name.startswith('guy4ase.gui.widgets.') for name in sys.modules)
+assert not any(name.startswith('ase2sprkkr_gui.gui.dialogs.') for name in sys.modules)
+assert not any(name.startswith('ase2sprkkr_gui.gui.widgets.') for name in sys.modules)
 """,
         ],
         cwd=ROOT,

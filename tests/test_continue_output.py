@@ -5,12 +5,12 @@ from types import SimpleNamespace
 from ase import Atoms
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.flows import files as file_flows
-from guy4ase.gui.workflow.model import RunTask
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import files as file_flows
+from ase2sprkkr_gui.gui.workflow.model import RunTask
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def _loaded_scf(path, *, atoms=None) -> LoadedResult:

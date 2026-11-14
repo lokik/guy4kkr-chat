@@ -8,8 +8,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 from kkrunner.projects import ProjectRepository
 
-import guy4ase.main as main_module
-from guy4ase.main import GuiApplication
+import ase2sprkkr_gui.main as main_module
+from ase2sprkkr_gui.main import GuiApplication
 
 
 class _JobSource:

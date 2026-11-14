@@ -5,7 +5,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GUI = ROOT / "guy4ase" / "gui"
+GUI = ROOT / "ase2sprkkr_gui" / "gui"
 
 
 def _tree(relative_path: str) -> ast.AST:
@@ -34,15 +34,15 @@ def test_persistent_jobs_widget_is_presentation_only():
     tree = _tree("widgets/persistent_jobs.py")
     imports = _imports(tree)
 
-    assert "guy4ase.gui.dialogs.attached_run" not in imports
-    assert "guy4ase.gui.misc.modal_task" not in imports
-    assert "guy4ase.gui.application.persistent_jobs" in imports
+    assert "ase2sprkkr_gui.gui.dialogs.attached_run" not in imports
+    assert "ase2sprkkr_gui.gui.misc.modal_task" not in imports
+    assert "ase2sprkkr_gui.gui.application.persistent_jobs" in imports
 
     imported_source_names = {
         alias.name
         for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom)
-        and node.module == "guy4ase.gui.application.persistent_jobs"
+        and node.module == "ase2sprkkr_gui.gui.application.persistent_jobs"
         for alias in node.names
     }
     assert imported_source_names == {"PersistentJob"}
@@ -55,17 +55,17 @@ def test_persistent_job_dialogs_receive_controller_instead_of_constructing_it():
     ):
         tree = _tree(relative_path)
         assert "PersistentJobsController" not in _constructed_names(tree)
-        assert "guy4ase.gui.misc.modal_task" not in _imports(tree)
-        assert "guy4ase.gui.dialogs.attached_run" not in _imports(tree)
+        assert "ase2sprkkr_gui.gui.misc.modal_task" not in _imports(tree)
+        assert "ase2sprkkr_gui.gui.dialogs.attached_run" not in _imports(tree)
 
 
 def test_persistent_jobs_controller_is_the_monitor_orchestration_boundary():
     tree = _tree("controllers/persistent_jobs.py")
     imports = _imports(tree)
 
-    assert "guy4ase.gui.application.persistent_jobs" in imports
-    assert "guy4ase.gui.widgets.persistent_jobs" in imports
-    assert "guy4ase.gui.dialogs.attached_run" in imports
+    assert "ase2sprkkr_gui.gui.application.persistent_jobs" in imports
+    assert "ase2sprkkr_gui.gui.widgets.persistent_jobs" in imports
+    assert "ase2sprkkr_gui.gui.dialogs.attached_run" in imports
 
     widget_tree = _tree("widgets/persistent_jobs.py")
-    assert "guy4ase.gui.controllers.persistent_jobs" not in _imports(widget_tree)
+    assert "ase2sprkkr_gui.gui.controllers.persistent_jobs" not in _imports(widget_tree)

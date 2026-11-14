@@ -7,14 +7,14 @@ import pytest
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.input_parameters.field_binding import (
+from ase2sprkkr_gui.gui.input_parameters.field_binding import (
     ProjectedFieldBinding,
     create_field_binding,
 )
-from guy4ase.gui.input_parameters.session import InputParametersSession
-from guy4ase.gui.input_parameters.specs.schema import FieldPlacement, field
-from guy4ase.gui.widgets.input_parameters.registry import create_editor
-from guy4ase.gui.widgets.input_parameters.scalar import (
+from ase2sprkkr_gui.gui.input_parameters.session import InputParametersSession
+from ase2sprkkr_gui.gui.input_parameters.specs.schema import FieldPlacement, field
+from ase2sprkkr_gui.gui.widgets.input_parameters.registry import create_editor
+from ase2sprkkr_gui.gui.widgets.input_parameters.scalar import (
     IntegerEditor,
     KeywordEditor,
     RealEditor,

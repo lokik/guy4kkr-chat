@@ -7,9 +7,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.widgets.result_actions import ResultActionsWidget
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.widgets.result_actions import ResultActionsWidget
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def _loaded(name: str) -> LoadedResult:

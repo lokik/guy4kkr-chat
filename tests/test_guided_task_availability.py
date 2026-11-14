@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.dialogs import guided_input as guided_input_module
-from guy4ase.gui.dialogs.guided_input import GuidedTaskUnavailable
-from guy4ase.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.dialogs import guided_input as guided_input_module
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedTaskUnavailable
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
 
 
 def _controller(tmp_path) -> WorkspaceController:

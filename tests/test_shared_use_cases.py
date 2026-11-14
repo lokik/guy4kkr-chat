@@ -5,16 +5,16 @@ from types import SimpleNamespace
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import (
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import (
     CalculationNotReady,
     WorkspaceController,
 )
-from guy4ase.gui.flows import calculation as calculation_flow
-from guy4ase.gui.flows import input_editing as input_editing_flow
-from guy4ase.gui.flows import structures as structure_flows
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.flows import input_editing as input_editing_flow
+from ase2sprkkr_gui.gui.flows import structures as structure_flows
 
 
 class _Parameters:

@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 from ase import Atoms
 
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import (
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import (
     CalculationRequest,
     WorkspaceController,
 )

@@ -5,10 +5,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PyQt6.QtWidgets import QApplication, QTreeWidget, QTreeWidgetItem
 
-from guy4ase.gui.input_parameters.specs.schema import FieldPlacement
-from guy4ase.gui.widgets.input_parameters.expert_tree_runtime import ExpertTreeRuntime
-from guy4ase.gui.widgets.input_parameters.expert_tree_structure import ValueShape
-from guy4ase.gui.widgets.input_parameters.scalar import RealEditor
+from ase2sprkkr_gui.gui.input_parameters.specs.schema import FieldPlacement
+from ase2sprkkr_gui.gui.widgets.input_parameters.expert_tree_runtime import ExpertTreeRuntime
+from ase2sprkkr_gui.gui.widgets.input_parameters.expert_tree_structure import ValueShape
+from ase2sprkkr_gui.gui.widgets.input_parameters.scalar import RealEditor
 
 
 @pytest.fixture

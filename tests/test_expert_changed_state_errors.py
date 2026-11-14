@@ -1,7 +1,7 @@
 import pytest
 
-from guy4ase.gui.widgets.input_parameters.expert_tree import ExpertInputTreeEditor
-from guy4ase.gui.widgets.input_parameters.expert_tree_renderer import ExpertTreeRole
+from ase2sprkkr_gui.gui.widgets.input_parameters.expert_tree import ExpertInputTreeEditor
+from ase2sprkkr_gui.gui.widgets.input_parameters.expert_tree_renderer import ExpertTreeRole
 
 
 class _Item:

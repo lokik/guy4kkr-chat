@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.dialogs.structures.empty_spheres import EmptySpheresDialog
+from ase2sprkkr_gui.gui.dialogs.structures.empty_spheres import EmptySpheresDialog
 
 
 def test_empty_sphere_defaults():

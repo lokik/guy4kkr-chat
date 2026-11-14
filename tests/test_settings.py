@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from ase import Atoms
 
-from guy4ase.gui.application.settings import ApplicationSettings
-from guy4ase.gui.flows import visualization
+from ase2sprkkr_gui.gui.application.settings import ApplicationSettings
+from ase2sprkkr_gui.gui.flows import visualization
 
 
 def test_settings_round_trip(tmp_path):
@@ -88,7 +88,7 @@ class _FakeProfileStore:
         self.saved = []
 
     def drafts(self):
-        from guy4ase.gui.application.execution_profiles import ProfileDraft
+        from ase2sprkkr_gui.gui.application.execution_profiles import ProfileDraft
 
         return {
             "local": ProfileDraft(
@@ -105,9 +105,9 @@ class _FakeProfileStore:
 def test_settings_has_independent_frame_tabs(tmp_path):
     from PyQt6.QtWidgets import QFrame
 
-    from guy4ase.gui.dialogs.settings import SettingsDialog
-    from guy4ase.gui.widgets.settings.general import GeneralSettingsPage
-    from guy4ase.gui.widgets.settings.run_configurations import RunConfigurationsPage
+    from ase2sprkkr_gui.gui.dialogs.settings import SettingsDialog
+    from ase2sprkkr_gui.gui.widgets.settings.general import GeneralSettingsPage
+    from ase2sprkkr_gui.gui.widgets.settings.run_configurations import RunConfigurationsPage
 
     dialog = SettingsDialog(
         ApplicationSettings(tmp_path / "settings.json"),
@@ -134,7 +134,7 @@ def test_settings_has_independent_frame_tabs(tmp_path):
 def test_settings_accept_commits_run_profiles_and_application_defaults(tmp_path):
     from PyQt6.QtWidgets import QDialog
 
-    from guy4ase.gui.dialogs.settings import SettingsDialog
+    from ase2sprkkr_gui.gui.dialogs.settings import SettingsDialog
 
     settings = ApplicationSettings(tmp_path / "settings.json")
     store = _FakeProfileStore()
@@ -157,7 +157,7 @@ def test_settings_accept_commits_run_profiles_and_application_defaults(tmp_path)
 
 
 def test_settings_without_run_edits_does_not_rewrite_profiles(tmp_path):
-    from guy4ase.gui.dialogs.settings import SettingsDialog
+    from ase2sprkkr_gui.gui.dialogs.settings import SettingsDialog
 
     settings = ApplicationSettings(tmp_path / "settings.json")
     store = _FakeProfileStore()
@@ -168,8 +168,8 @@ def test_settings_without_run_edits_does_not_rewrite_profiles(tmp_path):
 
 
 def test_run_profile_edits_survive_switching_profiles(tmp_path):
-    from guy4ase.gui.application.execution_profiles import ProfileDraft
-    from guy4ase.gui.dialogs.settings import SettingsDialog
+    from ase2sprkkr_gui.gui.application.execution_profiles import ProfileDraft
+    from ase2sprkkr_gui.gui.dialogs.settings import SettingsDialog
 
     class TwoProfiles(_FakeProfileStore):
         def drafts(self):
@@ -194,7 +194,7 @@ def test_run_profile_edits_survive_switching_profiles(tmp_path):
 
 
 def test_settings_cancel_does_not_commit_run_profiles(tmp_path):
-    from guy4ase.gui.dialogs.settings import SettingsDialog
+    from ase2sprkkr_gui.gui.dialogs.settings import SettingsDialog
 
     settings = ApplicationSettings(tmp_path / "settings.json")
     store = _FakeProfileStore()
@@ -210,7 +210,7 @@ def test_settings_cancel_does_not_commit_run_profiles(tmp_path):
 def test_settings_run_profile_save_failure_keeps_dialog_open(tmp_path, monkeypatch):
     from PyQt6.QtWidgets import QDialog, QMessageBox
 
-    from guy4ase.gui.dialogs.settings import SettingsDialog
+    from ase2sprkkr_gui.gui.dialogs.settings import SettingsDialog
 
     class FailingStore(_FakeProfileStore):
         def save(self, drafts):
@@ -238,8 +238,8 @@ def test_settings_run_profile_save_failure_keeps_dialog_open(tmp_path, monkeypat
 def test_bundled_settings_icon_is_renderable():
     from PyQt6.QtGui import QIcon
 
-    from guy4ase.gui.misc.icons import settings_icon
-    from guy4ase.gui.misc.resources import icon_path
+    from ase2sprkkr_gui.gui.misc.icons import settings_icon
+    from ase2sprkkr_gui.gui.misc.resources import icon_path
 
     icon = QIcon(str(icon_path("settings-cog.svg")))
     assert not icon.isNull()

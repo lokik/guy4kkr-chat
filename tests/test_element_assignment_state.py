@@ -6,7 +6,7 @@ import pytest
 from ase import Atoms
 from ase2sprkkr import SPRKKRAtoms
 
-from guy4ase.ase.element_assignment import ElementAssignmentDraft
+from ase2sprkkr_gui.ase.element_assignment import ElementAssignmentDraft
 
 
 def _atoms(

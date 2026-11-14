@@ -1,7 +1,7 @@
 """Memory-bounded LRU behavior independent of the Qt interface."""
 from __future__ import annotations
 
-from guy4ase.gui.application.result_cache import ResultLRU
+from ase2sprkkr_gui.gui.application.result_cache import ResultLRU
 
 
 def test_result_cache_evicts_least_recently_used_and_checks_versions():

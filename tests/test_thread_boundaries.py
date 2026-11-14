@@ -5,7 +5,7 @@ from threading import get_ident
 
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from guy4ase.gui.misc import modal_task
+from ase2sprkkr_gui.gui.misc import modal_task
 
 
 def _application() -> QApplication:

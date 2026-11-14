@@ -8,12 +8,12 @@ from kkrunner.files import FileEntry, FileManifest
 from kkrunner import RunState, RunStore
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QDialog, QWidget
-from guy4ase.gui.application.persistent_jobs import PersistentJobSource
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
-from guy4ase.gui.dialogs.profiles import ProfileSelectionDialog
-from guy4ase.gui.flows import calculation as calculation_flow
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJobSource
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.profiles import ProfileSelectionDialog
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.main import GuiApplication
 
 def _finished_dos_run(tmp_path):
     parameters = InputParameters.create('DOS')

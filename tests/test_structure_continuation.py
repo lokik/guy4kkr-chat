@@ -10,12 +10,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from guy4ase.gui.application.result_action_policy import NewCalculationSource
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import DocumentChange, WorkspaceController
-from guy4ase.gui.flows import calculation as calculation_flow
-from guy4ase.gui.presenters.result_actions import ResultActionsPresenter
-from guy4ase.gui.widgets.result_actions import ResultActionsWidget
+from ase2sprkkr_gui.gui.application.result_action_policy import NewCalculationSource
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import DocumentChange, WorkspaceController
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.presenters.result_actions import ResultActionsPresenter
+from ase2sprkkr_gui.gui.widgets.result_actions import ResultActionsWidget
 
 
 class _Value:

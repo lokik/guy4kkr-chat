@@ -10,9 +10,9 @@ from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.dialogs.expert_input import InputParametersDialog
-from guy4ase.gui.widgets.input_parameters.expert_tree_renderer import ExpertTreeRole
-from guy4ase.gui.widgets.input_parameters.scalar import IntegerEditor, RealEditor, TextEditor
+from ase2sprkkr_gui.gui.dialogs.expert_input import InputParametersDialog
+from ase2sprkkr_gui.gui.widgets.input_parameters.expert_tree_renderer import ExpertTreeRole
+from ase2sprkkr_gui.gui.widgets.input_parameters.scalar import IntegerEditor, RealEditor, TextEditor
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from ase import Atoms
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
 
 
 def _controller(record, replacements):

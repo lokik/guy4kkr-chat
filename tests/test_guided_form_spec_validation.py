@@ -7,13 +7,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PyQt6.QtWidgets import QApplication, QStackedWidget
 
-from guy4ase.gui.input_parameters.specs.schema import (
+from ase2sprkkr_gui.gui.input_parameters.specs.schema import (
     GroupSpec,
     PageSpec,
     TaskDialogSpec,
     field,
 )
-from guy4ase.gui.widgets.input_parameters.form import GuidedFormRenderer
+from ase2sprkkr_gui.gui.widgets.input_parameters.form import GuidedFormRenderer
 
 
 class _MissingOptionSession:

@@ -4,13 +4,13 @@ from __future__ import annotations
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 import numpy as np
 from ase import Atoms
 from PyQt6.QtWidgets import QDialog
 
-from guy4ase.gui.dialogs.structures.element_assignment import (
+from ase2sprkkr_gui.gui.dialogs.structures.element_assignment import (
     ElementAssignmentDialog,
 )
 

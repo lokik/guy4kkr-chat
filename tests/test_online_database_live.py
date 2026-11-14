@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from guy4ase.online_databases import (
+from ase2sprkkr_gui.online_databases import (
     CodOptimadeProvider,
     MaterialsCloudMc3dOptimadeProvider,
     NomadOptimadeProvider,
@@ -13,8 +13,8 @@ from guy4ase.online_databases import (
 
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("GUY4ASE_RUN_LIVE_OPTIMADE") != "1",
-    reason="set GUY4ASE_RUN_LIVE_OPTIMADE=1 to query public OPTIMADE APIs",
+    os.environ.get("ASE2SPRKKR_GUI_RUN_LIVE_OPTIMADE") != "1",
+    reason="set ASE2SPRKKR_GUI_RUN_LIVE_OPTIMADE=1 to query public OPTIMADE APIs",
 )
 
 

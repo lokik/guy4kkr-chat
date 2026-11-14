@@ -12,9 +12,9 @@ from PyQt6.QtCore import QPoint, Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QSizePolicy, QTreeWidgetItem, QWidget
 from kkrunner.projects import ProjectRepository, ProjectRepositoryError
 
-from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
-from guy4ase.gui.dialogs.project_browser import ProjectBrowserDialog
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob
+from ase2sprkkr_gui.gui.controllers.persistent_jobs import PersistentJobsController
+from ase2sprkkr_gui.gui.dialogs.project_browser import ProjectBrowserDialog
 
 
 def _job(job_id: str, *, dataset: str, project_id=None, profile=None) -> PersistentJob:
@@ -361,7 +361,7 @@ def test_failed_conflict_retry_reloads_external_project_state(tmp_path, monkeypa
 
 
 def test_project_edit_changes_name_and_directory(tmp_path, monkeypatch):
-    from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
+    from ase2sprkkr_gui.gui.dialogs.project_edit import ProjectEditDialog
 
     _application = QApplication.instance() or QApplication([])
     repository = ProjectRepository(tmp_path / "projects")
@@ -434,7 +434,7 @@ def test_project_browser_moves_multiple_completed_records_to_another_project(tmp
     browser.show()
     application.processEvents()
 
-    from guy4ase.gui.dialogs.assign_results import AssignResultsDialog
+    from ase2sprkkr_gui.gui.dialogs.assign_results import AssignResultsDialog
 
     def choose_target(dialog):
         assert dialog.allow_unassigned

@@ -12,14 +12,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QCoreApplication, QEvent, Qt, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
-import guy4ase.gui.controllers.persistent_jobs as controller_module
-from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.application.run_file_deletion import (
+import ase2sprkkr_gui.gui.controllers.persistent_jobs as controller_module
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob
+from ase2sprkkr_gui.gui.application.run_file_deletion import (
     FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
 )
-from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
-from guy4ase.gui.dialogs.delete_run_record import DeleteRunRecordDialog
-from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
+from ase2sprkkr_gui.gui.controllers.persistent_jobs import PersistentJobsController
+from ase2sprkkr_gui.gui.dialogs.delete_run_record import DeleteRunRecordDialog
+from ase2sprkkr_gui.gui.widgets.persistent_jobs import PersistentJobsWidget
 
 
 def _job(
@@ -881,7 +881,7 @@ def test_local_directory_shows_children_and_requires_recursive_confirmation(
 ):
     _app = QApplication.instance() or QApplication([])
     from PyQt6.QtWidgets import QMessageBox
-    from guy4ase.gui.application.run_file_deletion import plan_file_deletion
+    from ase2sprkkr_gui.gui.application.run_file_deletion import plan_file_deletion
 
     taudir = tmp_path / "tau"
     (taudir / "nested").mkdir(parents=True)

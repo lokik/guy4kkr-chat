@@ -3,9 +3,9 @@ from __future__ import annotations
 from ase import Atoms
 from ase2sprkkr.sprkkr.sprkkr_atoms import SPRKKRAtoms
 
-from guy4ase.gui.application.sprkkr_execution import SprkkrExecution
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.application.sprkkr_execution import SprkkrExecution
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
 
 
 class _Parameters:

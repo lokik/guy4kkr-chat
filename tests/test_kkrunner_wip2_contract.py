@@ -7,7 +7,7 @@ from kkrunner.client import LocalTransport, SshTransport
 from kkrunner.projects import ProjectRepository, ProjectRunManager
 from kkrunner.runs import RunState
 
-from guy4ase.gui.application.persistent_jobs import (
+from ase2sprkkr_gui.gui.application.persistent_jobs import (
     PersistentJob,
     project_run_manager,
 )

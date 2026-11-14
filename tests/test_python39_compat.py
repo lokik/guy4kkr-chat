@@ -10,7 +10,7 @@ import unittest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_ROOT = PROJECT_ROOT / "guy4ase"
+PACKAGE_ROOT = PROJECT_ROOT / "ase2sprkkr_gui"
 
 
 def _has_postponed_annotations(tree):

@@ -4,7 +4,7 @@ import pytest
 from ase2sprkkr.common.grammar_types import Array, Integer, Keyword, Real, Sequence, Table
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.input_parameters.field_binding import (
+from ase2sprkkr_gui.gui.input_parameters.field_binding import (
     ProjectedFieldBinding,
     array_item_binding,
     create_field_binding,
@@ -12,9 +12,9 @@ from guy4ase.gui.input_parameters.field_binding import (
     sequence_item_binding,
     table_cell_binding,
 )
-from guy4ase.gui.input_parameters.session import InputParametersSession
-from guy4ase.gui.input_parameters.single_site_contour import SingleSiteContourPlugin
-from guy4ase.gui.input_parameters.specs.schema import FieldPlacement, field
+from ase2sprkkr_gui.gui.input_parameters.session import InputParametersSession
+from ase2sprkkr_gui.gui.input_parameters.single_site_contour import SingleSiteContourPlugin
+from ase2sprkkr_gui.gui.input_parameters.specs.schema import FieldPlacement, field
 
 
 def _secondary_ne_binding(session):

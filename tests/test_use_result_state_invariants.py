@@ -7,10 +7,10 @@ import numpy as np
 from ase import Atoms
 from ase2sprkkr import SPRKKRAtoms
 
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.result_presentation import present_result_record
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.application.result_presentation import present_result_record
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
 
 
 class _Parameters:

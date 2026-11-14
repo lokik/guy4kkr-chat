@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from guy4ase.physics.structure_database import (
+from ase2sprkkr_gui.physics.structure_database import (
     StructureDatabaseError,
     load_structure_database,
     parse_structure_database,

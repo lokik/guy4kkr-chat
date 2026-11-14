@@ -1,7 +1,7 @@
 import os
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-os.environ.setdefault('MPLCONFIGDIR', '/tmp/guy4ase-test-matplotlib')
+os.environ.setdefault('MPLCONFIGDIR', '/tmp/ase2sprkkr_gui-test-matplotlib')
 
 import numpy as np
 import pytest
@@ -11,17 +11,17 @@ from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QToolButton
 
-from guy4ase.gui.dialogs.expert_input import InputParametersDialog
-from guy4ase.gui.dialogs.input_file import InputFileEditor
-from guy4ase.gui.input_parameters.expert_fields import EXPERT_FIELDS
-from guy4ase.gui.input_parameters.energy import convert_energy, set_bound_energy
-from guy4ase.gui.widgets.input_parameters.relativistic_scaling import (
+from ase2sprkkr_gui.gui.dialogs.expert_input import InputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.input_file import InputFileEditor
+from ase2sprkkr_gui.gui.input_parameters.expert_fields import EXPERT_FIELDS
+from ase2sprkkr_gui.gui.input_parameters.energy import convert_energy, set_bound_energy
+from ase2sprkkr_gui.gui.widgets.input_parameters.relativistic_scaling import (
     RelativisticScalingEditor,
 )
-from guy4ase.gui.widgets.input_parameters.modal_editor import (
+from ase2sprkkr_gui.gui.widgets.input_parameters.modal_editor import (
     ExpertFieldEditorDialog,
 )
-from guy4ase.gui.widgets.input_parameters.scalar import (
+from ase2sprkkr_gui.gui.widgets.input_parameters.scalar import (
     IntegerEditor,
     KeywordEditor,
     RealEditor,

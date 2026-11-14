@@ -4,12 +4,12 @@ from __future__ import annotations
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application import historical_state
-from guy4ase.gui.application.execution_cancellation import RunCancellation
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.sprkkr_execution import SprkkrExecution
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.application import historical_state
+from ase2sprkkr_gui.gui.application.execution_cancellation import RunCancellation
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.application.sprkkr_execution import SprkkrExecution
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
 
 
 class _Parameters:

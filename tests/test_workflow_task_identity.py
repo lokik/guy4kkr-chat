@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.input_parameters.validation import validate_setup
+from ase2sprkkr_gui.gui.input_parameters.validation import validate_setup
 
 
 def test_validate_setup_uses_effective_task_for_arpes_checks():

@@ -2,7 +2,7 @@ from PyQt6.QtCore import QCoreApplication, QEvent
 from PyQt6.QtWidgets import QApplication
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
 
 
 def test_deferred_history_navigation_dies_with_dialog():

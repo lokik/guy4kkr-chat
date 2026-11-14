@@ -5,15 +5,15 @@ from dataclasses import dataclass
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.input_parameters.tasks import (
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.input_parameters.tasks import (
     WorkflowStage,
     WorkflowTaskRole,
     guided_task_definition,
     workflow_tasks,
 )
-from guy4ase.gui.workflow.model import (
+from ase2sprkkr_gui.gui.workflow.model import (
     ActionIcon,
     AvailableAction,
     AvailableActionGroup,
@@ -31,8 +31,8 @@ from guy4ase.gui.workflow.model import (
     WorkflowPlan,
     WorkflowSection,
 )
-from guy4ase.gui.workflow.planner import WorkflowPlanner
-from guy4ase.gui.workspace_semantics import EmptySpheresAction
+from ase2sprkkr_gui.gui.workflow.planner import WorkflowPlanner
+from ase2sprkkr_gui.gui.workspace_semantics import EmptySpheresAction
 
 
 @dataclass

@@ -3,15 +3,15 @@ from types import SimpleNamespace
 from ase import Atoms
 from ase2sprkkr import SPRKKRAtoms
 
-from guy4ase.gui.application.operation_results import EmptySpheresResult
-from guy4ase.gui.application.result_loading import LoadedResult
-from guy4ase.gui.application.workspace import EmptySpheresState, WorkspaceState
-from guy4ase.gui.application.workspace_controller import (
+from ase2sprkkr_gui.gui.application.operation_results import EmptySpheresResult
+from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
+from ase2sprkkr_gui.gui.application.workspace import EmptySpheresState, WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import (
     CalculationRequest,
     DocumentChange,
     WorkspaceController,
 )
-from guy4ase.gui.workspace_semantics import EmptySpheresAction
+from ase2sprkkr_gui.gui.workspace_semantics import EmptySpheresAction
 
 
 def test_empty_sphere_search_state_allows_repeated_failed_search():
@@ -148,7 +148,7 @@ def test_empty_sphere_state_keeps_search_parameters_across_later_results():
 
 
 def test_empty_sphere_flow_prefills_parameters_from_workspace_state(monkeypatch):
-    from guy4ase.gui.flows import structures
+    from ase2sprkkr_gui.gui.flows import structures
 
     search_parameters = {"max_radius": 1.4, "mesh": (18, 20, 22)}
     controller = WorkspaceController(

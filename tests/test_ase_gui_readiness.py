@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.viewers import ase_gui
+from ase2sprkkr_gui.gui.viewers import ase_gui
 
 
 class FakeWindow:

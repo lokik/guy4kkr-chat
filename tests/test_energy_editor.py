@@ -1,7 +1,7 @@
 import os
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-os.environ.setdefault('MPLCONFIGDIR', '/tmp/guy4ase-test-matplotlib')
+os.environ.setdefault('MPLCONFIGDIR', '/tmp/ase2sprkkr_gui-test-matplotlib')
 
 from io import StringIO
 import pytest
@@ -9,10 +9,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.widgets.input_parameters.energy import EnergyEditor
-from guy4ase.gui.input_parameters.energy import convert_energy
-from guy4ase.gui.dialogs.guided_input import GuidedInputParametersDialog
-from guy4ase.gui.dialogs.expert_input import InputParametersDialog
+from ase2sprkkr_gui.gui.widgets.input_parameters.energy import EnergyEditor
+from ase2sprkkr_gui.gui.input_parameters.energy import convert_energy
+from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
+from ase2sprkkr_gui.gui.dialogs.expert_input import InputParametersDialog
 
 
 @pytest.fixture

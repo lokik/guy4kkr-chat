@@ -8,18 +8,18 @@ from ase import Atoms
 import pytest
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from guy4ase.ase.element_assignment import ElementAssignmentDraft
-from guy4ase.gui.application import result_loading as result_loading_module
-from guy4ase.gui.application import sprkkr_execution as execution_module
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.result_loading import load_result, load_result_file
-from guy4ase.gui.application.sprkkr_execution import SprkkrExecution
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import (
+from ase2sprkkr_gui.ase.element_assignment import ElementAssignmentDraft
+from ase2sprkkr_gui.gui.application import result_loading as result_loading_module
+from ase2sprkkr_gui.gui.application import sprkkr_execution as execution_module
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.result_loading import load_result, load_result_file
+from ase2sprkkr_gui.gui.application.sprkkr_execution import SprkkrExecution
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import (
     DocumentChange,
     WorkspaceController,
 )
-from guy4ase.gui.flows import files as file_flows
+from ase2sprkkr_gui.gui.flows import files as file_flows
 
 
 class _Parameters:

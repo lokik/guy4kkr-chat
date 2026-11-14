@@ -10,8 +10,8 @@ from kkrunner.runs import RunState, FailurePhase, ExecutionMetadata, WorkingDire
 from kkrunner.client import SshTransport
 from kkrunner.backends import BackendConfig
 from kkrunner.files import FileManifest, FileEntry
-import guy4ase.gui.application.persistent_jobs as module
-from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
+import ase2sprkkr_gui.gui.application.persistent_jobs as module
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 
 
 def record(state=RunState.RUNNING, *, backend_id="pid-42", failure_phase=None, return_code=None):
@@ -223,7 +223,7 @@ def test_source_cancel_and_forget_delegate_to_manager():
 
 def test_file_only_results_join_project_history_without_fake_run(tmp_path, monkeypatch):
     from kkrunner.projects import ProjectRepository
-    from guy4ase.gui.application.imported_project_results import assign
+    from ase2sprkkr_gui.gui.application.imported_project_results import assign
 
     projects = ProjectRepository(tmp_path / "projects")
     first = projects.create("First")
@@ -270,7 +270,7 @@ def test_file_only_results_join_project_history_without_fake_run(tmp_path, monke
 
 def test_missing_imported_file_remains_visible_for_removal(tmp_path):
     from kkrunner.projects import ProjectRepository
-    from guy4ase.gui.application.imported_project_results import assign
+    from ase2sprkkr_gui.gui.application.imported_project_results import assign
 
     projects = ProjectRepository(tmp_path / "projects")
     project = projects.create("Project")

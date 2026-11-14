@@ -3,10 +3,10 @@ from __future__ import annotations
 from ase import Atoms
 from types import SimpleNamespace
 
-from guy4ase.gui.application import sprkkr_execution as execution_module
-from guy4ase.gui.application.execution_cancellation import ExecutionCancelled
-from guy4ase.gui.application.sprkkr_execution import SprkkrExecution
-from guy4ase.gui.application.workspace_controller import CalculationRequest
+from ase2sprkkr_gui.gui.application import sprkkr_execution as execution_module
+from ase2sprkkr_gui.gui.application.execution_cancellation import ExecutionCancelled
+from ase2sprkkr_gui.gui.application.sprkkr_execution import SprkkrExecution
+from ase2sprkkr_gui.gui.application.workspace_controller import CalculationRequest
 
 
 class _Cancellation:

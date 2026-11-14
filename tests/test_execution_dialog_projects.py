@@ -9,10 +9,10 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 from kkrunner.projects import ProjectRepository
 
-from guy4ase.gui.dialogs import profiles as profiles_module
-from guy4ase.gui.dialogs import project_edit as project_edit_module
-from guy4ase.gui.dialogs.project_edit import ProjectEditDialog
-from guy4ase.gui.dialogs.profiles import ProfileSelectionDialog
+from ase2sprkkr_gui.gui.dialogs import profiles as profiles_module
+from ase2sprkkr_gui.gui.dialogs import project_edit as project_edit_module
+from ase2sprkkr_gui.gui.dialogs.project_edit import ProjectEditDialog
+from ase2sprkkr_gui.gui.dialogs.profiles import ProfileSelectionDialog
 
 
 @pytest.fixture
@@ -722,7 +722,7 @@ def test_reopened_run_setup_preserves_profile_identifiers_and_explicit_directory
     application, tmp_path
 ):
     from types import SimpleNamespace
-    from guy4ase.gui.dialogs.profiles import RunIdentification
+    from ase2sprkkr_gui.gui.dialogs.profiles import RunIdentification
 
     repo = ProjectRepository(tmp_path / "projects")
     initial = repo.create("Initial", directory=tmp_path / "default")

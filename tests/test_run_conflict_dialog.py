@@ -12,9 +12,9 @@ from kkrunner import RunManager, RunState, RunStore
 from kkrunner.files import FileEntry, FileManifest
 from kkrunner.runs import DuplicateSubmissionError
 
-from guy4ase.gui.application.execution_cancellation import RunCancellation
-from guy4ase.gui.dialogs import run_calculation as calculation
-from guy4ase.gui.dialogs.run_conflict import SubmissionConflictDialog
+from ase2sprkkr_gui.gui.application.execution_cancellation import RunCancellation
+from ase2sprkkr_gui.gui.dialogs import run_calculation as calculation
+from ase2sprkkr_gui.gui.dialogs.run_conflict import SubmissionConflictDialog
 
 
 def _conflict(tmp_path, *, count=1):

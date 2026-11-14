@@ -1,8 +1,8 @@
 import pytest
 from ase2sprkkr.common.warnings import DataValidityError
 
-from guy4ase.gui.input_parameters.field_binding import FieldValue
-from guy4ase.gui.widgets.input_parameters.scalar import IntegerEditor
+from ase2sprkkr_gui.gui.input_parameters.field_binding import FieldValue
+from ase2sprkkr_gui.gui.widgets.input_parameters.scalar import IntegerEditor
 
 
 def _editor(apply_value):

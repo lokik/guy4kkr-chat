@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from guy4ase.gui.presentation import empty_spheres_action_title
-from guy4ase.gui.recent_presentation import RecentLaunch, recent_launch_presentation
-from guy4ase.gui.workspace_semantics import EmptySpheresAction
+from ase2sprkkr_gui.gui.presentation import empty_spheres_action_title
+from ase2sprkkr_gui.gui.recent_presentation import RecentLaunch, recent_launch_presentation
+from ase2sprkkr_gui.gui.workspace_semantics import EmptySpheresAction
 
 
 class RecentSnapshot:

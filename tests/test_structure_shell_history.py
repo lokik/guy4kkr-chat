@@ -12,12 +12,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog
 
-from guy4ase.gui.application.settings import ApplicationSettings
-from guy4ase.gui.application.shell_history import (
+from ase2sprkkr_gui.gui.application.settings import ApplicationSettings
+from ase2sprkkr_gui.gui.application.shell_history import (
     PythonReplHistory, ShellHistory, default_shell_history_path,
     python_repl_history_path,
 )
-from guy4ase.gui.dialogs.structures.shell import StructureShellDialog
+from ase2sprkkr_gui.gui.dialogs.structures.shell import StructureShellDialog
 
 
 def _app():
@@ -47,14 +47,14 @@ def _dialog(tmp_path, *, shared=True):
 
 
 def test_history_path_uses_platformdirs(monkeypatch, tmp_path):
-    from guy4ase.gui.application import shell_history
+    from ase2sprkkr_gui.gui.application import shell_history
 
     monkeypatch.setattr(
         shell_history.platformdirs, "user_state_dir",
         lambda name, appauthor: str(tmp_path / name / appauthor),
     )
     assert default_shell_history_path() == (
-        tmp_path / "guy4ase" / "ase2sprkkr" / "python_shell_history.json"
+        tmp_path / "ase2sprkkr_gui" / "ase2sprkkr" / "python_shell_history.json"
     )
 
 
@@ -141,7 +141,7 @@ def test_history_is_saved_on_cancel_and_exceptions(tmp_path):
     assert history.load() == repl.load()
 
 
-def test_sharing_disabled_still_restores_and_saves_guy4ase_history(tmp_path):
+def test_sharing_disabled_still_restores_and_saves_ase2sprkkr_gui_history(tmp_path):
     _app()
     history = ShellHistory(tmp_path / "own.json")
     repl = PythonReplHistory(tmp_path / "python_history")

@@ -1,17 +1,17 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase import Atoms
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QFrame, QGroupBox, QToolButton
 
-from guy4ase.gui.widgets.browser_panel import BrowserPanel
+from ase2sprkkr_gui.gui.widgets.browser_panel import BrowserPanel
 
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.dialogs import workflow_window as workflow_module
-from guy4ase.gui.workflow.model import (
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.dialogs import workflow_window as workflow_module
+from ase2sprkkr_gui.gui.workflow.model import (
     Build2D,
     Build2DKind,
     ContinueRecent,
@@ -25,7 +25,7 @@ from guy4ase.gui.workflow.model import (
     UseForNewCalculation,
     VisualizeStructure,
 )
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def _workflow(tmp_path, *, workspace=None):
@@ -193,7 +193,7 @@ def test_cancelled_first_stage_preserves_existing_structure(tmp_path, monkeypatc
 
 
 def test_new_2d_flow_only_publishes_final_structure(tmp_path, monkeypatch):
-    from guy4ase.gui.flows.structure_candidates import StructureCandidate
+    from ase2sprkkr_gui.gui.flows.structure_candidates import StructureCandidate
 
     _gui, window = _workflow(tmp_path)
     bulk = Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True)
@@ -228,7 +228,7 @@ import pytest
 @pytest.mark.parametrize("keep_bulk", [False, True])
 def test_cancel_new_2d_prompts_to_keep_or_discard_3d(tmp_path, monkeypatch, keep_bulk):
     from PyQt6.QtWidgets import QMessageBox
-    from guy4ase.gui.flows.structure_candidates import StructureCandidate
+    from ase2sprkkr_gui.gui.flows.structure_candidates import StructureCandidate
 
     _gui, window = _workflow(tmp_path)
     original = Atoms("Cu", cell=(2.8, 2.8, 2.8), pbc=True)

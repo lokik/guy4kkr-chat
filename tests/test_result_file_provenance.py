@@ -10,12 +10,12 @@ from ase import Atoms
 from PyQt6.QtWidgets import QApplication, QToolButton
 
 from kkrunner.files import FileState
-from guy4ase.gui.application.result_presentation import (
+from ase2sprkkr_gui.gui.application.result_presentation import (
     present_result_record,
     present_result_tree,
 )
-from guy4ase.gui.application.result_store import ResultStore
-from guy4ase.gui.widgets.result_actions import ResultActionsWidget
+from ase2sprkkr_gui.gui.application.result_store import ResultStore
+from ase2sprkkr_gui.gui.widgets.result_actions import ResultActionsWidget
 
 
 class _FileValue:

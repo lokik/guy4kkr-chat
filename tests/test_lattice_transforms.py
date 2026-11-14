@@ -5,7 +5,7 @@ from ase import Atoms
 from ase.build import bulk
 from ase2sprkkr.sprkkr.build import semiinfinite_system
 
-from guy4ase.physics.lattice import (
+from ase2sprkkr_gui.physics.lattice import (
     detect_structure_kind,
     match_structure_axis_length,
 )

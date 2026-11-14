@@ -5,7 +5,7 @@ from kkrunner.runs import ExecutionMetadata, WorkingDirectory
 from kkrunner.client import LocalTransport
 from types import SimpleNamespace
 
-from guy4ase.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 
 
 def _record(*, result_files=None):

@@ -7,10 +7,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-import guy4ase.gui.controllers.persistent_jobs as controller_module
-from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
-from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
+import ase2sprkkr_gui.gui.controllers.persistent_jobs as controller_module
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob
+from ase2sprkkr_gui.gui.controllers.persistent_jobs import PersistentJobsController
+from ase2sprkkr_gui.gui.widgets.persistent_jobs import PersistentJobsWidget
 
 
 def _job() -> PersistentJob:

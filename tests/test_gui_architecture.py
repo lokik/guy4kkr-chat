@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 import numpy as np
 import pytest
@@ -17,20 +17,20 @@ from ase2sprkkr.common.grammar_types import Energy, Real
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.ase.element_assignment import ElementAssignmentDraft
-from guy4ase.gui.input_parameters.field_binding import SessionFieldBinding
-from guy4ase.gui.input_parameters.session import InputParametersSession
-from guy4ase.gui.input_parameters.specs.schema import field
-from guy4ase.gui.misc.resources import icon_path
-from guy4ase.gui.widgets.input_parameters.registry import editor_for_type
-from guy4ase.gui.widgets.structures.element_assignment import QLetterRow
+from ase2sprkkr_gui.ase.element_assignment import ElementAssignmentDraft
+from ase2sprkkr_gui.gui.input_parameters.field_binding import SessionFieldBinding
+from ase2sprkkr_gui.gui.input_parameters.session import InputParametersSession
+from ase2sprkkr_gui.gui.input_parameters.specs.schema import field
+from ase2sprkkr_gui.gui.misc.resources import icon_path
+from ase2sprkkr_gui.gui.widgets.input_parameters.registry import editor_for_type
+from ase2sprkkr_gui.gui.widgets.structures.element_assignment import QLetterRow
 
 ROOT = Path(__file__).resolve().parents[1]
-GUI = ROOT / "guy4ase" / "gui"
+GUI = ROOT / "ase2sprkkr_gui" / "gui"
 
 
 def _gui_graph():
-    """Return the static import graph between modules inside ``guy4ase.gui``."""
+    """Return the static import graph between modules inside ``ase2sprkkr_gui.gui``."""
     modules = {}
     for path in GUI.rglob("*.py"):
         module = ".".join(path.relative_to(ROOT).with_suffix("").parts)
@@ -77,76 +77,76 @@ def test_gui_dependencies_are_acyclic_and_follow_layers():
     """Keep broad layer boundaries without pinning individual implementations."""
     graph = _gui_graph()
     for module, targets in graph.items():
-        if module.startswith("guy4ase.gui.widgets"):
+        if module.startswith("ase2sprkkr_gui.gui.widgets"):
             assert not any(
                 target.startswith(
                     (
-                        "guy4ase.gui.controllers",
-                        "guy4ase.gui.dialogs",
-                        "guy4ase.gui.flows",
+                        "ase2sprkkr_gui.gui.controllers",
+                        "ase2sprkkr_gui.gui.dialogs",
+                        "ase2sprkkr_gui.gui.flows",
                     )
                 )
                 for target in targets
             ), module
-        if module.startswith("guy4ase.gui.flows"):
+        if module.startswith("ase2sprkkr_gui.gui.flows"):
             assert not any(
                 target in {
-                    "guy4ase.gui.dialogs.main_window",
-                    "guy4ase.gui.dialogs.workflow_window",
+                    "ase2sprkkr_gui.gui.dialogs.main_window",
+                    "ase2sprkkr_gui.gui.dialogs.workflow_window",
                 }
                 for target in targets
             ), module
-        if module.startswith("guy4ase.gui.input_parameters"):
+        if module.startswith("ase2sprkkr_gui.gui.input_parameters"):
             assert not any(
-                target.startswith(("guy4ase.gui.dialogs", "guy4ase.gui.widgets"))
+                target.startswith(("ase2sprkkr_gui.gui.dialogs", "ase2sprkkr_gui.gui.widgets"))
                 for target in targets
             ), module
-        if module.startswith("guy4ase.gui.application"):
+        if module.startswith("ase2sprkkr_gui.gui.application"):
             assert not any(
                 target.startswith(
                     (
-                        "guy4ase.gui.controllers",
-                        "guy4ase.gui.dialogs",
-                        "guy4ase.gui.widgets",
-                        "guy4ase.gui.flows",
-                        "guy4ase.gui.workflow",
-                        "guy4ase.gui.presentation",
-                        "guy4ase.gui.recent_presentation",
+                        "ase2sprkkr_gui.gui.controllers",
+                        "ase2sprkkr_gui.gui.dialogs",
+                        "ase2sprkkr_gui.gui.widgets",
+                        "ase2sprkkr_gui.gui.flows",
+                        "ase2sprkkr_gui.gui.workflow",
+                        "ase2sprkkr_gui.gui.presentation",
+                        "ase2sprkkr_gui.gui.recent_presentation",
                     )
                 )
                 for target in targets
             ), module
-        if module.startswith("guy4ase.gui.workflow"):
+        if module.startswith("ase2sprkkr_gui.gui.workflow"):
             assert not any(
                 target.startswith(
                     (
-                        "guy4ase.gui.controllers",
-                        "guy4ase.gui.dialogs",
-                        "guy4ase.gui.widgets",
-                        "guy4ase.gui.flows",
+                        "ase2sprkkr_gui.gui.controllers",
+                        "ase2sprkkr_gui.gui.dialogs",
+                        "ase2sprkkr_gui.gui.widgets",
+                        "ase2sprkkr_gui.gui.flows",
                     )
                 )
                 for target in targets
             ), module
         if module in {
-            "guy4ase.gui.presentation",
-            "guy4ase.gui.recent_presentation",
+            "ase2sprkkr_gui.gui.presentation",
+            "ase2sprkkr_gui.gui.recent_presentation",
         }:
             assert not any(
                 target.startswith(
                     (
-                        "guy4ase.gui.application",
-                        "guy4ase.gui.controllers",
-                        "guy4ase.gui.dialogs",
-                        "guy4ase.gui.widgets",
-                        "guy4ase.gui.flows",
-                        "guy4ase.gui.workflow",
-                        "guy4ase.gui.input_parameters",
+                        "ase2sprkkr_gui.gui.application",
+                        "ase2sprkkr_gui.gui.controllers",
+                        "ase2sprkkr_gui.gui.dialogs",
+                        "ase2sprkkr_gui.gui.widgets",
+                        "ase2sprkkr_gui.gui.flows",
+                        "ase2sprkkr_gui.gui.workflow",
+                        "ase2sprkkr_gui.gui.input_parameters",
                     )
                 )
                 for target in targets
             ), module
-        if module == "guy4ase.gui.workspace_semantics":
+        if module == "ase2sprkkr_gui.gui.workspace_semantics":
             assert not targets, module
 
     visited = set()
@@ -167,20 +167,20 @@ def test_workflow_renderer_has_no_application_state_dependency():
     """Renderer dependencies stay presentation-only, including transitively."""
     dependencies = _reachable(
         _gui_graph(),
-        "guy4ase.gui.widgets.workflow_actions",
+        "ase2sprkkr_gui.gui.widgets.workflow_actions",
     )
     assert not any(
-        module.startswith("guy4ase.gui.application") for module in dependencies
+        module.startswith("ase2sprkkr_gui.gui.application") for module in dependencies
     )
 
 
 def test_moved_semantics_are_not_reexported_from_old_modules():
     """Canonical moves must not leave accidental compatibility APIs behind."""
-    action_card = importlib.import_module("guy4ase.gui.widgets.action_card")
-    presentation = importlib.import_module("guy4ase.gui.presentation")
-    recent_launcher = importlib.import_module("guy4ase.gui.widgets.recent_launcher")
+    action_card = importlib.import_module("ase2sprkkr_gui.gui.widgets.action_card")
+    presentation = importlib.import_module("ase2sprkkr_gui.gui.presentation")
+    recent_launcher = importlib.import_module("ase2sprkkr_gui.gui.widgets.recent_launcher")
     workspace_controller = importlib.import_module(
-        "guy4ase.gui.application.workspace_controller"
+        "ase2sprkkr_gui.gui.application.workspace_controller"
     )
 
     assert not hasattr(action_card, "ActionCategory")
@@ -188,7 +188,7 @@ def test_moved_semantics_are_not_reexported_from_old_modules():
     assert not hasattr(presentation, "recent_launch_presentation")
     assert not hasattr(recent_launcher, "recent_path_label")
     assert not hasattr(workspace_controller, "EmptySpheresAction")
-    assert importlib.util.find_spec("guy4ase.gui.application.workspace_actions") is None
+    assert importlib.util.find_spec("ase2sprkkr_gui.gui.application.workspace_actions") is None
 
 
 def test_result_widget_accepts_presentations_not_application_state():
@@ -231,12 +231,12 @@ def test_lightweight_input_parameter_modules_import_without_qt_or_dialogs():
             "-c",
             """
 import sys
-from guy4ase.gui.input_parameters.expert_fields import EXPERT_FIELDS
-from guy4ase.gui.input_parameters.tasks import guided_task_definition
+from ase2sprkkr_gui.gui.input_parameters.expert_fields import EXPERT_FIELDS
+from ase2sprkkr_gui.gui.input_parameters.tasks import guided_task_definition
 assert EXPERT_FIELDS
 assert guided_task_definition('scf').backend_task == 'scf'
 assert not any(name.startswith('PyQt6') for name in sys.modules)
-assert not any(name.startswith('guy4ase.gui.dialogs.') for name in sys.modules)
+assert not any(name.startswith('ase2sprkkr_gui.gui.dialogs.') for name in sys.modules)
 """,
         ],
         cwd=ROOT,
@@ -252,9 +252,9 @@ def test_workflow_model_import_does_not_load_task_registry():
             "-c",
             """
 import sys
-from guy4ase.gui.workflow.model import RunTask
+from ase2sprkkr_gui.gui.workflow.model import RunTask
 assert RunTask('SCF').backend_task == 'SCF'
-assert not any(name.startswith('guy4ase.gui.input_parameters') for name in sys.modules)
+assert not any(name.startswith('ase2sprkkr_gui.gui.input_parameters') for name in sys.modules)
 assert not any(name.startswith('PyQt6') for name in sys.modules)
 """,
         ],
@@ -271,16 +271,16 @@ def test_workflow_presentation_imports_without_qt_layers():
             "-c",
             """
 import sys
-from guy4ase.gui.recent_presentation import RecentLaunch
-from guy4ase.gui.workflow.model import RunTask
-from guy4ase.gui.workflow.planner import WorkflowPlanner
+from ase2sprkkr_gui.gui.recent_presentation import RecentLaunch
+from ase2sprkkr_gui.gui.workflow.model import RunTask
+from ase2sprkkr_gui.gui.workflow.planner import WorkflowPlanner
 assert RecentLaunch and RunTask and WorkflowPlanner
 assert not any(name.startswith('PyQt6') for name in sys.modules)
 for prefix in (
-    'guy4ase.gui.controllers.',
-    'guy4ase.gui.dialogs.',
-    'guy4ase.gui.widgets.',
-    'guy4ase.gui.flows.',
+    'ase2sprkkr_gui.gui.controllers.',
+    'ase2sprkkr_gui.gui.dialogs.',
+    'ase2sprkkr_gui.gui.widgets.',
+    'ase2sprkkr_gui.gui.flows.',
 ):
     assert not any(name.startswith(prefix) for name in sys.modules)
 """,
@@ -298,10 +298,10 @@ def test_execution_cancellation_imports_without_qt_or_dialogs():
             "-c",
             """
 import sys
-from guy4ase.gui.application.execution_cancellation import RunCancellation
+from ase2sprkkr_gui.gui.application.execution_cancellation import RunCancellation
 assert RunCancellation
 assert not any(name.startswith('PyQt6') for name in sys.modules)
-assert not any(name.startswith('guy4ase.gui.dialogs.') for name in sys.modules)
+assert not any(name.startswith('ase2sprkkr_gui.gui.dialogs.') for name in sys.modules)
 """,
         ],
         cwd=ROOT,
@@ -317,9 +317,9 @@ def test_domain_element_assignment_import_does_not_pull_in_gui():
             "-c",
             """
 import sys
-import guy4ase.ase.element_assignment
+import ase2sprkkr_gui.ase.element_assignment
 assert not any(name.startswith('PyQt6') for name in sys.modules)
-assert not any(name.startswith('guy4ase.gui') for name in sys.modules)
+assert not any(name.startswith('ase2sprkkr_gui.gui') for name in sys.modules)
 """,
         ],
         cwd=ROOT,
@@ -336,8 +336,8 @@ def test_all_gui_modules_import_in_a_fresh_process():
             """
 import importlib
 import pkgutil
-import guy4ase.gui
-for module in pkgutil.walk_packages(guy4ase.gui.__path__, 'guy4ase.gui.'):
+import ase2sprkkr_gui.gui
+for module in pkgutil.walk_packages(ase2sprkkr_gui.gui.__path__, 'ase2sprkkr_gui.gui.'):
     importlib.import_module(module.name)
 """,
         ],

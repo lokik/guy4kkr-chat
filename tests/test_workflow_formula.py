@@ -1,7 +1,7 @@
 import numpy as np
 from ase import Atoms
 
-from guy4ase.gui.workflow.planner import WorkflowPlanner
+from ase2sprkkr_gui.gui.workflow.planner import WorkflowPlanner
 
 
 class _Workspace:

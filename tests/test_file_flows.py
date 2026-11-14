@@ -3,11 +3,11 @@ from __future__ import annotations
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import DocumentChange, WorkspaceController
-from guy4ase.gui.flows import files as file_flows
-from guy4ase.gui.flows import structures as structure_flows
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import DocumentChange, WorkspaceController
+from ase2sprkkr_gui.gui.flows import files as file_flows
+from ase2sprkkr_gui.gui.flows import structures as structure_flows
 
 
 @pytest.mark.parametrize("suffix", [".pot", ".pot_new"])

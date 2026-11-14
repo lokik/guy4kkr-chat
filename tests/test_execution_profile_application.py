@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from guy4ase.gui.application import execution_profiles as profile_application
-from guy4ase.gui.application.execution_profiles import (
+from ase2sprkkr_gui.gui.application import execution_profiles as profile_application
+from ase2sprkkr_gui.gui.application.execution_profiles import (
     ExecutionProfileEditor,
     ExecutionProfileStore,
 )

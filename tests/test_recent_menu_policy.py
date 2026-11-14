@@ -4,12 +4,12 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QMenu
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.dialogs.main_window import MainWindow
-from guy4ase.gui.dialogs.structures import source as source_module
-from guy4ase.gui.flows.structure_candidates import StructureCandidate
-from guy4ase.gui.recent_presentation import RecentLaunch
-from guy4ase.gui.widgets.recent_launcher import populate_recent_menu
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.dialogs.main_window import MainWindow
+from ase2sprkkr_gui.gui.dialogs.structures import source as source_module
+from ase2sprkkr_gui.gui.flows.structure_candidates import StructureCandidate
+from ase2sprkkr_gui.gui.recent_presentation import RecentLaunch
+from ase2sprkkr_gui.gui.widgets.recent_launcher import populate_recent_menu
 
 
 def _app():

@@ -8,10 +8,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QPlainTextEdit
 
-from guy4ase.gui.application.execution_cancellation import RunCancellation
-from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.dialogs.attached_run import AttachedRunWorker
-from guy4ase.gui.dialogs.run_monitor import (
+from ase2sprkkr_gui.gui.application.execution_cancellation import RunCancellation
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob
+from ase2sprkkr_gui.gui.dialogs.attached_run import AttachedRunWorker
+from ase2sprkkr_gui.gui.dialogs.run_monitor import (
     MAX_LOGICAL_LINE_LENGTH,
     MAX_OUTPUT_BLOCKS,
     RunMonitorWindow,

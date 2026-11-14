@@ -1,11 +1,11 @@
-from guy4ase.gui.dialogs.profiles import RunIdentification
+from ase2sprkkr_gui.gui.dialogs.profiles import RunIdentification
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
 
 
 class _Parameters:

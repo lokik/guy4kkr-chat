@@ -5,10 +5,10 @@ from types import SimpleNamespace
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application import result_loading as result_loading_module
-from guy4ase.gui.application.result_loading import load_result, load_result_file
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.application import result_loading as result_loading_module
+from ase2sprkkr_gui.gui.application.result_loading import load_result, load_result_file
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
 
 
 def test_result_loading_resolves_relative_artifacts_from_result_directory(

@@ -1,17 +1,17 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase import Atoms
 from PyQt6.QtWidgets import QApplication, QDialog
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.dialogs import main_window as main_window_module
-from guy4ase.gui.dialogs import workflow_window as workflow_module
-from guy4ase.gui.dialogs.structures import build_2d as build_2d_module
-from guy4ase.gui.flows import structures as structure_flows
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.dialogs import main_window as main_window_module
+from ase2sprkkr_gui.gui.dialogs import workflow_window as workflow_module
+from ase2sprkkr_gui.gui.dialogs.structures import build_2d as build_2d_module
+from ase2sprkkr_gui.gui.flows import structures as structure_flows
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def test_build2d_selector_uses_explicit_recent_files(tmp_path, monkeypatch):

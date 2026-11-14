@@ -1,4 +1,4 @@
-from guy4ase.gui.misc.dialog_flow import DialogAction, chain_dialogs
+from ase2sprkkr_gui.gui.misc.dialog_flow import DialogAction, chain_dialogs
 
 
 def test_chain_dialogs_passes_previous_result_and_parent():

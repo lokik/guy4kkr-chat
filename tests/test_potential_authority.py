@@ -7,16 +7,16 @@ from ase import Atoms
 from ase2sprkkr.potentials.potentials import PotentialFileChanged
 from ase2sprkkr.sprkkr.sprkkr_atoms import SPRKKRAtoms
 
-from guy4ase.gui.application import result_loading
-from guy4ase.gui.application.historical_state import (
+from ase2sprkkr_gui.gui.application import result_loading
+from ase2sprkkr_gui.gui.application.historical_state import (
     NewHistoricalPotential,
     resolve_historical_state,
 )
-from guy4ase.gui.application.potential_version import PotentialFileVersion
-from guy4ase.gui.application.result_loading import PotentialVersionChanged
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.flows import files as file_flows
+from ase2sprkkr_gui.gui.application.potential_version import PotentialFileVersion
+from ase2sprkkr_gui.gui.application.result_loading import PotentialVersionChanged
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import files as file_flows
 
 
 class _Parameters:
@@ -231,7 +231,7 @@ def test_historical_resolution_of_unknown_current_potfil_is_read_only(
     current_version = PotentialFileVersion.capture(path)
     loaded_atoms = SPRKKRAtoms.promote_ase_atoms(Atoms("Fe"))
     monkeypatch.setattr(
-        "guy4ase.gui.application.historical_state.load_potential_version",
+        "ase2sprkkr_gui.gui.application.historical_state.load_potential_version",
         lambda version: loaded_atoms,
     )
 
@@ -307,7 +307,7 @@ def test_unknown_current_potfil_version_stays_in_structure_lineage(
         return loaded_atoms
 
     monkeypatch.setattr(
-        "guy4ase.gui.application.historical_state.load_potential_version",
+        "ase2sprkkr_gui.gui.application.historical_state.load_potential_version",
         load,
     )
 

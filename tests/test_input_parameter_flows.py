@@ -1,13 +1,13 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.flows import input_parameters as input_parameter_flows
-from guy4ase.gui.input_parameters.session import create_input_parameters_session
+from ase2sprkkr_gui.gui.flows import input_parameters as input_parameter_flows
+from ase2sprkkr_gui.gui.input_parameters.session import create_input_parameters_session
 
 
 def _changed_scf_parameters(session):

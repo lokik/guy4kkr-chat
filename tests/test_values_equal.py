@@ -1,6 +1,6 @@
 import pytest
 
-from guy4ase.gui.input_parameters.bindings import values_equal
+from ase2sprkkr_gui.gui.input_parameters.bindings import values_equal
 
 
 def test_values_equal_propagates_equality_errors():

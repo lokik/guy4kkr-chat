@@ -3,7 +3,7 @@ __pycache__/**
 *.swp
 uv.lock
 tinker_version
-guy4kkr.egg-info
-guy4ase.code-workspace
+ase2sprkkr-gui.egg-info
+ase2sprkkr_gui.code-workspace
 build/**
 dist/**

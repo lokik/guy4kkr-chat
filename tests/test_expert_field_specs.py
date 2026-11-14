@@ -2,7 +2,7 @@
 
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 
-from guy4ase.gui.input_parameters.expert_fields import (
+from ase2sprkkr_gui.gui.input_parameters.expert_fields import (
     EXPERT_FIELDS,
     applicable_expert_fields,
 )

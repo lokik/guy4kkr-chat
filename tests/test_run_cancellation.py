@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from threading import Event, get_ident
 
-from guy4ase.gui.application.execution_cancellation import RunCancellation
+from ase2sprkkr_gui.gui.application.execution_cancellation import RunCancellation
 
 
 def test_backend_cancel_runs_outside_requesting_thread():

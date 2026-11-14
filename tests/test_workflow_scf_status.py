@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from guy4ase.gui.workflow.scf_status import (
+from ase2sprkkr_gui.gui.workflow.scf_status import (
     ScfProgress,
     classify_scf_progress,
     scf_progress_label,

@@ -1,13 +1,13 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from PyQt6.QtCore import QCoreApplication, QEvent
 
-from guy4ase.gui.dialogs.structures.spacegroup_selector import SpaceGroupSelectorDialog
-from guy4ase.gui.dialogs.structures.database import StructureDatabaseDialog
-from guy4ase.physics.structure_database import load_structure_database
+from ase2sprkkr_gui.gui.dialogs.structures.spacegroup_selector import SpaceGroupSelectorDialog
+from ase2sprkkr_gui.gui.dialogs.structures.database import StructureDatabaseDialog
+from ase2sprkkr_gui.physics.structure_database import load_structure_database
 
 
 def test_filtered_selection_and_details_stay_synchronized():

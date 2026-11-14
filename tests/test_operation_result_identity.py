@@ -1,8 +1,8 @@
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application.operation_results import EmptySpheresResult
-from guy4ase.gui.application.result_store import ResultStore
+from ase2sprkkr_gui.gui.application.operation_results import EmptySpheresResult
+from ase2sprkkr_gui.gui.application.result_store import ResultStore
 
 
 def test_empty_spheres_result_has_stable_task_identity():

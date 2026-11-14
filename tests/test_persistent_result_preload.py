@@ -9,9 +9,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
-from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob
+from ase2sprkkr_gui.gui.controllers.persistent_jobs import PersistentJobsController
+from ase2sprkkr_gui.gui.widgets.persistent_jobs import PersistentJobsWidget
 
 
 def _job(job_id: str, updated: str = "2026-11-13T10:00:00+00:00") -> PersistentJob:
@@ -124,7 +124,7 @@ def test_background_errors_are_not_cached_and_manual_loading_can_retry(monkeypat
     controller.preload_results(("first",))
     _spin_until(app, lambda: "Result unavailable:" in view.result_widget._empty_label.text())
     monkeypatch.setattr(
-        "guy4ase.gui.controllers.persistent_jobs.run_modal_task",
+        "ase2sprkkr_gui.gui.controllers.persistent_jobs.run_modal_task",
         lambda _view, operation, **_kwargs: operation(),
     )
     published = []
@@ -150,7 +150,7 @@ def test_refresh_reparses_files_without_adopting_but_load_opens_cached_result(mo
     shown = []
     monkeypatch.setattr(view.result_widget, "set_result", shown.append)
     monkeypatch.setattr(
-        "guy4ase.gui.controllers.persistent_jobs.run_modal_task",
+        "ase2sprkkr_gui.gui.controllers.persistent_jobs.run_modal_task",
         lambda _view, operation, **_kw: operation(),
     )
     opened = []

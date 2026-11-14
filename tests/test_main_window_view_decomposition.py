@@ -3,22 +3,22 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase import Atoms
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QApplication, QMenu
+from PyQt6.QtWidgets import QApplication, QMenu, QPushButton
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.settings import ApplicationSettings
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.dialogs.main_window import MainWindow
-from guy4ase.gui.widgets.browser_panel import BrowserPanel
-from guy4ase.gui.widgets.calculation_setup import CalculationSetupPanel
-from guy4ase.gui.widgets.expert_side_panel import ExpertSidePanel
-from guy4ase.gui.widgets.result_actions import ResultActionsWidget
-from guy4ase.gui.widgets.structure_overview import StructureOverviewWidget
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.settings import ApplicationSettings
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.dialogs.main_window import MainWindow
+from ase2sprkkr_gui.gui.widgets.browser_panel import BrowserPanel
+from ase2sprkkr_gui.gui.widgets.calculation_setup import CalculationSetupPanel
+from ase2sprkkr_gui.gui.widgets.expert_side_panel import ExpertSidePanel
+from ase2sprkkr_gui.gui.widgets.result_actions import ResultActionsWidget
+from ase2sprkkr_gui.gui.widgets.structure_overview import StructureOverviewWidget
 
 
 def _app() -> QApplication:
@@ -53,6 +53,34 @@ def test_structure_overview_renders_structure_snapshot():
 
     widget.clear_structure()
     assert widget.positions_table.rowCount() == 0
+    widget.close()
+
+
+def test_expert_welcome_buttons_have_equal_width_including_recent():
+    app = _app()
+    noop = lambda: None
+    widget = StructureOverviewWidget(
+        save_action=QAction("Save"),
+        edit_action=QAction("Edit"),
+        create_structure=noop,
+        create_from_database=noop,
+        download_structure=noop,
+        load_structure=noop,
+        load_output=noop,
+    )
+    widget.show()
+    app.processEvents()
+
+    actions = widget._welcome_widget.findChildren(QPushButton)
+    assert len(actions) == 5
+    buttons = (*actions, widget._recent_start_button)
+    assert len({(button.minimumWidth(), button.maximumWidth()) for button in buttons}) == 1
+    assert len({button.width() for button in buttons}) == 1
+    assert actions[0].width() >= max(button.sizeHint().width() for button in actions)
+
+    widget.set_recent_start(title="Continue: Fe.cif")
+    app.processEvents()
+    assert widget._recent_start_button.width() == actions[0].width()
     widget.close()
 
 

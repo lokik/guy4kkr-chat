@@ -4,25 +4,25 @@ import os
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/guy4ase-test-matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 
 from ase import Atoms
 from ase2sprkkr import SPRKKRAtoms
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.application.recent_files import RecentFiles
-from guy4ase.gui.application.workspace import WorkspaceState
-from guy4ase.gui.application.workspace_controller import WorkspaceController
-from guy4ase.gui.flows import calculation as calculation_flow
-from guy4ase.gui.input_parameters.bindings import resolve_option
-from guy4ase.gui.input_parameters.tasks import (
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.input_parameters.bindings import resolve_option
+from ase2sprkkr_gui.gui.input_parameters.tasks import (
     WorkflowStage,
     guided_task_definition,
     guided_task_definitions,
     workflow_tasks,
 )
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def _scf_atoms(status="CONVERGED"):

@@ -6,8 +6,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.application.execution_profiles import ProfileDraft
-from guy4ase.gui.widgets.execution_profiles import MpiEditor, ProfileForm
+from ase2sprkkr_gui.gui.application.execution_profiles import ProfileDraft
+from ase2sprkkr_gui.gui.widgets.execution_profiles import MpiEditor, ProfileForm
 
 
 def _app():
@@ -343,7 +343,7 @@ def test_profile_without_explicit_backend_uses_transport_specific_default():
 
 
 def test_explicit_process_backend_is_not_misidentified_as_ssh_psij():
-    from guy4ase.gui.application.execution_profiles import draft_kind
+    from ase2sprkkr_gui.gui.application.execution_profiles import draft_kind
 
     _application = _app()
     form = ProfileForm()

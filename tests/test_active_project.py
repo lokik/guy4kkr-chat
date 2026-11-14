@@ -10,9 +10,9 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QApplication, QWidget
 from kkrunner.projects import ProjectRepository
 
-from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
-from guy4ase.gui.dialogs.project_browser import ProjectBrowserDialog
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.controllers.persistent_jobs import PersistentJobsController
+from ase2sprkkr_gui.gui.dialogs.project_browser import ProjectBrowserDialog
+from ase2sprkkr_gui.main import GuiApplication
 
 
 class _JobSource:

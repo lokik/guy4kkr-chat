@@ -10,9 +10,9 @@ from kkrunner.files import CacheEntry, FileEntry, FileManifest
 from kkrunner.projects import ProjectRepository
 from kkrunner.runs import ExecutionMetadata, RunState, WorkingDirectory
 
-from guy4ase.gui.application.imported_project_results import assign
-from guy4ase.gui.application.persistent_jobs import PersistentJobSource
-from guy4ase.gui.application.run_file_deletion import (
+from ase2sprkkr_gui.gui.application.imported_project_results import assign
+from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJobSource
+from ase2sprkkr_gui.gui.application.run_file_deletion import (
     delete_local_files, plan_file_deletion, referenced_local_paths,
 )
 

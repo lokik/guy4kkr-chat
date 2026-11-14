@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import pytest
 from ase import Atoms
 
-from guy4ase.gui.application import result_store as result_store_module
-from guy4ase.gui.application.result_store import ResultStore
-from guy4ase.gui.application.workspace_controller import (
+from ase2sprkkr_gui.gui.application import result_store as result_store_module
+from ase2sprkkr_gui.gui.application.result_store import ResultStore
+from ase2sprkkr_gui.gui.application.workspace_controller import (
     CalculationRequest,
     WorkspaceController,
 )

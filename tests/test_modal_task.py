@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import QApplication, QDialog, QWidget
 
-from guy4ase.gui.misc.modal_task import _ModalTaskDialog
+from ase2sprkkr_gui.gui.misc.modal_task import _ModalTaskDialog
 
 
 def _app() -> QApplication:

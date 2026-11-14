@@ -6,8 +6,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from guy4ase.gui.workflow.model import ContinueRecent, WorkflowSection
-from guy4ase.main import GuiApplication
+from ase2sprkkr_gui.gui.workflow.model import ContinueRecent, WorkflowSection
+from ase2sprkkr_gui.main import GuiApplication
 
 
 def test_recent_history_change_refreshes_guided_plan(tmp_path):
