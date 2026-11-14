@@ -1,4 +1,4 @@
-"""A scrollable, explicit confirmation of record and local-file deletion."""
+"""Explicit, per-file confirmation of run history and local-file deletion."""
 from __future__ import annotations
 
 import os
@@ -6,11 +6,13 @@ from datetime import datetime
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
+    QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -18,12 +20,16 @@ from PyQt6.QtWidgets import (
 )
 
 from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.application.run_file_deletion import FileDeletionPlan
+from guy4ase.gui.application.run_file_deletion import (
+    FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
+)
 
 
-def _last_modified(path: str, *, remote: bool = False, modified_ns: int | None = None) -> str:
-    """Display a portable local timestamp, not the Linux inode change time."""
-    if remote:
+def _last_modified(
+    path: str, *, remote: bool = False, modified_ns: int | None = None,
+) -> str:
+    """Display modification date in local time, not inode change time."""
+    if remote and modified_ns is None:
         return "— (remote)"
     if modified_ns is not None:
         timestamp = modified_ns / 1_000_000_000
@@ -36,11 +42,10 @@ def _last_modified(path: str, *, remote: bool = False, modified_ns: int | None =
 
 
 class DeleteRunRecordDialog(QDialog):
-    """List every affected file *before* an irreversible deletion.
+    """Let the user select exact local and inspected SSH files individually.
 
-    Removing the history record is the default. Files are removed only after
-    checking an additional, initially unchecked option. Remote and shared files
-    are always shown as kept, never silently included in a deletion.
+    Remote inspection is asynchronous and optional; an unavailable connection
+    never blocks confirmation, local-file deletion, or history removal.
     """
 
     def __init__(
@@ -52,38 +57,39 @@ class DeleteRunRecordDialog(QDialog):
         super().__init__(parent)
         imported = job.imported_path is not None
         self._action_label = "Remove reference" if imported else "Delete run record"
+        self._plan = plan
         self.setWindowTitle(
             "Remove imported result?" if imported else "Delete calculation record?"
         )
-        self.resize(950, 540)
+        self.resize(1050, 570)
         self.setMinimumWidth(700)
 
         root = QVBoxLayout(self)
-        header = QLabel(
+        heading = QLabel(
             f"Remove the project reference to {job.imported_path}?"
             if imported
             else f"Permanently delete the run record for "
                  f"{job.dataset or job.id} ({job.id})?",
             self,
         )
-        header.setWordWrap(True)
-        root.addWidget(header)
+        heading.setWordWrap(True)
+        root.addWidget(heading)
 
         if not job.is_final:
             warning = QLabel(
-                "WARNING: This calculation might still be running. Removing the "
-                "record does not stop its process. File deletion is unavailable "
-                "for an active or unknown run.",
+                "WARNING: This calculation might still be running. Removing its "
+                "record does not stop the process. Files cannot be deleted "
+                "while the run is active or its state is unknown.",
                 self,
             )
             warning.setWordWrap(True)
             root.addWidget(warning)
 
         summary = QLabel(
-            "The record/reference will be removed. Files are kept unless you "
-            "explicitly enable deletion below. The table lists every referenced "
-            "file and its last-modified date (local time); creation dates are "
-            "not reliably available on all operating systems.",
+            "Check individual local or SSH files to delete permanently. SSH "
+            "details load separately; local deletion does not require SSH. "
+            "Shared files require another confirmation. Dates are last-modified "
+            "times (local time), since creation dates are not universally available.",
             self,
         )
         summary.setWordWrap(True)
@@ -93,9 +99,9 @@ class DeleteRunRecordDialog(QDialog):
         self.file_table.setObjectName("referenced_files")
         self.file_table.setColumnCount(3)
         self.file_table.setHeaderLabels(
-            ("Referenced file", "Last modified (local time)", "Action")
+            ("Delete / Referenced file", "Last modified (local time)", "References")
         )
-        self.file_table.setRootIsDecorated(False)
+        self.file_table.setRootIsDecorated(True)
         self.file_table.setAlternatingRowColors(True)
         self.file_table.setUniformRowHeights(True)
         self.file_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
@@ -106,73 +112,331 @@ class DeleteRunRecordDialog(QDialog):
         table_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         root.addWidget(self.file_table, 1)
 
-        self._eligible_rows: list[QTreeWidgetItem] = []
+        self._selectable_rows: dict[str, QTreeWidgetItem] = {}
+        self._remote_rows: dict[str, QTreeWidgetItem] = {}
+        self._remote_selectable: dict[str, QTreeWidgetItem] = {}
+        self._remote_review: RemoteFileReview | None = None
+        self._shared_files = frozenset(
+            () if plan is None else (*plan.shared, *plan.shared_directories)
+        )
         if plan is not None:
-            snapshots = {item.path: item for item in plan.snapshots}
+            snapshots = {item.path: item for item in plan.selectable_snapshots}
             groups = (
-                (plan.files, "Eligible — keep", "Eligible for local deletion", False, True),
-                (plan.shared, "Keep — shared", "Referenced by another run or imported result", False, False),
-                (plan.unsafe, "Keep — unsafe", "Symlink, directory, or other non-regular file", False, False),
+                (plan.files, "Only this record", "No other saved run references this file", False, True),
+                (plan.shared, "Shared", "Referenced by other runs or imported results", False, True),
+                (plan.directories, "Directory — recursive", "Delete directory and all its contents", False, True),
+                (plan.shared_directories, "Shared directory — recursive", "Deleting this directory affects other saved runs", False, True),
+                (plan.unsafe, "Cannot delete", "Symlink or special file", False, False),
                 (plan.missing, "Missing", "File does not exist", False, False),
-                (plan.remote, "Keep — remote", "Remote files are not deleted here", True, False),
+                (plan.remote, "SSH — checking", "Checking remote file metadata (local cleanup is available immediately)", True, False),
             )
-            for paths, action, reason, remote, eligible in groups:
+            for paths, status, reason, remote, selectable in groups:
                 for filename in paths:
                     snapshot = snapshots.get(filename)
-                    row = QTreeWidgetItem(
-                        [filename, _last_modified(
-                            filename, remote=remote,
-                            modified_ns=None if snapshot is None else snapshot.modified_ns,
-                        ), action]
+                    referrers = (
+                        plan.referrers(filename) if "Shared" in status else ()
                     )
+                    references = (
+                        f"Shared ({len(referrers)} other reference(s))"
+                        if referrers else status
+                    )
+                    tooltip = (
+                        "Also referenced by:\n" + "\n".join(referrers)
+                        if referrers else reason
+                    )
+                    row = QTreeWidgetItem([
+                        filename,
+                        _last_modified(
+                            filename, remote=remote,
+                            modified_ns=(
+                                None if snapshot is None else snapshot.modified_ns
+                            ),
+                        ),
+                        references,
+                    ])
                     row.setToolTip(0, filename)
-                    row.setToolTip(2, reason)
+                    row.setToolTip(2, tooltip)
+                    # QTreeWidgetItem is user-checkable by default in Qt:
+                    # explicitly disable every unsafe or uninspected row.
+                    row.setFlags(row.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+                    if selectable and job.is_final:
+                        row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                        row.setCheckState(0, Qt.CheckState.Unchecked)
+                        self._selectable_rows[filename] = row
+                    if remote:
+                        self._remote_rows[filename] = row
                     self.file_table.addTopLevelItem(row)
-                    if eligible:
-                        self._eligible_rows.append(row)
+                    if snapshot is not None and snapshot.kind == "directory":
+                        self._add_directory_contents(row, snapshot)
         if not self.file_table.topLevelItemCount():
             self.file_table.addTopLevelItem(
-                QTreeWidgetItem(["(no referenced local files to review)", "—", "Keep"])
+                QTreeWidgetItem(["(no referenced files available)", "—", "—"])
             )
+        self.file_table.itemChanged.connect(self._update_selection_summary)
 
-        self.delete_files_checkbox = QCheckBox(
-            "Also permanently delete the eligible local files", self,
-        )
-        self.delete_files_checkbox.setChecked(False)
-        self.delete_files_checkbox.setEnabled(
-            plan is not None and job.is_final and bool(plan.files)
-        )
-        self.delete_files_checkbox.toggled.connect(self._update_file_actions)
-        root.addWidget(self.delete_files_checkbox)
+        selection_buttons = QHBoxLayout()
+        self.select_none_button = QPushButton("Select none", self)
+        self.select_none_button.setToolTip("Keep all files; remove only the record or reference.")
+        self.select_none_button.clicked.connect(self.select_none)
+        selection_buttons.addWidget(self.select_none_button)
 
-        count = len(self._eligible_rows)
-        self._count_label = QLabel(
-            f"{count} local file(s) eligible for deletion. All other rows will be kept.",
-            self,
+        self.select_unshared_button = QPushButton("Select unshared files", self)
+        self.select_unshared_button.setToolTip(
+            "Check only files not referenced by another saved run or imported "
+            "result, including runs in this or other projects."
         )
-        self._count_label.setWordWrap(True)
-        root.addWidget(self._count_label)
+        self.select_unshared_button.clicked.connect(self.select_unshared_files)
+        selection_buttons.addWidget(self.select_unshared_button)
+
+        self.select_all_button = QPushButton("Select all files", self)
+        self.select_all_button.setToolTip(
+            "Check every selectable local and inspected SSH file, including "
+            "files shared with other runs. Shared files require another confirmation."
+        )
+        self.select_all_button.clicked.connect(self.select_all_files)
+        selection_buttons.addWidget(self.select_all_button)
+        selection_buttons.addStretch(1)
+        root.addLayout(selection_buttons)
+        for button in (
+            self.select_none_button, self.select_unshared_button,
+            self.select_all_button,
+        ):
+            button.setEnabled(bool(self._selectable_rows))
+
+        self.selection_summary = QLabel(self)
+        self.selection_summary.setWordWrap(True)
+        root.addWidget(self.selection_summary)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel, self)
         self.confirm_button = buttons.addButton(
-            self._action_label,
-            QDialogButtonBox.ButtonRole.AcceptRole,
+            self._action_label, QDialogButtonBox.ButtonRole.AcceptRole
         )
         self.confirm_button.setAutoDefault(False)
         cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel.setDefault(True)
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self._confirm_selection)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
+        self._update_selection_summary()
+
+    @staticmethod
+    def _add_directory_contents(
+        row: QTreeWidgetItem, snapshot: FileDeletionSnapshot,
+    ) -> None:
+        """Display the reviewed tree without selecting descendants twice."""
+        for path, kind, modified_ns, _size, _device, _inode in snapshot.contents:
+            child = QTreeWidgetItem([
+                path,
+                _last_modified(path, modified_ns=modified_ns),
+                kind.capitalize() + " — included with directory",
+            ])
+            child.setFlags(child.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+            child.setToolTip(0, path)
+            row.addChild(child)
+        row.setExpanded(bool(snapshot.contents))
+
+    @property
+    def selected_files(self) -> tuple[str, ...]:
+        return tuple(sorted(
+            name for name, row in self._selectable_rows.items()
+            if row.checkState(0) == Qt.CheckState.Checked
+        ))
+
+    @property
+    def selected_shared_files(self) -> tuple[str, ...]:
+        return tuple(sorted(set(self.selected_files) & self._shared_files))
+
+    @property
+    def selected_file_snapshots(self) -> tuple[FileDeletionSnapshot, ...]:
+        selected = set(self.selected_files)
+        return tuple(
+            snapshot for snapshot in self._plan.selectable_snapshots
+            if snapshot.path in selected
+        ) if self._plan is not None else ()
+
+    @property
+    def remote_review(self) -> RemoteFileReview | None:
+        return self._remote_review
+
+    @property
+    def selected_remote_files(self) -> tuple[str, ...]:
+        return tuple(sorted(
+            name for name, row in self._remote_selectable.items()
+            if row.checkState(0) == Qt.CheckState.Checked
+        ))
+
+    @property
+    def selected_remote_shared_files(self) -> tuple[str, ...]:
+        shared = () if self._remote_review is None else self._remote_review.shared
+        return tuple(sorted(set(self.selected_remote_files).intersection(shared)))
+
+    @property
+    def selected_remote_snapshots(self) -> tuple[FileDeletionSnapshot, ...]:
+        selected = set(self.selected_remote_files)
+        return (
+            tuple(item for item in self._remote_review.snapshots if item.path in selected)
+            if self._remote_review is not None else ()
+        )
+
+    def set_remote_preview(self, review: RemoteFileReview) -> None:
+        """Update remote rows on the Qt thread after background SSH inspection."""
+        self._remote_review = review
+        snapshots = {snapshot.path: snapshot for snapshot in review.snapshots}
+        reasons = dict(review.unavailable)
+        self.file_table.blockSignals(True)
+        try:
+            for path, row in self._remote_rows.items():
+                snapshot = snapshots.get(path)
+                if snapshot is None:
+                    row.setText(2, "SSH — " + reasons.get(path, "Unavailable"))
+                    row.setToolTip(2, "Not selectable for deletion")
+                    continue
+                other = review.referrers_for(path)
+                row.setText(
+                    1, _last_modified(path, remote=True, modified_ns=snapshot.modified_ns)
+                )
+                row.setText(
+                    2, f"SSH · shared ({len(other)} other reference(s))"
+                    if other else f"SSH · {review.host} · unshared",
+                )
+                row.setToolTip(
+                    2, ("Referenced by:\n" + "\n".join(other)) if other
+                    else f"On SSH host {review.host}; no other saved references",
+                )
+                row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                row.setCheckState(0, Qt.CheckState.Unchecked)
+                if snapshot.kind == "directory":
+                    self._add_directory_contents(row, snapshot)
+                    row.setText(2, row.text(2) + " · directory (recursive)")
+                self._remote_selectable[path] = row
+        finally:
+            self.file_table.blockSignals(False)
+        self._update_selection_summary()
+
+    def set_remote_error(self, message: str) -> None:
+        """SSH inspection failure is informational, not a deletion blocker."""
+        for row in self._remote_rows.values():
+            row.setText(2, "SSH unavailable — kept")
+            row.setToolTip(2, message)
+        self._update_selection_summary()
 
     @property
     def delete_files(self) -> bool:
-        return self.delete_files_checkbox.isEnabled() and self.delete_files_checkbox.isChecked()
+        return bool(self.selected_files or self.selected_remote_files)
 
-    def _update_file_actions(self, checked: bool) -> None:
-        for row in self._eligible_rows:
-            row.setText(2, "Delete permanently" if checked else "Eligible — keep")
-        self.confirm_button.setText(
-            self._action_label
-            + (f" and {len(self._eligible_rows)} file(s)" if checked else "")
+    def _select(self, local: set[str], remote: set[str] | None = None) -> None:
+        self.file_table.blockSignals(True)
+        try:
+            for rows, selected in (
+                (self._selectable_rows, local),
+                (self._remote_selectable, remote or set()),
+            ):
+                for name, row in rows.items():
+                    row.setCheckState(
+                        0, Qt.CheckState.Checked if name in selected
+                        else Qt.CheckState.Unchecked
+                    )
+        finally:
+            self.file_table.blockSignals(False)
+        self._update_selection_summary()
+
+    def select_none(self) -> None:
+        self._select(set(), set())
+
+    def select_unshared_files(self) -> None:
+        remote = (
+            set() if self._remote_review is None
+            else {item.path for item in self._remote_review.snapshots}
+                 - set(self._remote_review.shared)
         )
+        self._select(
+            set() if self._plan is None else set((
+                *self._plan.files, *self._plan.directories,
+            )), remote,
+        )
+
+    def select_all_files(self) -> None:
+        self._select(set(self._selectable_rows), set(self._remote_selectable))
+
+    def _update_selection_summary(self, *_args) -> None:
+        local_count = len(self.selected_files)
+        remote_count = len(self.selected_remote_files)
+        shared = len(self.selected_shared_files) + len(self.selected_remote_shared_files)
+        count = local_count + remote_count
+        directories = sum(
+            1 for item in self.selected_file_snapshots if item.kind == "directory"
+        ) + sum(
+            1 for item in self.selected_remote_snapshots if item.kind == "directory"
+        )
+        note = (
+            f"{local_count} local and {remote_count} SSH item(s) selected. "
+            "SSH cleanup is best-effort and cannot prevent local deletion."
+            if count else "No files selected. Only the record/reference will be removed."
+        )
+        if directories:
+            note += f" {directories} selected director(ies) will be removed recursively."
+        if shared:
+            note += f" WARNING: {shared} selected file(s) have other saved references."
+        self.selection_summary.setText(note)
+        self.confirm_button.setText(
+            self._action_label + (f" and {count} file(s)" if count else "")
+        )
+        enabled = bool(self._selectable_rows or self._remote_selectable)
+        for button in (
+            self.select_none_button, self.select_unshared_button, self.select_all_button,
+        ):
+            button.setEnabled(enabled)
+
+    def _confirm_selection(self) -> None:
+        shared_local = self.selected_shared_files
+        shared_remote = self.selected_remote_shared_files
+        shared_count = len(shared_local) + len(shared_remote)
+        if shared_count:
+            details = [
+                path + "\n  " +
+                "\n  ".join(self._plan.referrers(path) or ("Other saved record",))
+                for path in shared_local
+            ]
+            if self._remote_review is not None:
+                details.extend(
+                    f"SSH: {path}\n  " +
+                    "\n  ".join(
+                        self._remote_review.referrers_for(path)
+                        or ("Other saved record",)
+                    )
+                    for path in shared_remote
+                )
+            warning = (
+                f"{shared_count} selected file(s) are referenced by other run "
+                "records or imported results. Deleting them may make those "
+                "results unusable.\n\n"
+                + "\n\n".join(details)
+                + "\n\nDelete these shared files anyway?"
+            )
+            answer = QMessageBox.warning(
+                self, "Delete shared files?", warning,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        directories = [
+            item for item in (
+                *self.selected_file_snapshots, *self.selected_remote_snapshots,
+            ) if item.kind == "directory"
+        ]
+        if directories:
+            description = "\n".join(
+                f"{item.path} ({len(item.contents)} contained entries)"
+                for item in directories
+            )
+            result = QMessageBox.warning(
+                self, "Delete entire directories?",
+                "The following directories and ALL their contents will be "
+                "permanently deleted:\n\n" + description,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if result != QMessageBox.StandardButton.Yes:
+                return
+        self.accept()

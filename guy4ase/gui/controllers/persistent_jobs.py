@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from threading import Thread
 from concurrent.futures import Future, ThreadPoolExecutor
 from collections.abc import Callable
 from typing import Any
@@ -30,6 +31,10 @@ class _SourceSignals(QObject):
 
 class _ResultSignals(QObject):
     ready = pyqtSignal(str, object, object)
+
+
+class _RemoteFileSignals(QObject):
+    ready = pyqtSignal(str, str, object, object)
 
 
 def _result_version(job: PersistentJob) -> tuple[Any, ...]:
@@ -101,6 +106,12 @@ class PersistentJobsController(QObject):
                 wait=False, cancel_futures=True
             )
         )
+
+        self._remote_file_signals = _RemoteFileSignals(self)
+        self._remote_file_signals.ready.connect(
+            self._remote_file_preview_ready, Qt.ConnectionType.QueuedConnection,
+        )
+        self._deletion_dialogs: dict[str, DeleteRunRecordDialog] = {}
 
         self._source_signals = _SourceSignals(self)
         self._source_signals.changed.connect(self._source_changed)
@@ -459,8 +470,20 @@ class PersistentJobsController(QObject):
         except Exception as exc:  # noqa: BLE001 - remote execution boundary
             QMessageBox.warning(view, "Cancellation Failed", str(exc))
 
+    @pyqtSlot(str, str, object, object)
+    def _remote_file_preview_ready(
+        self, job_id: str, dialog_id: str, review: object, error: object,
+    ) -> None:
+        dialog = self._deletion_dialogs.get(job_id)
+        if dialog is None or str(id(dialog)) != dialog_id:
+            return  # The user closed or replaced the dialog.
+        if error is not None:
+            dialog.set_remote_error(str(error))
+        else:
+            dialog.set_remote_preview(review)
+
     def _forget_requested(self, view: PersistentJobsWidget, job_id: str) -> None:
-        """Show every referenced file and its modification date before deletion."""
+        """Local removal is independent of the optional, background SSH cleanup."""
         job = self._source.job(job_id)
         if job is None or not self._source.supports_forget:
             return
@@ -474,14 +497,51 @@ class PersistentJobsController(QObject):
                 return
 
         dialog = DeleteRunRecordDialog(job, plan, view)
-        if dialog.exec() != dialog.DialogCode.Accepted:
-            return
-        delete_files = dialog.delete_files
+        if plan is not None and plan.remote:
+            self._deletion_dialogs[job_id] = dialog
+
+            def inspect() -> None:
+                try:
+                    preview = self._source.remote_file_review(job_id)
+                except Exception as exc:  # noqa: BLE001 - background SSH boundary
+                    logger.info("SSH deletion preview unavailable for %s: %s", job_id, exc)
+                    preview, error = None, str(exc)
+                else:
+                    error = None
+                try:
+                    self._remote_file_signals.ready.emit(job_id, str(id(dialog)), preview, error)
+                except RuntimeError:
+                    # Application already closed while the SSH request was pending.
+                    pass
+
+            Thread(
+                target=inspect, daemon=True, name="guy4ase-remote-file-preview",
+            ).start()
+        try:
+            if dialog.exec() != dialog.DialogCode.Accepted:
+                return
+        finally:
+            self._deletion_dialogs.pop(job_id, None)
+
+        selected_files = dialog.selected_files
+        selected_remote = dialog.selected_remote_files
+        delete_files = bool(selected_files)
+        remote_record = None
+        remote_review = dialog.remote_review
+        if selected_remote:
+            try:
+                remote_record = self._source.capture_remote_cleanup(job_id)
+            except Exception as exc:  # noqa: BLE001 - optional SSH cleanup
+                logger.warning("Cannot prepare remote cleanup for %s: %s", job_id, exc)
         kwargs = {"force": active}
         if delete_files:
+            shared_files = dialog.selected_shared_files
             kwargs.update(
-                delete_files=True, expected_files=plan.files,
-                expected_file_snapshots=plan.snapshots,
+                delete_files=True,
+                expected_files=selected_files,
+                expected_file_snapshots=dialog.selected_file_snapshots,
+                expected_shared_files=shared_files,
+                allow_shared_files=bool(shared_files),
             )
         try:
             run_modal_task(
@@ -489,12 +549,33 @@ class PersistentJobsController(QObject):
                 lambda: self._source.forget(job_id, **kwargs),
                 title="Removing Calculation Record",
                 label=(
-                    "Removing referenced local files and saved calculation history…"
+                    "Removing selected local files and saved calculation history…"
                     if delete_files else "Removing saved calculation history…"
                 ),
             )
         except Exception as exc:  # noqa: BLE001 - filesystem/persistent storage boundary
             QMessageBox.warning(view, "Delete Run Record Failed", str(exc))
+            return
+
+        # Only after local cleanup and history removal succeeded. SSH errors
+        # never propagate back into this workflow, including lost connections.
+        if selected_remote and remote_record is not None and remote_review is not None:
+            def cleanup() -> None:
+                try:
+                    results = self._source.cleanup_remote_files(
+                        remote_record, remote_review, selected_remote,
+                    )
+                    for item in results:
+                        logger.info(
+                            "SSH file cleanup: %s: %s",
+                            item["path"], item["status"],
+                        )
+                except Exception:  # noqa: BLE001 - log, never block local deletion
+                    logger.exception("SSH cleanup failed for removed run %s", job_id)
+
+            Thread(
+                target=cleanup, daemon=True, name="guy4ase-remote-file-cleanup",
+            ).start()
 
     @staticmethod
     def _show_monitor_window(monitor_window: RunMonitorWindow) -> None:

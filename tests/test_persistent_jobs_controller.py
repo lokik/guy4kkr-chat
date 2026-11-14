@@ -14,7 +14,9 @@ from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
 import guy4ase.gui.controllers.persistent_jobs as controller_module
 from guy4ase.gui.application.persistent_jobs import PersistentJob
-from guy4ase.gui.application.run_file_deletion import FileDeletionPlan
+from guy4ase.gui.application.run_file_deletion import (
+    FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
+)
 from guy4ase.gui.controllers.persistent_jobs import PersistentJobsController
 from guy4ase.gui.dialogs.delete_run_record import DeleteRunRecordDialog
 from guy4ase.gui.widgets.persistent_jobs import PersistentJobsWidget
@@ -557,8 +559,8 @@ def test_unknown_run_can_be_forgotten_only_after_dangerous_confirmation(monkeypa
 
     def prompt(dialog):
         confirmations.extend(label.text() for label in dialog.findChildren(QLabel))
-        assert not dialog.delete_files_checkbox.isEnabled()
-        assert not dialog.delete_files_checkbox.isChecked()
+        assert dialog.selected_files == ()
+        assert not dialog.select_all_button.isEnabled()
         return dialog.DialogCode.Accepted
 
     monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt)
@@ -586,21 +588,23 @@ def test_cancel_uses_native_backend_and_keeps_history(monkeypatch):
     assert view.all_jobs == (job,)
 
 
-def test_delete_files_requires_explicit_checkbox_and_displays_exclusions(monkeypatch, tmp_path):
+def test_delete_file_selection_is_explicit_and_displays_shared_references(monkeypatch, tmp_path):
     _app = QApplication.instance() or QApplication([])
     from datetime import datetime
+    from PyQt6.QtCore import Qt
     import os
 
     job = _job("completed", state="finished")
     source = _Source((job,))
     source.supports_forget = True
-    file = tmp_path / "output.dos"
+    own = tmp_path / "output.dos"
     shared = tmp_path / "shared.pot"
-    file.write_text("output")
+    own.write_text("output")
     shared.write_text("shared")
-    os.utime(file, (1_700_000_000, 1_700_000_000))
+    os.utime(own, (1_700_000_000, 1_700_000_000))
     source.referenced_file_deletion = lambda _job_id: FileDeletionPlan(
-        (str(file),), (str(shared),), (), (), ("/remote/output.dos",),
+        (str(own),), (str(shared),), (), (), ("/remote/output.dos",),
+        shared_referrers=((str(shared), ("Run other (Fe-SCF, project 123)",)),),
     )
     calls = []
     source.forget = lambda job_id, **kwargs: calls.append((job_id, kwargs))
@@ -609,47 +613,93 @@ def test_delete_files_requires_explicit_checkbox_and_displays_exclusions(monkeyp
     controller.bind_view(view)
     monkeypatch.setattr(controller_module, "run_modal_task", lambda _view, fn, **_kwargs: fn())
 
-    def table_values(dialog):
-        tree = dialog.file_table
-        return [
-            tuple(tree.topLevelItem(i).text(col) for col in range(3))
-            for i in range(tree.topLevelItemCount())
-        ]
-
     def prompt_record_only(dialog):
-        assert not dialog.delete_files_checkbox.isChecked()
-        assert dialog.delete_files_checkbox.isEnabled()
-        rows = table_values(dialog)
-        assert len(rows) == 3
-        assert rows[0] == (
-            str(file), datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-            "Eligible — keep",
-        )
-        assert rows[1][0] == str(shared) and rows[1][2] == "Keep — shared"
-        assert rows[2] == ("/remote/output.dos", "— (remote)", "Keep — remote")
+        assert dialog.selected_files == ()
+        assert dialog.select_all_button.isEnabled()
+        assert dialog.select_unshared_button.isEnabled()
+        tree = dialog.file_table
+        assert tree.topLevelItemCount() == 3
+        first = tree.topLevelItem(0)
+        assert first.text(0) == str(own)
+        assert first.text(1) == datetime.fromtimestamp(
+            own.stat().st_mtime
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        assert first.checkState(0) == Qt.CheckState.Unchecked
+        shared_row = tree.topLevelItem(1)
+        assert shared_row.text(0) == str(shared)
+        assert "Shared" in shared_row.text(2)
+        assert "Run other" in shared_row.toolTip(2)
+        assert tree.topLevelItem(2).text(2) == "SSH — checking"
         return dialog.DialogCode.Accepted
 
     monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt_record_only)
     view.forgetRequested.emit(job.id)
     assert calls == [(job.id, {"force": False})]
 
-    def prompt_with_files(dialog):
-        assert not dialog.delete_files_checkbox.isChecked()
-        dialog.delete_files_checkbox.setChecked(True)
-        assert table_values(dialog)[0][2] == "Delete permanently"
+    def prompt_select_unshared(dialog):
+        dialog.select_unshared_button.click()
+        assert dialog.selected_files == (str(own),)
+        assert dialog.selected_shared_files == ()
         assert dialog.confirm_button.text() == "Delete run record and 1 file(s)"
         return dialog.DialogCode.Accepted
 
-    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt_with_files)
+    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt_select_unshared)
     view.forgetRequested.emit(job.id)
     assert calls[-1] == (
         job.id, {
             "force": False,
             "delete_files": True,
-            "expected_files": (str(file),),
+            "expected_files": (str(own),),
             "expected_file_snapshots": (),
+            "expected_shared_files": (),
+            "allow_shared_files": False,
         },
     )
+
+    def prompt_select_shared(dialog):
+        dialog.select_all_button.click()
+        assert dialog.selected_files == tuple(sorted((str(own), str(shared))))
+        assert dialog.selected_shared_files == (str(shared),)
+        assert "WARNING" in dialog.selection_summary.text()
+        dialog.select_none_button.click()
+        assert dialog.selected_files == ()
+        return dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt_select_shared)
+    view.forgetRequested.emit(job.id)
+    assert calls[-1] == (job.id, {"force": False})
+
+
+def test_shared_file_requires_second_confirmation(monkeypatch, tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtWidgets import QMessageBox
+
+    path = tmp_path / "shared.out"
+    path.write_text("important")
+    plan = FileDeletionPlan(
+        (), (str(path),), (), (), (),
+        shared_referrers=((str(path), ("Run another-job (DOS, project B)",)),),
+    )
+    dialog = DeleteRunRecordDialog(_job("done", state="finished"), plan)
+    dialog.select_all_files()
+    prompts = []
+
+    def cancel_first(_parent, title, question, *_buttons):
+        prompts.append((title, question))
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", cancel_first)
+    dialog._confirm_selection()
+    assert dialog.result() != dialog.DialogCode.Accepted
+    assert "Run another-job" in prompts[0][1]
+
+    monkeypatch.setattr(
+        QMessageBox, "warning",
+        lambda *_args: QMessageBox.StandardButton.Yes,
+    )
+    dialog._confirm_selection()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    dialog.close()
 
 
 def test_deletion_dialog_cancel_has_no_effect(monkeypatch):
@@ -672,6 +722,7 @@ def test_deletion_dialog_cancel_has_no_effect(monkeypatch):
 def test_deletion_dialog_lists_all_files_and_last_modified_dates(tmp_path):
     _app = QApplication.instance() or QApplication([])
     from datetime import datetime
+    from PyQt6.QtCore import Qt
     import os
 
     paths = tuple(tmp_path / f"result_{index:02d}.dos" for index in range(24))
@@ -694,10 +745,196 @@ def test_deletion_dialog_lists_all_files_and_last_modified_dates(tmp_path):
         paths[-1].stat().st_mtime
     ).strftime("%Y-%m-%d %H:%M:%S")
 
-    dialog.delete_files_checkbox.setChecked(True)
+    dialog.select_all_button.click()
     assert dialog.delete_files
+    assert len(dialog.selected_files) == 24
     assert all(
-        dialog.file_table.topLevelItem(i).text(2) == "Delete permanently"
+        dialog.file_table.topLevelItem(i).checkState(0) == Qt.CheckState.Checked
         for i in range(24)
     )
+    dialog.select_none_button.click()
+    assert dialog.selected_files == ()
+    # Each individual checkbox can be changed independently.
+    dialog.file_table.topLevelItem(5).setCheckState(0, Qt.CheckState.Checked)
+    assert dialog.selected_files == (str(paths[5]),)
+    dialog.close()
+
+
+
+def test_ssh_preview_does_not_disable_local_selection(tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtCore import Qt
+
+    local = tmp_path / "local.out"
+    local.write_text("local")
+    remote = "/remote/run/output.out"
+    missing = "/remote/run/missing.out"
+    plan = FileDeletionPlan((str(local),), (), (), (), (remote, missing))
+    dialog = DeleteRunRecordDialog(_job("done", state="finished"), plan)
+    assert dialog.selected_remote_files == ()
+    assert dialog.select_all_button.isEnabled()
+    dialog.select_unshared_button.click()
+    assert dialog.selected_files == (str(local),)
+    assert dialog.selected_remote_files == ()
+    review = RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(remote, 1_700_000_000_000_000_000, 8, 1, 3),),
+        unavailable=((missing, "missing"),),
+    )
+    dialog.set_remote_preview(review)
+    assert dialog.file_table.topLevelItem(1).text(1).startswith("2023")
+    dialog.select_unshared_button.click()
+    assert dialog.selected_files == (str(local),)
+    assert dialog.selected_remote_files == (remote,)
+    assert dialog.file_table.topLevelItem(2).flags() & Qt.ItemFlag.ItemIsUserCheckable == 0
+    dialog.select_none()
+    assert dialog.selected_files == dialog.selected_remote_files == ()
+    dialog.close()
+
+
+def test_shared_ssh_files_are_not_bulk_selected_as_unshared(tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtWidgets import QMessageBox
+    local = tmp_path / "own.out"
+    local.write_text("local")
+    remote = "/remote/Fe.pot"
+    dialog = DeleteRunRecordDialog(
+        _job("done", state="finished"),
+        FileDeletionPlan((str(local),), (), (), (), (remote,)),
+    )
+    dialog.set_remote_preview(RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(remote, 1700000000000000000, 5, 1, 2),),
+        shared=(remote,),
+        referrers=((remote, ("Run second (DOS, project B)",)),),
+    ))
+    dialog.select_unshared_files()
+    assert dialog.selected_files == (str(local),)
+    assert dialog.selected_remote_files == ()
+    dialog.select_all_files()
+    assert dialog.selected_remote_shared_files == (remote,)
+    assert "Run second" in dialog.file_table.topLevelItem(1).toolTip(2)
+    dialog.close()
+
+
+def test_ssh_cleanup_starts_only_after_local_record_removal(monkeypatch, tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    job = _job("finished", state="finished")
+    source = _Source((job,))
+    source.supports_forget = True
+    own = tmp_path / "output.out"
+    own.write_text("local")
+    remote = "/remote/output.out"
+    source.referenced_file_deletion = lambda _id: FileDeletionPlan(
+        (str(own),), (), (), (), (remote,),
+    )
+    remote_review = RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(remote, 1_700_000_000_000_000_000, 5, 2, 3),),
+    )
+    events = []
+    pending = []
+
+    class FakeThread:
+        def __init__(self, *, target, **kwargs):
+            self.target = target
+
+        def start(self):
+            pending.append(self.target)
+
+    source.capture_remote_cleanup = lambda _id: object()
+
+    def forget(_id, **kwargs):
+        assert own.exists()
+        own.unlink()
+        events.append(("local", kwargs))
+
+    def cleanup(*args):
+        assert not own.exists()
+        events.append(("remote", args))
+        raise OSError("SSH disconnected")
+
+    source.forget = forget
+    source.cleanup_remote_files = cleanup
+    controller = PersistentJobsController(source)
+    view = _view()
+    controller.bind_view(view)
+    monkeypatch.setattr(controller_module, "Thread", FakeThread)
+    monkeypatch.setattr(controller_module, "run_modal_task", lambda _view, fn, **kw: fn())
+
+    def prompt(dialog):
+        dialog.set_remote_preview(remote_review)
+        dialog.select_all_files()
+        assert dialog.selected_files == (str(own),)
+        assert dialog.selected_remote_files == (remote,)
+        return dialog.DialogCode.Accepted
+
+    monkeypatch.setattr(DeleteRunRecordDialog, "exec", prompt)
+    view.forgetRequested.emit(job.id)
+    assert len(pending) == 2  # inspection and deferred deletion
+    assert not own.exists()
+    assert [event[0] for event in events] == ["local"]
+    pending[-1]()  # Failure is reported asynchronously, not raised by local cleanup.
+    assert [event[0] for event in events] == ["local", "remote"]
+
+
+
+def test_local_directory_shows_children_and_requires_recursive_confirmation(
+    monkeypatch, tmp_path,
+):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtWidgets import QMessageBox
+    from guy4ase.gui.application.run_file_deletion import plan_file_deletion
+
+    taudir = tmp_path / "tau"
+    (taudir / "nested").mkdir(parents=True)
+    (taudir / "nested" / "Fe.tau").write_text("tau")
+    plan = plan_file_deletion((str(taudir),), other_references=(), expected_kinds={str(taudir): "directory"})
+    dialog = DeleteRunRecordDialog(_job("done", state="finished"), plan)
+    root = dialog.file_table.topLevelItem(0)
+    assert root.text(0) == str(taudir)
+    assert root.childCount() == 2
+    assert root.child(1).text(1)  # Children's modification dates are displayed.
+    dialog.select_unshared_files()
+    assert dialog.selected_files == (str(taudir),)
+    prompts = []
+
+    def warning(*args):
+        prompts.append((args[1], args[2]))
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", warning)
+    dialog._confirm_selection()
+    assert prompts[0][0] == "Delete entire directories?"
+    assert dialog.result() != dialog.DialogCode.Accepted
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *_args: QMessageBox.StandardButton.Yes,
+    )
+    dialog._confirm_selection()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    dialog.close()
+
+
+def test_remote_directory_tree_preview_is_not_confused_with_local_file(tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtCore import Qt
+
+    path = "/scratch/TAUDIR"
+    child = path + "/Fe.tau"
+    review = RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(
+            path, 1_700_000_000_000_000_000, 64, 1, 10, "directory",
+            ((child, "file", 1_700_000_000_000_000_001, 6, 1, 11),),
+        ),),
+    )
+    dialog = DeleteRunRecordDialog(
+        _job("done", state="finished"),
+        FileDeletionPlan((), (), (), (), (path,)),
+    )
+    dialog.set_remote_preview(review)
+    directory = dialog.file_table.topLevelItem(0)
+    assert directory.childCount() == 1
+    assert directory.child(0).text(0) == child
+    assert not (directory.child(0).flags() & Qt.ItemFlag.ItemIsUserCheckable)
+    dialog.select_unshared_files()
+    assert dialog.selected_remote_files == (path,)
+    assert dialog.selected_remote_snapshots[0].kind == "directory"
+    assert "recursively" in dialog.selection_summary.text()
     dialog.close()
