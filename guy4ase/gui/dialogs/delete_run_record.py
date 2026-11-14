@@ -101,7 +101,7 @@ class DeleteRunRecordDialog(QDialog):
         self.file_table.setHeaderLabels(
             ("Delete / Referenced file", "Last modified (local time)", "References")
         )
-        self.file_table.setRootIsDecorated(False)
+        self.file_table.setRootIsDecorated(True)
         self.file_table.setAlternatingRowColors(True)
         self.file_table.setUniformRowHeights(True)
         self.file_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
@@ -116,20 +116,26 @@ class DeleteRunRecordDialog(QDialog):
         self._remote_rows: dict[str, QTreeWidgetItem] = {}
         self._remote_selectable: dict[str, QTreeWidgetItem] = {}
         self._remote_review: RemoteFileReview | None = None
-        self._shared_files = frozenset(() if plan is None else plan.shared)
+        self._shared_files = frozenset(
+            () if plan is None else (*plan.shared, *plan.shared_directories)
+        )
         if plan is not None:
             snapshots = {item.path: item for item in plan.selectable_snapshots}
             groups = (
                 (plan.files, "Only this record", "No other saved run references this file", False, True),
                 (plan.shared, "Shared", "Referenced by other runs or imported results", False, True),
-                (plan.unsafe, "Cannot delete", "Symlink, directory, or other non-regular file", False, False),
+                (plan.directories, "Directory — recursive", "Delete directory and all its contents", False, True),
+                (plan.shared_directories, "Shared directory — recursive", "Deleting this directory affects other saved runs", False, True),
+                (plan.unsafe, "Cannot delete", "Symlink or special file", False, False),
                 (plan.missing, "Missing", "File does not exist", False, False),
                 (plan.remote, "SSH — checking", "Checking remote file metadata (local cleanup is available immediately)", True, False),
             )
             for paths, status, reason, remote, selectable in groups:
                 for filename in paths:
                     snapshot = snapshots.get(filename)
-                    referrers = plan.referrers(filename) if status == "Shared" else ()
+                    referrers = (
+                        plan.referrers(filename) if "Shared" in status else ()
+                    )
                     references = (
                         f"Shared ({len(referrers)} other reference(s))"
                         if referrers else status
@@ -160,6 +166,8 @@ class DeleteRunRecordDialog(QDialog):
                     if remote:
                         self._remote_rows[filename] = row
                     self.file_table.addTopLevelItem(row)
+                    if snapshot is not None and snapshot.kind == "directory":
+                        self._add_directory_contents(row, snapshot)
         if not self.file_table.topLevelItemCount():
             self.file_table.addTopLevelItem(
                 QTreeWidgetItem(["(no referenced files available)", "—", "—"])
@@ -210,6 +218,22 @@ class DeleteRunRecordDialog(QDialog):
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
         self._update_selection_summary()
+
+    @staticmethod
+    def _add_directory_contents(
+        row: QTreeWidgetItem, snapshot: FileDeletionSnapshot,
+    ) -> None:
+        """Display the reviewed tree without selecting descendants twice."""
+        for path, kind, modified_ns, _size, _device, _inode in snapshot.contents:
+            child = QTreeWidgetItem([
+                path,
+                _last_modified(path, modified_ns=modified_ns),
+                kind.capitalize() + " — included with directory",
+            ])
+            child.setFlags(child.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+            child.setToolTip(0, path)
+            row.addChild(child)
+        row.setExpanded(bool(snapshot.contents))
 
     @property
     def selected_files(self) -> tuple[str, ...]:
@@ -281,6 +305,9 @@ class DeleteRunRecordDialog(QDialog):
                 )
                 row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 row.setCheckState(0, Qt.CheckState.Unchecked)
+                if snapshot.kind == "directory":
+                    self._add_directory_contents(row, snapshot)
+                    row.setText(2, row.text(2) + " · directory (recursive)")
                 self._remote_selectable[path] = row
         finally:
             self.file_table.blockSignals(False)
@@ -322,7 +349,11 @@ class DeleteRunRecordDialog(QDialog):
             else {item.path for item in self._remote_review.snapshots}
                  - set(self._remote_review.shared)
         )
-        self._select(set() if self._plan is None else set(self._plan.files), remote)
+        self._select(
+            set() if self._plan is None else set((
+                *self._plan.files, *self._plan.directories,
+            )), remote,
+        )
 
     def select_all_files(self) -> None:
         self._select(set(self._selectable_rows), set(self._remote_selectable))
@@ -332,11 +363,18 @@ class DeleteRunRecordDialog(QDialog):
         remote_count = len(self.selected_remote_files)
         shared = len(self.selected_shared_files) + len(self.selected_remote_shared_files)
         count = local_count + remote_count
+        directories = sum(
+            1 for item in self.selected_file_snapshots if item.kind == "directory"
+        ) + sum(
+            1 for item in self.selected_remote_snapshots if item.kind == "directory"
+        )
         note = (
-            f"{local_count} local and {remote_count} SSH file(s) selected. "
+            f"{local_count} local and {remote_count} SSH item(s) selected. "
             "SSH cleanup is best-effort and cannot prevent local deletion."
             if count else "No files selected. Only the record/reference will be removed."
         )
+        if directories:
+            note += f" {directories} selected director(ies) will be removed recursively."
         if shared:
             note += f" WARNING: {shared} selected file(s) have other saved references."
         self.selection_summary.setText(note)
@@ -381,5 +419,24 @@ class DeleteRunRecordDialog(QDialog):
                 QMessageBox.StandardButton.Cancel,
             )
             if answer != QMessageBox.StandardButton.Yes:
+                return
+        directories = [
+            item for item in (
+                *self.selected_file_snapshots, *self.selected_remote_snapshots,
+            ) if item.kind == "directory"
+        ]
+        if directories:
+            description = "\n".join(
+                f"{item.path} ({len(item.contents)} contained entries)"
+                for item in directories
+            )
+            result = QMessageBox.warning(
+                self, "Delete entire directories?",
+                "The following directories and ALL their contents will be "
+                "permanently deleted:\n\n" + description,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if result != QMessageBox.StandardButton.Yes:
                 return
         self.accept()

@@ -27,7 +27,8 @@ from guy4ase.gui.application.imported_project_results import (
 from guy4ase.gui.application.result_loading import load_result_file
 from guy4ase.gui.application.run_file_deletion import (
     FileDeletionPlan, FileDeletionSnapshot, RemoteFileReview,
-    delete_local_files, plan_file_deletion,
+    delete_local_files, expected_identity, plan_file_deletion,
+    snapshot_from_review,
     referenced_local_paths, referenced_remote_paths,
 )
 
@@ -580,22 +581,27 @@ class PersistentJobSource:
         unavailable = []
         for item in replies:
             if item["status"] == "ok":
-                snapshots.append(FileDeletionSnapshot(
-                    item["path"], item["mtime_ns"], item["size"],
-                    item["device"], item["inode"],
-                ))
+                snapshots.append(snapshot_from_review(item))
             else:
                 unavailable.append((
                     item["path"], item.get("message") or item["status"],
                 ))
-        shared = tuple(sorted(
-            snap.path for snap in snapshots
-            if posixpath.normpath(snap.path) in referrers
-        ))
+        def referencing_runs(snapshot):
+            path = posixpath.normpath(snapshot.path)
+            labels = set()
+            for reference, names in referrers.items():
+                if (path == reference
+                        or snapshot.kind == "directory"
+                        and posixpath.commonpath((path, reference)) == path
+                        or posixpath.commonpath((path, reference)) == reference):
+                    labels.update(names)
+            return tuple(sorted(labels))
+
         details = tuple(
-            (snap.path, referrers[posixpath.normpath(snap.path)])
-            for snap in snapshots if snap.path in shared
+            (snap.path, referencing_runs(snap))
+            for snap in snapshots if referencing_runs(snap)
         )
+        shared = tuple(sorted(path for path, _labels in details))
         return RemoteFileReview(
             record.execution.transport.host, tuple(snapshots),
             shared, details, tuple(unavailable),
@@ -632,14 +638,32 @@ class PersistentJobSource:
                                 "message": "Not present in the inspected remote file list"})
                 continue
             before = review.referrers_for(path)
-            current = references.get(posixpath.normpath(path), ())
-            if before != current:
+            norm = posixpath.normpath(path)
+            current_labels = set()
+            for reference, labels in references.items():
+                if (norm == reference
+                        or snapshot.kind == "directory"
+                        and posixpath.commonpath((norm, reference)) == norm
+                        or posixpath.commonpath((norm, reference)) == reference):
+                    current_labels.update(labels)
+            if before != tuple(sorted(current_labels)):
                 skipped.append({"path": path, "status": "skipped",
                                 "message": "Other run references changed since confirmation"})
                 continue
-            approved[path] = [
-                snapshot.modified_ns, snapshot.size, snapshot.device, snapshot.inode,
-            ]
+            approved[path] = expected_identity(snapshot)
+        # A recursive directory target already covers explicitly selected
+        # children; sending both would lead to misleading missing-file errors.
+        directories = {
+            path for path, snapshot in snapshots.items()
+            if path in approved and snapshot.kind == "directory"
+        }
+        for path in tuple(approved):
+            if any(
+                path != directory
+                and posixpath.commonpath((path, directory)) == directory
+                for directory in directories
+            ):
+                del approved[path]
         if not approved:
             return tuple(skipped)
         try:
@@ -684,7 +708,9 @@ class PersistentJobSource:
                 raise RuntimeError(
                     "Referenced files changed since confirmation; review them again"
                 )
-            shared = tuple(sorted(set(selected).intersection(plan.shared)))
+            shared = tuple(sorted(set(selected).intersection((
+                *plan.shared, *plan.shared_directories,
+            ))))
             if shared != tuple(sorted(expected_shared_files)):
                 raise RuntimeError(
                     "Shared file references changed since confirmation; review them again"

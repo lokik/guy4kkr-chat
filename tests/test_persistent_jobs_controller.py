@@ -873,3 +873,68 @@ def test_ssh_cleanup_starts_only_after_local_record_removal(monkeypatch, tmp_pat
     assert [event[0] for event in events] == ["local"]
     pending[-1]()  # Failure is reported asynchronously, not raised by local cleanup.
     assert [event[0] for event in events] == ["local", "remote"]
+
+
+
+def test_local_directory_shows_children_and_requires_recursive_confirmation(
+    monkeypatch, tmp_path,
+):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtWidgets import QMessageBox
+    from guy4ase.gui.application.run_file_deletion import plan_file_deletion
+
+    taudir = tmp_path / "tau"
+    (taudir / "nested").mkdir(parents=True)
+    (taudir / "nested" / "Fe.tau").write_text("tau")
+    plan = plan_file_deletion((str(taudir),), other_references=())
+    dialog = DeleteRunRecordDialog(_job("done", state="finished"), plan)
+    root = dialog.file_table.topLevelItem(0)
+    assert root.text(0) == str(taudir)
+    assert root.childCount() == 2
+    assert root.child(1).text(1)  # Children's modification dates are displayed.
+    dialog.select_unshared_files()
+    assert dialog.selected_files == (str(taudir),)
+    prompts = []
+
+    def warning(*args):
+        prompts.append((args[1], args[2]))
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", warning)
+    dialog._confirm_selection()
+    assert prompts[0][0] == "Delete entire directories?"
+    assert dialog.result() != dialog.DialogCode.Accepted
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *_args: QMessageBox.StandardButton.Yes,
+    )
+    dialog._confirm_selection()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    dialog.close()
+
+
+def test_remote_directory_tree_preview_is_not_confused_with_local_file(tmp_path):
+    _app = QApplication.instance() or QApplication([])
+    from PyQt6.QtCore import Qt
+
+    path = "/scratch/TAUDIR"
+    child = path + "/Fe.tau"
+    review = RemoteFileReview(
+        "cluster", (FileDeletionSnapshot(
+            path, 1_700_000_000_000_000_000, 64, 1, 10, "directory",
+            ((child, "file", 1_700_000_000_000_000_001, 6, 1, 11),),
+        ),),
+    )
+    dialog = DeleteRunRecordDialog(
+        _job("done", state="finished"),
+        FileDeletionPlan((), (), (), (), (path,)),
+    )
+    dialog.set_remote_preview(review)
+    directory = dialog.file_table.topLevelItem(0)
+    assert directory.childCount() == 1
+    assert directory.child(0).text(0) == child
+    assert not (directory.child(0).flags() & Qt.ItemFlag.ItemIsUserCheckable)
+    dialog.select_unshared_files()
+    assert dialog.selected_remote_files == (path,)
+    assert dialog.selected_remote_snapshots[0].kind == "directory"
+    assert "recursively" in dialog.selection_summary.text()
+    dialog.close()

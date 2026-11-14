@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from kkrunner.files.queries import remote_file_cleanup
+
 
 @dataclass(frozen=True)
 class FileDeletionSnapshot:
@@ -22,6 +24,34 @@ class FileDeletionSnapshot:
     size: int
     device: int
     inode: int
+    kind: str = "file"
+    contents: tuple[tuple[str, str, int, int, int, int], ...] = ()
+
+
+def snapshot_from_review(item: dict) -> FileDeletionSnapshot:
+    """Preserve the exact tree the user saw, including symlinks and dates."""
+    contents = tuple(
+        (child["path"], child["kind"], child["mtime_ns"],
+         child["size"], child["device"], child["inode"])
+        for child in item.get("contents", ())
+    )
+    return FileDeletionSnapshot(
+        item["path"], item["mtime_ns"], item["size"],
+        item["device"], item["inode"], item.get("kind", "file"), contents,
+    )
+
+
+def expected_identity(snapshot: FileDeletionSnapshot) -> dict:
+    """The target compares all descendants before recursive deletion."""
+    return {
+        "kind": snapshot.kind, "mtime_ns": snapshot.modified_ns,
+        "size": snapshot.size, "device": snapshot.device, "inode": snapshot.inode,
+        "contents": [
+            {"path": path, "kind": kind, "mtime_ns": mtime,
+             "size": size, "device": device, "inode": inode}
+            for path, kind, mtime, size, device, inode in snapshot.contents
+        ],
+    }
 
 
 @dataclass(frozen=True)
@@ -36,15 +66,24 @@ class FileDeletionPlan:
     snapshots: tuple[FileDeletionSnapshot, ...] = ()
     shared_snapshots: tuple[FileDeletionSnapshot, ...] = ()
     shared_referrers: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    directories: tuple[str, ...] = ()
+    shared_directories: tuple[str, ...] = ()
+    directory_snapshots: tuple[FileDeletionSnapshot, ...] = ()
+    shared_directory_snapshots: tuple[FileDeletionSnapshot, ...] = ()
 
     @property
     def selectable_files(self) -> tuple[str, ...]:
         """Individual local files that may be checked in the dialog."""
-        return tuple(sorted((*self.files, *self.shared)))
+        return tuple(sorted((
+            *self.files, *self.shared, *self.directories, *self.shared_directories,
+        )))
 
     @property
     def selectable_snapshots(self) -> tuple[FileDeletionSnapshot, ...]:
-        return (*self.snapshots, *self.shared_snapshots)
+        return (
+            *self.snapshots, *self.shared_snapshots,
+            *self.directory_snapshots, *self.shared_directory_snapshots,
+        )
 
     def referrers(self, path: str) -> tuple[str, ...]:
         return dict(self.shared_referrers).get(path, ())
@@ -102,6 +141,25 @@ def referenced_remote_paths(manifest) -> tuple[str, ...]:
     }))
 
 
+def _references_for(
+    path: str, directory: bool, other_references: Iterable[str],
+) -> tuple[str, ...]:
+    """A directory is shared when another record refers to a descendant.
+
+    Also protect an individual file if another run references an ancestor
+    directory, because that run may own the entire directory's contents.
+    """
+    real = os.path.realpath(path)
+    matches = []
+    for candidate in other_references:
+        reference = os.path.realpath(candidate)
+        if reference == real or (
+            directory and os.path.commonpath((real, reference)) == real
+        ) or os.path.commonpath((real, reference)) == reference:
+            matches.append(candidate)
+    return tuple(matches)
+
+
 def plan_file_deletion(
     candidates: Iterable[str],
     *,
@@ -109,22 +167,22 @@ def plan_file_deletion(
     remote_references: Iterable[str] = (),
     reference_details: Mapping[str, Iterable[str]] | None = None,
 ) -> FileDeletionPlan:
-    """Review regular files, marking shared references without silently deleting them.
-
-    All paths are normalized before comparing references. The caller supplies
-    descriptions of other records for the UI; they do not control eligibility.
-    """
-    protected = {os.path.realpath(path) for path in other_references}
+    """Preview manifest files and directories, including complete directory trees."""
+    other_references = tuple(other_references)
     referrers = {
         os.path.realpath(path): tuple(sorted(set(labels)))
         for path, labels in (reference_details or {}).items()
     }
     files: list[str] = []
     shared: list[str] = []
+    directories: list[str] = []
+    shared_directories: list[str] = []
     unsafe: list[str] = []
     missing: list[str] = []
     snapshots: list[FileDeletionSnapshot] = []
     shared_snapshots: list[FileDeletionSnapshot] = []
+    directory_snapshots: list[FileDeletionSnapshot] = []
+    shared_directory_snapshots: list[FileDeletionSnapshot] = []
     shared_details: list[tuple[str, tuple[str, ...]]] = []
 
     for path in sorted({_absolute(item, os.curdir) for item in candidates}):
@@ -137,17 +195,42 @@ def plan_file_deletion(
         except FileNotFoundError:
             missing.append(path)
             continue
-        if not stat.S_ISREG(info.st_mode):
+        is_dir = stat.S_ISDIR(info.st_mode)
+        if not (stat.S_ISREG(info.st_mode) or is_dir):
             unsafe.append(path)
             continue
-        snapshot = FileDeletionSnapshot(
-            path, info.st_mtime_ns, info.st_size, info.st_dev, info.st_ino,
-        )
-        real_path = os.path.realpath(path)
-        if real_path in protected:
-            shared.append(path)
-            shared_snapshots.append(snapshot)
-            shared_details.append((path, referrers.get(real_path, ())))
+        # A symlink on the path to a declared directory could redirect
+        # recursive deletion. Do not offer that entry for deletion.
+        if any(parent.is_symlink() for parent in item.parents):
+            unsafe.append(path)
+            continue
+        if is_dir:
+            reviewed = remote_file_cleanup((path,))[0]
+            if reviewed["status"] != "ok":
+                unsafe.append(path)
+                continue
+            snapshot = snapshot_from_review(reviewed)
+        else:
+            snapshot = FileDeletionSnapshot(
+                path, info.st_mtime_ns, info.st_size, info.st_dev, info.st_ino,
+            )
+        matches = _references_for(path, is_dir, other_references)
+        if matches:
+            labels = sorted({
+                label
+                for reference in matches
+                for label in referrers.get(os.path.realpath(reference), ())
+            })
+            shared_details.append((path, tuple(labels)))
+            if is_dir:
+                shared_directories.append(path)
+                shared_directory_snapshots.append(snapshot)
+            else:
+                shared.append(path)
+                shared_snapshots.append(snapshot)
+        elif is_dir:
+            directories.append(path)
+            directory_snapshots.append(snapshot)
         else:
             files.append(path)
             snapshots.append(snapshot)
@@ -156,6 +239,8 @@ def plan_file_deletion(
         tuple(files), tuple(shared), tuple(unsafe), tuple(missing),
         tuple(sorted(set(remote_references))), tuple(snapshots),
         tuple(shared_snapshots), tuple(shared_details),
+        tuple(directories), tuple(shared_directories),
+        tuple(directory_snapshots), tuple(shared_directory_snapshots),
     )
 
 
@@ -164,33 +249,45 @@ def delete_local_files(
     *,
     snapshots: Iterable[FileDeletionSnapshot] = (),
 ) -> None:
-    """Preflight every selected file before unlinking any of them.
+    """Preflight every selected path, then remove files or complete directories.
 
-    The caller has already rechecked the authoritative run references. Each
-    path is verified again immediately before deletion. This minimizes partial
-    cleanup if a file has changed since the user reviewed its timestamp.
+    Recursive targets are only explicitly reviewed directory entries; never
+    infer a recursive deletion from a path merely containing selected files.
     """
     selected = tuple(files)
-    expected = {snapshot.path: snapshot for snapshot in snapshots}
+    expected = {snap.path: snap for snap in snapshots}
+    if set(selected) != set(expected):
+        raise ValueError("Deletion requires an identity snapshot for every selected target")
 
-    def verify(filename: str) -> None:
-        try:
-            info = os.stat(filename, follow_symlinks=False)
-        except FileNotFoundError as exc:
-            raise OSError(f"Selected file disappeared since confirmation: {filename}") from exc
-        if not stat.S_ISREG(info.st_mode):
-            raise OSError(f"Refusing to delete a non-regular file: {filename}")
-        if expected:
-            snapshot = expected.get(filename)
-            if snapshot is None or (
-                info.st_mtime_ns, info.st_size, info.st_dev, info.st_ino
-            ) != (
-                snapshot.modified_ns, snapshot.size, snapshot.device, snapshot.inode
-            ):
-                raise OSError(f"File changed since confirmation: {filename}")
+    # Verify *all* selected trees before deleting anything.
+    for path in selected:
+        observed = remote_file_cleanup((path,))[0]
+        snapshot = expected[path]
+        if (observed["status"] != "ok"
+                or expected_identity(snapshot) != {
+                    key: observed[key] for key in (
+                        "kind", "mtime_ns", "size", "device", "inode", "contents",
+                    )
+                }):
+            raise OSError(f"Selected file or directory changed since confirmation: {path}")
 
-    for filename in selected:
-        verify(filename)
-    for filename in selected:
-        verify(filename)
-        Path(filename).unlink()
+    # A selected directory already contains selected descendants. Removing
+    # children separately would invalidate the parent snapshot.
+    directories = tuple(
+        path for path in selected if expected[path].kind == "directory"
+    )
+    roots = tuple(
+        path for path in selected
+        if not any(
+            path != directory and os.path.commonpath((path, directory)) == directory
+            for directory in directories
+        )
+    )
+    approved = {path: expected_identity(expected[path]) for path in roots}
+    outcomes = remote_file_cleanup(roots, expected=approved)
+    for result in outcomes:
+        if result["status"] != "deleted":
+            raise OSError(
+                f"Could not delete {result['path']}: "
+                f"{result.get('message') or result['status']}"
+            )

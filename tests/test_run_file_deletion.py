@@ -88,10 +88,12 @@ def test_plan_skips_shared_symlinks_directories_and_missing_files(tmp_path):
     )
     assert plan.files == (str(own),)
     assert plan.shared == (str(shared),)
-    assert set(plan.unsafe) == {str(link), str(directory)}
+    assert plan.unsafe == (str(link),)
+    assert plan.directories == (str(directory),)
+    assert plan.directory_snapshots[0].kind == "directory"
     assert plan.missing == (str(missing),)
     assert plan.remote == ("/remote/own.out",)
-    delete_local_files(plan.files)
+    delete_local_files(plan.files, snapshots=plan.snapshots)
     assert not own.exists()
     assert shared.exists() and link.is_symlink() and directory.exists()
 
@@ -422,3 +424,113 @@ def test_ssh_cleanup_skips_newly_shared_file_without_affecting_other_files(tmp_p
     )
     assert len(calls) == 1 and tuple(calls[0]) == (second_path,)
     assert {item["status"] for item in results} == {"skipped", "deleted"}
+
+
+
+def test_declared_local_directory_is_deleted_recursively(tmp_path):
+    taudir = tmp_path / "scratch" / "tau"
+    (taudir / "nested").mkdir(parents=True)
+    (taudir / "nested" / "Fe.tau").write_text("tau")
+    (taudir / "save.dat").write_text("save")
+    outside = tmp_path / "scratch" / "other-run.out"
+    outside.write_text("keep")
+    run = _record(
+        "run", tmp_path,
+        FileManifest(outputs=(FileEntry(local_path=str(taudir)),)),
+    )
+    source, store = _source(run)
+    plan = source.referenced_file_deletion("run")
+    assert plan.directories == (str(taudir),)
+    assert len(plan.directory_snapshots[0].contents) == 3
+    source.forget(
+        "run", delete_files=True, expected_files=(str(taudir),),
+        expected_file_snapshots=plan.directory_snapshots,
+    )
+    assert not taudir.exists() and outside.exists()
+    assert "run" not in store.records
+
+
+def test_declared_directory_becomes_shared_when_other_run_uses_descendant(tmp_path):
+    taudir = tmp_path / "tau"
+    taudir.mkdir()
+    used = taudir / "used.tau"
+    used.write_text("in use")
+    first = _record(
+        "first", tmp_path,
+        FileManifest(outputs=(FileEntry(local_path=str(taudir)),)),
+    )
+    other = _record(
+        "second", tmp_path,
+        FileManifest(inputs=(FileEntry(local_path=str(used)),)),
+    )
+    source, store = _source(first, other)
+    plan = source.referenced_file_deletion("first")
+    assert plan.directories == ()
+    assert plan.shared_directories == (str(taudir),)
+    assert "second" in plan.referrers(str(taudir))[0]
+    with pytest.raises(RuntimeError, match="explicit confirmation"):
+        source.forget(
+            "first", delete_files=True,
+            expected_files=(str(taudir),),
+            expected_file_snapshots=plan.shared_directory_snapshots,
+            expected_shared_files=(str(taudir),),
+        )
+    assert taudir.exists() and "first" in store.records
+
+
+def test_directory_changed_after_confirmation_is_not_deleted(tmp_path):
+    taudir = tmp_path / "tau"
+    taudir.mkdir()
+    (taudir / "original.tau").write_text("before")
+    run = _record(
+        "run", tmp_path,
+        FileManifest(outputs=(FileEntry(local_path=str(taudir)),)),
+    )
+    source, store = _source(run)
+    plan = source.referenced_file_deletion("run")
+    (taudir / "unexpected.tau").write_text("new file")
+    with pytest.raises(RuntimeError, match="last-modified times"):
+        source.forget(
+            "run", delete_files=True,
+            expected_files=plan.directories,
+            expected_file_snapshots=plan.directory_snapshots,
+        )
+    assert (taudir / "unexpected.tau").exists()
+    assert "run" in store.records
+
+
+def test_remote_directory_review_and_recursive_delete_identity(tmp_path):
+    taudir = "/remote/path/TAUDIR"
+    record = _record(
+        "run", tmp_path, FileManifest(outputs=(FileEntry(remote_path=taudir),)),
+    )
+    source, store = _source(record)
+    children = [{
+        "path": taudir + "/Fe.tau", "kind": "file", "mtime_ns": 2,
+        "size": 5, "device": 1, "inode": 2,
+    }]
+    recorded = []
+
+    class Client:
+        def inspect_remote_files(self, _record, paths):
+            assert paths == (taudir,)
+            return ({
+                "path": taudir, "status": "ok", "kind": "directory",
+                "mtime_ns": 1, "size": 4, "device": 1, "inode": 1,
+                "contents": children,
+            },)
+
+        def delete_remote_files(self, _record, expected):
+            recorded.append(expected)
+            return ({"path": taudir, "status": "deleted"},)
+
+    source._manager.client_for = lambda record: Client()
+    review = source.remote_file_review("run")
+    assert review.snapshots[0].kind == "directory"
+    assert len(review.snapshots[0].contents) == 1
+    captured = source.capture_remote_cleanup("run")
+    source.forget("run")
+    response = source.cleanup_remote_files(captured, review, (taudir,))
+    assert response[0]["status"] == "deleted"
+    assert recorded[0][taudir]["kind"] == "directory"
+    assert recorded[0][taudir]["contents"] == children
