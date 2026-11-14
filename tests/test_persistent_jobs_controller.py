@@ -785,7 +785,10 @@ def test_ssh_preview_does_not_disable_local_selection(tmp_path):
     dialog.select_unshared_button.click()
     assert dialog.selected_files == (str(local),)
     assert dialog.selected_remote_files == (remote,)
-    assert dialog.file_table.topLevelItem(2).flags() & Qt.ItemFlag.ItemIsUserCheckable == 0
+    assert not (
+        dialog.file_table.topLevelItem(2).flags()
+        & Qt.ItemFlag.ItemIsUserCheckable
+    )
     dialog.select_none()
     assert dialog.selected_files == dialog.selected_remote_files == ()
     dialog.close()
