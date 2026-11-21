@@ -4,9 +4,21 @@ from __future__ import annotations
 from typing import Literal
 
 from ase2sprkkr_gui.gui.workspace_semantics import EmptySpheresAction as _EmptySpheresAction
+from ase2sprkkr_gui.physics.lattice import StructureKind
+
+def structure_kind_label(kind: StructureKind | None) -> str | None:
+    """Human-readable structure classification shared by Guided windows."""
+    return {
+        "3d": "Bulk (3D)",
+        "2d": "2D structure",
+        "0d": "Embedded cluster",
+        "unknown": "Unknown structure",
+        None: None,
+    }[kind]
+
 
 ActionCategory = Literal[
-    "structure", "load", "calculation", "destructive", "neutral"
+    "structure", "load", "calculation", "destructive", "results", "neutral"
 ]
 
 

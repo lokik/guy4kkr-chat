@@ -6,7 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 
 from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QIcon, QPaintEvent
+from PyQt6.QtGui import QCloseEvent, QIcon, QPaintEvent
 from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
@@ -73,6 +73,7 @@ class ProjectBrowserDialog(QWidget):
         self._selected_project_id: str | None = None
         self._active_project_id = active_project_id
         self._initial_load_complete = False
+        self._closed = False
         self._initial_paint_seen = False
         self._initial_load_timer = QTimer(self)
         self._initial_load_timer.setSingleShot(True)
@@ -99,7 +100,7 @@ class ProjectBrowserDialog(QWidget):
         self._unsubscribe_projects = self._repository.subscribe(
             self._repository_signals.changed.emit
         )
-        self.destroyed.connect(lambda *_args: self._unsubscribe_projects())
+        self.destroyed.connect(lambda *_args: self._stop_repository_subscription())
 
         root = QVBoxLayout(self)
         self.project_notice = QLabel(self)
@@ -245,6 +246,24 @@ class ProjectBrowserDialog(QWidget):
 
         self._refresh_action_availability()
 
+    def _stop_repository_subscription(self) -> None:
+        unsubscribe = self._unsubscribe_projects
+        self._unsubscribe_projects = None
+        if unsubscribe is not None:
+            unsubscribe()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Stop browser-owned background work; persistent job monitoring stays alive."""
+        super().closeEvent(event)
+        if not event.isAccepted():
+            return
+        self._closed = True
+        self._initial_load_timer.stop()
+        if self._initial_future is not None:
+            self._initial_future.cancel()
+        self._stop_repository_subscription()
+        self._persistent_jobs_controller.unbind_view(self.jobs)
+
     def paintEvent(self, event: QPaintEvent) -> None:
         """Start initialization only after Qt has painted the loading placeholder."""
         super().paintEvent(event)
@@ -275,7 +294,7 @@ class ProjectBrowserDialog(QWidget):
 
     def _start_initial_load(self) -> None:
         """Read the project repository off-thread; Qt widgets stay on the GUI thread."""
-        if self._initial_load_complete or self._initial_future is not None:
+        if self._closed or self._initial_load_complete or self._initial_future is not None:
             return
         if not self.isVisible():
             # The browser may have been closed before its first load began.
@@ -297,7 +316,7 @@ class ProjectBrowserDialog(QWidget):
 
     @pyqtSlot(object)
     def _initial_projects_loaded(self, future: Future[tuple[Project, ...]]) -> None:
-        if future is not self._initial_future:
+        if self._closed or future is not self._initial_future:
             return
         self._initial_future = None
         if self._initial_load_pending:
@@ -332,6 +351,8 @@ class ProjectBrowserDialog(QWidget):
 
     @pyqtSlot(str)
     def _repository_changed(self, _project_id: str) -> None:
+        if self._closed:
+            return
         if not self._initial_load_complete:
             self._initial_load_pending = True
             return
@@ -452,6 +473,8 @@ class ProjectBrowserDialog(QWidget):
         self._refresh_action_availability()
 
     def _apply_project_selection(self) -> None:
+        if self._closed:
+            return
         project_id = self._selected_project_id
         if project_id is None:
             refs = ()

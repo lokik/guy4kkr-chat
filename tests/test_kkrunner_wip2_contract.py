@@ -1,9 +1,9 @@
-"""Integration contracts with the KKRunner wip2 record and project APIs."""
+"""Integration contracts with KKRunner project, record, and transport APIs."""
 
 from dataclasses import replace
 
 from kkrunner.backends import BackendConfig
-from kkrunner.client import LocalTransport, SshTransport
+from kkrunner.transports import LocalTransport, SshTransport
 from kkrunner.projects import ProjectRepository, ProjectRunManager
 from kkrunner.runs import RunState
 

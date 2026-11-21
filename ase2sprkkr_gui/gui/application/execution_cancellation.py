@@ -6,6 +6,8 @@ import logging
 from threading import Lock, Thread
 from typing import Any, Protocol
 
+from kkrunner import ExecutionOutcome
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ def register_runner(cancellation: Cancellation, runner: Any) -> None:
 
 
 def wait_for_runner(cancellation: Cancellation, runner: Any) -> Any:
-    """Wait for a runner while normalizing backend cancellation semantics."""
+    """Wait for an interpreted result, reporting raw failures before adoption."""
     try:
         result = runner.wait()
     except asyncio.CancelledError as exc:
@@ -44,6 +46,21 @@ def wait_for_runner(cancellation: Cancellation, runner: Any) -> Any:
 
     if cancellation.requested:
         raise ExecutionCancelled
+    if isinstance(result, ExecutionOutcome):
+        # Failed or unobserved native exits deliberately bypass task parsers.
+        # Their raw facts are diagnostics, not a result the workspace can adopt.
+        code = result.return_code
+        message = (
+            f"SPR-KKR execution failed (exit code {code})." if code not in (None, 0)
+            else "SPR-KKR execution ended without a parsed calculation result."
+        )
+        reason = getattr(runner, "failure_message", None)
+        if reason:
+            message += f"\n{reason}"
+        for label, path in (("Output", result.output_file), ("Error output", result.error_file)):
+            if path is not None:
+                message += f"\n{label}: {path}"
+        raise RuntimeError(message)
     return result
 
 

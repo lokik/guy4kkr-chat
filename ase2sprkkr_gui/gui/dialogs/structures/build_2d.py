@@ -4,7 +4,6 @@ from typing import Any, Optional
 
 import numpy as np
 from ase2sprkkr.sprkkr.build import semiinfinite_system
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
@@ -22,6 +21,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ase2sprkkr_gui.gui.widgets.matplotlib_preview import PreviewFigureCanvas as FigureCanvas
+from ase2sprkkr_gui.ase.copy import copy_for_edit
 from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
 from ase2sprkkr_gui.gui.dialogs.structures.source import select_structure_source
 from ase2sprkkr_gui.gui.dialogs.structures.transforms import rotate_atoms, scale_atoms
@@ -58,7 +59,7 @@ class Build2DStructureDialog(QDialog):
 
         left_group = QGroupBox("Main System")
         left_layout = QVBoxLayout(left_group)
-        self.left = StructurePane(atoms.copy(), show_formula=True)
+        self.left = StructurePane(atoms, show_formula=True)
         self.left.scaleRequested.connect(
             lambda: self._transform(self.left, scale_atoms, "Scale (left)")
         )
@@ -283,9 +284,9 @@ class Build2DStructureDialog(QDialog):
         right_repeat = float(self._repeat_right.value())
         repeat = (left_repeat, right_repeat)
         axis = int(self._axis.currentData())
-        atoms = self.left.atoms.copy()
+        atoms = copy_for_edit(self.left.atoms)
         atoms2 = (
-            self.right.atoms.copy()
+            copy_for_edit(self.right.atoms)
             if self.right.atoms is not None
             else None
         )
@@ -321,7 +322,7 @@ class Build2DStructureDialog(QDialog):
     def result_atoms(self) -> Optional[Any]:
         if self._semiinfinite_atoms is None:
             return None
-        return self._semiinfinite_atoms.copy()
+        return self._semiinfinite_atoms
 
 
 def select_build_2d_structure(

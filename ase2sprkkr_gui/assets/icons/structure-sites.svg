@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Atomic sites</title>
+  <desc>Host atomic-site network with one selected teal site</desc>
+  <g fill="none" stroke="#34485f" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13 35 10 40 34 14 38 10 13"/>
+    <path d="M10 13 24 24 35 10M24 24 40 34M24 24 14 38"/>
+  </g>
+  <g stroke="#26384e" stroke-width="2.2">
+    <circle cx="10" cy="13" r="4.9" fill="#c8d4e0"/>
+    <circle cx="35" cy="10" r="4.9" fill="#c8d4e0"/>
+    <circle cx="40" cy="34" r="4.9" fill="#c8d4e0"/>
+    <circle cx="14" cy="38" r="4.9" fill="#c8d4e0"/>
+    <circle cx="24" cy="24" r="6.3" fill="#03a8a1"/>
+  </g>
+  <circle cx="22.3" cy="22.2" r="1.5" fill="#d4fffa"/>
+</svg>

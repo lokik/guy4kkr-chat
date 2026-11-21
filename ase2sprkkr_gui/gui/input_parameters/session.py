@@ -76,16 +76,17 @@ def _option_values_equal(value_type: Any, left: Any, right: Any) -> bool:
 
 
 def _changed_values(before: InputParameters, after: InputParameters) -> dict:
-    """Keep option values intact, including arrays and per-type dictionaries."""
-    left = before.as_dict(only_changed=False, generated=False, copy=True)
-    right = after.as_dict(only_changed=False, generated=False, copy=True)
+    """Describe effective edits and changes to explicitly assigned defaults."""
     changes = {}
-    for section in dict.fromkeys((*left, *right)):
-        old, new = left.get(section, {}), right.get(section, {})
-        for name in dict.fromkeys((*old, *new)):
-            a, b = old.get(name), new.get(name)
-            if not values_equal(a, b):
-                changes[(section, name)] = (a, b)
+    for mode in (False, "explicit"):
+        left = before.as_dict(only_changed=mode, copy=True) or {}
+        right = after.as_dict(only_changed=mode, copy=True) or {}
+        for section in dict.fromkeys((*left, *right)):
+            old, new = left.get(section, {}), right.get(section, {})
+            for name in dict.fromkeys((*old, *new)):
+                a, b = old.get(name), new.get(name)
+                if not values_equal(a, b):
+                    changes.setdefault((section, name), (a, b))
     return changes
 
 
@@ -287,6 +288,7 @@ class InputParametersSession(QObject):
         source_page: str | None = None,
         path: InputParameterPath | None = None,
         field_index: int | None = None,
+        preserve_explicit: bool = False,
     ) -> bool:
         """Apply a compound edit to a copy and record it as one command.
 
@@ -303,6 +305,7 @@ class InputParametersSession(QObject):
             source_page=source_page,
             path=path,
             field_index=field_index,
+            preserve_explicit=preserve_explicit,
         )
 
     def replace_parameters(
@@ -311,6 +314,7 @@ class InputParametersSession(QObject):
         *,
         text: str = "Replace input parameters",
         source_page: str | None = None,
+        preserve_explicit: bool = False,
     ) -> bool:
         """Install same-schema serialized input as one undoable full replacement.
 
@@ -336,6 +340,7 @@ class InputParametersSession(QObject):
             source_page=source_page,
             path=None,
             initial_dormant={},
+            preserve_explicit=preserve_explicit,
         )
 
     def replace_from_session(
@@ -366,6 +371,7 @@ class InputParametersSession(QObject):
             text=text,
             source_page=source_page,
             path=None,
+            preserve_explicit=True,
         )
 
     def _push(
@@ -377,6 +383,7 @@ class InputParametersSession(QObject):
         path: InputParameterPath | None,
         field_index: int | None = None,
         initial_dormant: dict[DormantKey, Any] | None = None,
+        preserve_explicit: bool = False,
     ) -> bool:
         dormant = deepcopy(
             self._dormant if initial_dormant is None else initial_dormant
@@ -390,6 +397,7 @@ class InputParametersSession(QObject):
             source_page=source_page,
             path=path,
             field_index=field_index,
+            preserve_explicit=preserve_explicit,
         )
 
     def _push_snapshot(
@@ -401,10 +409,18 @@ class InputParametersSession(QObject):
         source_page: str | None,
         path: InputParameterPath | None,
         field_index: int | None = None,
+        preserve_explicit: bool = False,
     ) -> bool:
         if (
             _parameters_equal(candidate, self._working)
             and values_equal(dormant, self._dormant)
+            # A default assigned explicitly still changes a sparse preset.
+            and (
+                not preserve_explicit or values_equal(
+                    candidate.as_dict(only_changed="explicit"),
+                    self._working.as_dict(only_changed="explicit"),
+                )
+            )
         ):
             return False
         before = _SessionSnapshot(self._working, deepcopy(self._dormant))

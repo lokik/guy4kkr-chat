@@ -88,6 +88,115 @@ def _set_store(
     )
 
 
+def test_results_toolbar_has_equal_width_buttons_and_load_action():
+    application = QApplication.instance() or QApplication([])
+    widget = _widget()
+    loaded = []
+    widget.loadResultRequested.connect(lambda: loaded.append("load"))
+    widget.resize(375, 360)
+    widget.show()
+    application.processEvents()
+
+    top_buttons = (
+        widget.load_result_button, widget.import_directory_button,
+    )
+    assert [button.text() for button in top_buttons] == [
+        "Load Result", "Import Directory…",
+    ]
+    assert all(not button.icon().isNull() for button in top_buttons)
+    assert all(button.isVisible() for button in top_buttons)
+    assert max(button.width() for button in top_buttons) - min(
+        button.width() for button in top_buttons
+    ) <= 1
+
+    bottom_buttons = (
+        widget._use_state_button, widget.assign_project_button,
+        widget.select_all_button,
+    )
+    assert [button.text() for button in bottom_buttons] == [
+        "Use this structure", "Assign to Project", "Select All",
+    ]
+    assert widget.show_all_values_checkbox.parentWidget().parentWidget() is (
+        widget._record_actions
+    )
+    assert widget._record_actions.isHidden()  # No result selected yet.
+    assert not widget._recompute_button.isEnabled()
+    assert not widget._use_state_button.isEnabled()
+    assert widget._bottom_controls.isHidden()  # No results to select yet.
+    assert widget.layout().indexOf(widget._bottom_controls) == (
+        widget.layout().indexOf(widget._selector) + 1
+    )
+    assert widget._record_actions.parentWidget() is widget._container
+    assert widget.layout().indexOf(widget._record_actions) == -1
+    assert widget._container.layout().itemAt(0).layout() is widget._grid
+    assert widget._container.layout().itemAt(1).widget() is widget._record_actions
+    assert not widget.select_all_button.isEnabled()
+    assert not widget.assign_project_button.isEnabled()
+    assert widget.load_result_button.isEnabled()
+    widget.load_result_button.click()
+    assert loaded == ["load"]
+    widget.close()
+
+
+def test_load_result_control_is_independent_of_assignment_controls():
+    application = QApplication.instance() or QApplication([])
+    widget = ResultActionsWidget(
+        lambda _value, _action: None,
+        show_values_without_actions=False,
+        show_assignment_controls=False,
+    )
+    assert widget.select_all_button.isHidden()
+    assert widget.assign_project_button.isHidden()
+    assert not widget.load_result_button.isHidden()
+    widget.close()
+
+
+def test_result_directory_import_is_independent_of_result_selection():
+    application = QApplication.instance() or QApplication([])
+    widget = _widget(show_values_without_actions=False)
+    requested = []
+    widget.importDirectoryRequested.connect(lambda: requested.append("directory"))
+    widget.resize(375, 360)
+    widget.show()
+    application.processEvents()
+
+    assert widget.import_directory_button.text() == "Import Directory…"
+    assert widget.import_directory_button.isEnabled()
+    assert widget.import_directory_button.isVisible()
+    assert not widget.import_directory_button.icon().isNull()
+    assert widget.import_directory_button.shortcut().toString() == "Ctrl+Shift+I"
+    assert widget.load_result_button.shortcut().toString() == "Ctrl+Shift+O"
+    widget.import_directory_button.click()
+    assert requested == ["directory"]
+    widget.close()
+
+
+def test_show_all_values_toggle_preserves_result_and_restores_summary_filter():
+    _application = QApplication.instance() or QApplication([])
+    widget = _widget(show_values_without_actions=False)
+    summary = _Value()
+    summary.show_in_summary = True
+    result = _Result({"ordinary": _Value(), "summary": summary})
+    widget.set_result(result)
+    assert not widget.show_all_values_checkbox.isChecked()
+    assert widget._row_count == 1
+    initial_presentation = widget._current_presentation
+
+    widget.show_all_values_checkbox.setChecked(True)
+    assert widget._row_count == 2
+    assert widget._current_presentation is initial_presentation
+
+    widget.show_all_values_checkbox.setChecked(False)
+    assert widget._row_count == 1
+    assert widget._current_presentation is initial_presentation
+
+    widget.set_status("Parsing a different output…")
+    widget.show_all_values_checkbox.setChecked(True)
+    assert widget._empty_label.text() == "Parsing a different output…"
+    assert widget._row_count == 0
+    widget.close()
+
+
 def test_result_actions_render_task_result():
     _application = QApplication.instance() or QApplication([])
     widget = _widget()
@@ -208,10 +317,52 @@ def test_result_from_other_structure_offers_structure_reuse():
 
     assert widget.selected_result_id == record.id
     assert not widget._record_actions.isHidden()
-    assert not widget._use_state_button.isHidden()
+    assert widget._use_state_button.isEnabled()
     assert widget._use_state_button.text() == "Use this structure"
+    assert not widget._bottom_controls.isHidden()
     assert not widget._recompute_button.isHidden()
-    assert widget._recompute_button.text() == "Recompute on current structure"
+    assert widget._recompute_button.text() == "Recompute"
+    assert widget._recompute_button.toolTip() == "Recompute on current structure"
+    widget.close()
+
+
+def test_recompute_width_matches_selection_button_and_checkbox_is_independent():
+    application = QApplication.instance() or QApplication([])
+    store = ResultStore()
+    structure_id, state_id = store.new_structure_state(
+        Atoms("Fe"), potential_path="Fe.pot"
+    )
+    record = store.add_result(
+        _record_result("dos"), structure_id=structure_id,
+        input_state_id=state_id, input_parameters=object(), directory=None,
+    )
+    widget = _widget(show_values_without_actions=False)
+    _set_store(
+        widget, store, structure_id=structure_id,
+        state_id=state_id, selected_result_id=record.id,
+    )
+    widget.resize(540, 450)
+    widget.show()
+    application.processEvents()
+    assert widget._recompute_button.isVisible()
+    assert widget._recompute_button.isEnabled()
+    assert widget.show_all_values_checkbox.isVisible()
+    assert widget._record_actions.layout().count() == 3
+    check = widget.show_all_values_checkbox
+    right = check.parentWidget().x() + check.x() + check.width()
+    assert widget._record_actions.width() - right <= 14
+    assert abs(
+        widget._recompute_button.width() - widget._use_state_button.width()
+    ) <= 18
+
+    # Recompute may be disabled for another result, but both slots stay put.
+    widget._refresh_record_actions(
+        type(widget._current_presentation.actions)(use_state=None, recompute=None)
+    )
+    application.processEvents()
+    assert widget._recompute_button.isVisible()
+    assert not widget._recompute_button.isEnabled()
+    assert widget.show_all_values_checkbox.isVisible()
     widget.close()
 
 
@@ -244,8 +395,10 @@ def test_result_from_other_state_of_same_structure_offers_potential_reuse(tmp_pa
         selected_result_id=record.id,
     )
 
+    assert widget._use_state_button.isEnabled()
     assert widget._use_state_button.text() == "Use this potential"
-    assert widget._recompute_button.text() == "Recompute on current potential"
+    assert widget._recompute_button.text() == "Recompute"
+    assert widget._recompute_button.toolTip() == "Recompute on current potential"
     widget.close()
 
 
@@ -271,5 +424,6 @@ def test_empty_spheres_is_not_presented_as_recomputable_task():
 
     assert widget.selected_result_id == record.id
     assert widget._selector.currentItem().text(0) == "Empty spheres"
-    assert widget._recompute_button.isHidden()
+    assert not widget._recompute_button.isEnabled()
+    assert widget._recompute_button.isVisible() is False  # Widget is not shown.
     widget.close()

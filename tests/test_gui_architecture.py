@@ -207,7 +207,6 @@ def test_result_widget_accepts_presentations_not_application_state():
 
     forbidden_calls = {"set_results", "set_workspace_state"}
     for relative_path in (
-        Path("dialogs/main_window.py"),
         Path("dialogs/workflow_window.py"),
     ):
         tree = ast.parse((GUI / relative_path).read_text())

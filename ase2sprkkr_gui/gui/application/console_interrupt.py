@@ -9,8 +9,10 @@ then wakes Qt so the normal shutdown callback runs on the GUI thread.
 """
 from __future__ import annotations
 
+import os
 import signal
 import socket
+from time import monotonic
 from collections.abc import Callable
 from types import FrameType
 
@@ -26,6 +28,10 @@ class ConsoleInterrupt(QObject):
         super().__init__(parent)
         self._on_interrupt = on_interrupt
         self._interrupted = False
+        self._handling_interrupt = False
+        self._first_interrupt_at: float | None = None
+        self._force_exit_delay = 0.5
+        self._force_exit_window = 3.0
         self._closed = False
         self._reader, self._writer = socket.socketpair()
         self._reader.setblocking(False)
@@ -48,8 +54,42 @@ class ConsoleInterrupt(QObject):
             self._writer.close()
             raise
 
+    @staticmethod
+    def _console_notice(message: bytes) -> None:
+        """Only use async-signal-safe output from the SIGINT handler."""
+        try:
+            os.write(2, message)
+        except OSError:
+            pass  # The process may have been launched without stderr.
+
     def _mark_interrupt(self, _signum: int, _frame: FrameType | None) -> None:
+        now = monotonic()
+        if self._interrupted or self._handling_interrupt:
+            # The force-exit window must expire even while Qt is inside a
+            # modal Save/Discard/Cancel dialog (and the callback is running).
+            # Re-arm lazily on SIGINT; no Qt timer or reentrant callback needed.
+            elapsed = now - self._first_interrupt_at
+            if elapsed > self._force_exit_window:
+                self._first_interrupt_at = now
+                self._console_notice(
+                    b"Ctrl+C: force-exit window expired; resetting.\n"
+                    b"Hit CTRL+C again to force terminate (after 500 ms, within 3 s).\n"
+                )
+                return
+            # A terminal may send two SIGINTs for an accidental key repeat.
+            # Ignore them during the initial debounce period.
+            if elapsed >= self._force_exit_delay:
+                # Qt may be inside a nested Save/Discard/Cancel dialog. The
+                # synchronous callback cannot reliably be reentered.
+                self._console_notice(b"Ctrl+C again: forcing exit.\n")
+                os._exit(130)
+            return
         self._interrupted = True
+        self._first_interrupt_at = now
+        self._console_notice(
+            b"Ctrl+C: shutdown requested.\n"
+            b"Hit CTRL+C again to force terminate (after 500 ms, within 3 s).\n"
+        )
 
     def _on_readable(self, *_args) -> None:
         while True:
@@ -60,7 +100,12 @@ class ConsoleInterrupt(QObject):
                 break
         if self._interrupted:
             self._interrupted = False
-            self._on_interrupt()
+            self._handling_interrupt = True
+            try:
+                self._on_interrupt()
+            finally:
+                self._handling_interrupt = False
+                self._first_interrupt_at = None
 
     def close(self) -> None:
         """Restore process signal state and close wakeup sockets."""

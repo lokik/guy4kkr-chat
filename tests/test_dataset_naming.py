@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from types import SimpleNamespace
+import pytest
 
 from ase import Atoms
 
@@ -113,22 +114,66 @@ def test_apply_default_dataset_uses_injected_mode(monkeypatch):
     assert option.value == "injected"
 
 
-def test_dataset_is_used_as_run_file_namespace():
+@pytest.mark.parametrize("dataset", ["runs/Fe-01", ".Fe", "../Fe", "Železo", "Fe%T%c"])
+def test_dataset_is_used_as_run_file_namespace(dataset):
+    from ase2sprkkr.sprkkr._preparation import FilenameTemplator
+
     class Option:
         def is_set(self):
             return True
 
         def __call__(self):
-            return "Fe run/01"
+            return dataset
 
     parameters = SimpleNamespace(CONTROL=SimpleNamespace(DATASET=Option()))
 
-    assert _execution(parameters).file_names() == (
-        "Fe_run_01_%T.inp",
-        "Fe_run_01.pot",
-        "Fe_run_01_%T.out",
+    templator = FilenameTemplator(None, 0, lambda: "SCF", lambda: "Fe")
+    assert tuple(templator(name) for name in _execution(parameters).file_names()) == (
+        f"{dataset}_SCF.inp",
+        f"{dataset}.pot",
+        f"{dataset}_SCF.out",
     )
+
+
+def test_generated_structure_name_is_a_filename_component():
     assert filename_component("Fe run/01") == "Fe_run_01"
+
+
+@pytest.mark.parametrize("prefix", ["runs/Fe-01", "Železo/Fe%T%c", ".Fe", "absolute"])
+@pytest.mark.parametrize("operation", ["save", "run"])
+def test_preparation_preserves_native_dataset_paths(tmp_path, prefix, operation):
+    from pathlib import Path
+    from ase.build import bulk
+    from ase2sprkkr.input_parameters.input_parameters import InputParameters
+
+    dataset = str(tmp_path / "nested/Fe") if prefix == "absolute" else prefix
+    parameters = InputParameters.create("SCF")
+    parameters.CONTROL.DATASET = dataset
+    request = CalculationRequest(
+        atoms=bulk("Fe"), input_parameters=parameters, directory=str(tmp_path),
+        structure_id=1, state_id=1,
+    )
+    execution = SprkkrExecution(request, _Cancellation())
+    expected = tmp_path / dataset
+    input_path = expected.with_name(f"{expected.name}_SCF.inp")
+    potential_path = expected.with_name(f"{expected.name}.pot")
+    if operation == "run":
+        runner = execution._create_runner(execution._calculator())
+        try:
+            output_path = expected.with_name(f"{expected.name}_SCF.out")
+            assert Path(runner.spec.output_file.name) == output_path
+            assert output_path.is_file()
+        finally:
+            runner.close()
+    else:
+        _written, actual_input, actual_potential, _output = execution.prepare_files()
+        assert Path(actual_input) == input_path
+        assert Path(actual_potential) == potential_path
+    saved = InputParameters.from_file(input_path)
+    assert saved.CONTROL.DATASET() == str(expected.relative_to(tmp_path))
+    assert (tmp_path / saved.CONTROL.POTFIL()).resolve() == potential_path
+    assert potential_path.is_file()
+    assert parameters.CONTROL.DATASET() == dataset
 
 
 def test_unset_dataset_uses_conventional_names():

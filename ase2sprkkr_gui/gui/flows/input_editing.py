@@ -28,6 +28,7 @@ def create_input_parameters(
         parent=parent,
         task=task,
         dataset_default_mode=dataset_default_mode,
+        directory=controller.directory,
     )
     if parameters is None:
         return False
@@ -73,6 +74,7 @@ def edit_current_input_parameters(
         parent=parent,
         show_changed_only=show_changed_only,
         atoms=atoms,
+        directory=controller.directory,
     )
     if edited is None:
         return False

@@ -203,6 +203,15 @@ def present_result(
     elif has_unavailable_result_file:
         file_warning = "⚠ Some historical result files are no longer available."
 
+    parse_error = getattr(result, "parse_error", None)
+    if parse_error is not None:
+        warning = (
+            "⚠ The calculation output could not be parsed completely: "
+            f"{parse_error}. Showing the captured output file only. "
+            "Scientific result actions are unavailable."
+        )
+        file_warning = "\n\n".join(part for part in (warning, file_warning) if part)
+
     return ResultPresentation(
         result_id=result_id,
         values=tuple(values),

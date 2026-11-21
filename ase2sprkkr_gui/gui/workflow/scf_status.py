@@ -29,6 +29,7 @@ class ScfProgress(Enum):
 
 _BACKEND_STATUS = {
     "ITR": ScfProgress.ITERATING,
+    "ITERATING": ScfProgress.ITERATING,  # Native CLUPOT spelling.
     "ITR-BULK": ScfProgress.BULK,
     "ITR-L-BULK": ScfProgress.LEFT_BULK,
     "ITR-R-BULK": ScfProgress.RIGHT_BULK,

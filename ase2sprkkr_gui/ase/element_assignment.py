@@ -12,6 +12,7 @@ from ase2sprkkr import SPRKKRAtoms
 from ase2sprkkr.sprkkr.atomic_types import AtomicType
 from ase2sprkkr.sprkkr.sites import Site, SiteType
 
+from ase2sprkkr_gui.ase.copy import copy_for_edit
 from ase2sprkkr_gui.ase.utils import labels_for_partitions, partition_by_kinds
 
 
@@ -64,6 +65,8 @@ class ElementAssignmentDraft:
         self._original_partition = tuple(
             tuple(site.origins) for site in self.sites
         )
+        self._initial_cell = self._cell.copy()
+        self._initial_sites = self._site_snapshot()
 
     @property
     def cell(self) -> np.ndarray:
@@ -72,6 +75,13 @@ class ElementAssignmentDraft:
 
     def set_cell_component(self, row: int, column: int, value: float) -> None:
         self._cell[row, column] = float(value)
+
+    def set_cell(self, cell) -> None:
+        """Set all lattice vectors atomically, preserving fractional positions."""
+        array = np.asarray(cell, dtype=float)
+        if array.shape != (3, 3) or not np.all(np.isfinite(array)):
+            raise ValueError("Cell must be a finite 3 × 3 matrix")
+        self._cell = array.copy()
 
     def split_site(self, site: AssignmentSite) -> tuple[AssignmentSite, ...]:
         """Replace a multi-position site by uniquely labelled single sites."""
@@ -223,6 +233,25 @@ class ElementAssignmentDraft:
             self.is_site_valid(site) for site in self.sites
         )
 
+    def _site_snapshot(self) -> tuple:
+        """Capture editable site data, independent of Qt and the source Atoms."""
+        return tuple(
+            (
+                site.label,
+                tuple(tuple(float(x) for x in row) for row in site.positions),
+                tuple(site.origins),
+                tuple((entry.symbol, entry.value) for entry in site.occupancies),
+            )
+            for site in self.sites
+        )
+
+    def is_unchanged(self) -> bool:
+        """No structure edit was made (including a split or added position)."""
+        return (
+            np.array_equal(self._cell, self._initial_cell)
+            and self._site_snapshot() == self._initial_sites
+        )
+
     def apply(self, atoms: Atoms | None = None) -> Atoms:
         """Validate and materialize the draft into a detached structure."""
         if not self.is_valid():
@@ -230,7 +259,7 @@ class ElementAssignmentDraft:
 
         source = self._source_atoms
         if atoms is None or atoms is source:
-            atoms = source.copy()
+            atoms = copy_for_edit(source)
         changed = self._partition_changed()
 
         if changed:
@@ -290,7 +319,7 @@ class ElementAssignmentDraft:
             if origin is None:
                 site_type = SiteType(atoms, occupation)
             else:
-                site_type = source_sites[origin].site_type.copy(atoms=atoms)
+                site_type = source_sites[origin].site_type.copy(atoms=atoms, shallow=True)
                 site_type.occupation.set(
                     self._occupation_with_preserved_types(
                         site_type, occupation

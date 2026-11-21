@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Radial wave functions</title>
+  <desc>A schematic damped radial wave with alternating positive and negative lobes.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f0f7f8" stroke="#b6cbd2"/>
+  <path d="M9 25c4 0 4-12 8-12s4 22 9 22 4-15 8-15c3 0 4 5 6 5Z" fill="#c9eeee"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 10v28m0-13h31" stroke="#26384e" stroke-width="2"/>
+    <path d="M9 25c4 0 4-12 8-12s4 22 9 22 4-15 8-15c3 0 4 5 6 5" stroke="#087f83" stroke-width="2.6"/>
+  </g>
+</svg>

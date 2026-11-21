@@ -50,10 +50,30 @@ def _state_for_result(store: ResultStore, result_id: int) -> CalculationStateRec
     return store.state(state_id)
 
 
+def _require_source_versions(state: CalculationStateRecord) -> None:
+    for version in state.source_versions:
+        require_potential_version_current(version)
+
+
+def _load_state_version(
+    version: PotentialFileVersion, state: CalculationStateRecord
+) -> Any:
+    _require_source_versions(state)
+    snapshot = state.structure_snapshot
+    host = (
+        snapshot.info.get("sprkkr_embedding_host")
+        if snapshot is not None else None
+    )
+    if host is not None:
+        return load_potential_version(version, embedding_host=host)
+    return load_potential_version(version)
+
+
 def _restore_state_atoms(state: CalculationStateRecord) -> Any:
+    _require_source_versions(state)
     version = state.potential_version
     if version is not None and version.available:
-        return load_potential_version(version)
+        return _load_state_version(version, state)
     if state.structure_snapshot is not None:
         return state.structure_snapshot.to_atoms()
     raise ValueError("The selected result no longer has a reusable calculation input.")
@@ -92,8 +112,10 @@ def resolve_historical_state(
         if (
             active.structure_id == state.structure_id
             and active.potential_version == expected_potential
+            and active.source_dependencies == state.source_dependencies
         ):
             require_potential_version_current(expected_potential)
+            _require_source_versions(active)
             return HistoricalStateAlreadyActive()
 
     if state.potential_version == expected_potential:
@@ -102,9 +124,10 @@ def resolve_historical_state(
         target_state = store.state_for_potential_version(
             expected_potential,
             structure_id=state.structure_id,
+            source_dependencies=state.source_dependencies,
         )
 
-    atoms = load_potential_version(expected_potential)
+    atoms = _load_state_version(expected_potential, target_state or state)
     if target_state is not None:
         return ExistingHistoricalState(atoms=atoms, state=target_state)
     return NewHistoricalPotential(

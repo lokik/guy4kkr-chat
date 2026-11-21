@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Self-consistent field</title>
+  <desc>Two arrows form an iteration cycle around a convergence check mark.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f0f7f8" stroke="#b6cbd2"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8">
+    <path d="M11 20a13.5 13.5 0 0 1 24-4m-7 0h7V9" stroke="#26384e"/>
+    <path d="M37 28a13.5 13.5 0 0 1-24 4m7 0h-7v7" stroke="#26384e"/>
+    <path d="m19 24 3.5 3.5 7-8" stroke="#087f83"/>
+  </g>
+</svg>

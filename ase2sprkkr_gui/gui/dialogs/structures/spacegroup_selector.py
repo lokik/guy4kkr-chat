@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from ase import Atoms
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import QSignalBlocker, Qt, QTimer
 from PyQt6.QtWidgets import (
@@ -29,6 +28,7 @@ from PyQt6.QtWidgets import (
 )
 from pyxtal.symmetry import Group
 
+from ase2sprkkr_gui.gui.widgets.matplotlib_preview import PreviewFigureCanvas as FigureCanvas
 from ase2sprkkr_gui.gui.plots.lattice import plot_lattice, plot_sites_in_lattice
 from ase2sprkkr_gui.gui.widgets.double_edit import QDoubleEdit
 from ase2sprkkr_gui.gui.widgets.structures.wyckoff_position import WyckoffPositionWidget

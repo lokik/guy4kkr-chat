@@ -54,7 +54,7 @@ def edit_current_structure(
     *,
     error_title: str,
 ) -> bool:
-    """Edit a detached copy of the current structure and publish on success."""
+    """Show the current structure and publish the editor's independent result."""
     generation = controller.structure_generation
     if controller.atoms is None:
         QMessageBox.information(
@@ -65,10 +65,45 @@ def edit_current_structure(
     change = controller.apply_structure_edit(
         lambda candidate: editor(candidate, parent=parent),
         expected_structure_generation=generation,
+        copy_source=False,
     )
     if change is None:
         return False
     return document_change_applied(parent, change)
+
+
+def edit_structure(
+    controller: WorkspaceController,
+    parent: QWidget,
+    *,
+    recent_files: RecentFiles | None = None,
+) -> bool:
+    """Open the integrated structure editor and commit one accepted result."""
+    from ase2sprkkr_gui.gui.dialogs.structures.structure_editor import (
+        select_structure_editor,
+    )
+
+    generation = controller.structure_generation
+    atoms = controller.atoms
+    if atoms is None:
+        QMessageBox.information(parent, "No Structure", "Load or create a structure first.")
+        return False
+
+    result = select_structure_editor(
+        atoms,
+        parent=parent,
+        recent_files=recent_files,
+        allow_build_2d=controller.can_build_2d(),
+        allow_build_embedding=controller.can_build_embedding(),
+    )
+    if result is None:
+        return False
+    change = controller.apply_structure_edit(
+        lambda _candidate: result,
+        expected_structure_generation=generation,
+        copy_source=False,
+    )
+    return change is not None and document_change_applied(parent, change)
 
 
 def edit_site_elements(
@@ -208,7 +243,7 @@ def create_2d_from_new_structure(
 
     bulk = candidate.atoms
     result = select_build_2d_structure(
-        bulk.copy(),
+        bulk,
         parent=parent,
         recent_files=recent_files,
         surface_mode=surface_mode,
@@ -267,6 +302,7 @@ def build_2d_structure(
     change = controller.apply_structure_edit(
         lambda candidate: edit(candidate, parent=parent),
         expected_structure_generation=generation,
+        copy_source=False,
     )
     if change is None:
         return None
@@ -371,3 +407,50 @@ def update_empty_spheres(
             ),
         )
     return True
+
+
+def build_embedding_structure(
+    controller: WorkspaceController,
+    parent: QWidget,
+) -> Any | None:
+    """Edit a detached cluster candidate and publish only the accepted result.
+
+    Import lazily because GUI installations with a previously released
+    ASE2SPRKKR must remain usable before the embedding backend is installed.
+    """
+    if not controller.can_build_embedding():
+        QMessageBox.information(
+            parent, "Build Embedded Cluster",
+            "Load a 3D bulk, 2D layered host or an existing embedded cluster first.",
+        )
+        return None
+    # Embedding is part of the required ASE2SPRKKR 4.x backend.
+    # A missing module is an installation error, not an optional GUI feature.
+    from ase2sprkkr_gui.gui.dialogs.structures.embedding import (
+        select_build_embedding_structure,
+    )
+    from ase2sprkkr_gui.ase.embedding import prepare_embedding_source
+
+    generation = controller.structure_generation
+    source = controller.atoms
+    try:
+        # The editor is read-only with respect to the source. Keep its original
+        # Potential identity: generic ASE copy() can discard the attached POTFIL.
+        # apply_structure_edit still checks the workspace generation atomically.
+        def edit_embedding(_candidate):
+            prepared = prepare_embedding_source(source)
+            result = select_build_embedding_structure(prepared, parent)
+            # Closing an unchanged editor must not create a restarted state.
+            return None if result is source else result
+
+        change = controller.apply_structure_edit(
+            edit_embedding,
+            expected_structure_generation=generation,
+            copy_source=False,
+        )
+    except (ValueError, TypeError, NotImplementedError) as exc:
+        QMessageBox.warning(parent, "Embedded Cluster", str(exc))
+        return None
+    if change is None or not document_change_applied(parent, change):
+        return None
+    return controller.atoms

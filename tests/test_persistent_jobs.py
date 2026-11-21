@@ -7,7 +7,7 @@ import os
 from types import SimpleNamespace
 import pytest
 from kkrunner.runs import RunState, FailurePhase, ExecutionMetadata, WorkingDirectory
-from kkrunner.client import SshTransport
+from kkrunner.transports import SshTransport
 from kkrunner.backends import BackendConfig
 from kkrunner.files import FileManifest, FileEntry
 import ase2sprkkr_gui.gui.application.persistent_jobs as module

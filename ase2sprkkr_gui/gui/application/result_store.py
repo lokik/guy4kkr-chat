@@ -66,6 +66,13 @@ def _snapshot_needed(version: PotentialFileVersion | None) -> bool:
     return version is None or not version.available
 
 
+def _is_embedded_snapshot(snapshot: StructureSnapshot | None) -> bool:
+    return bool(
+        snapshot is not None
+        and snapshot.info.get("sprkkr_embedding_host") is not None
+    )
+
+
 @dataclass(frozen=True)
 class StructureRecord:
     """Identity of one user-visible physical structure."""
@@ -93,6 +100,20 @@ class CalculationStateRecord:
     empty_spheres: EmptySpheresState | None = None
     produced_by_result_id: int | None = None
     potential_source_result_id: int | None = None
+    # A native structure can depend on both the host POTFIL and the CLUPOT.
+    source_versions: tuple[FileVersion, ...] = ()
+
+    @property
+    def source_dependencies(self) -> tuple[FileVersion, ...]:
+        """Versions required in addition to this state's primary potential."""
+        primary = (
+            Path(self.potential_path).expanduser().absolute()
+            if self.potential_path is not None else None
+        )
+        return tuple(
+            version for version in self.source_versions
+            if version.path != primary
+        )
 
 
 @dataclass(frozen=True)
@@ -257,13 +278,17 @@ class ResultStore:
         version: PotentialFileVersion,
         *,
         structure_id: int | None = None,
+        source_dependencies: tuple[FileVersion, ...] = (),
     ) -> CalculationStateRecord | None:
-        """Return the newest state known to represent this exact POTFIL version."""
+        """Find a state for this potential AND its additional input versions."""
         for state_id in sorted(self._states, reverse=True):
             state = self._states[state_id]
             if structure_id is not None and state.structure_id != structure_id:
                 continue
-            if state.potential_version == version:
+            if (
+                state.potential_version == version
+                and state.source_dependencies == source_dependencies
+            ):
                 return state
         return None
 
@@ -332,15 +357,20 @@ class ResultStore:
         *,
         potential_path: str | None,
         potential_version: PotentialFileVersion | None = None,
+        source_versions: tuple[FileVersion, ...] = (),
         empty_spheres: EmptySpheresState | None = None,
         produced_by_result_id: int | None = None,
         potential_source_result_id: int | None = None,
     ) -> _PreparedState:
         resolved_version = _resolve_potential_version(potential_path, potential_version)
         formula = structure_formula(atoms) or type(atoms).__name__
+        # CLUPOT alone is not self-contained. Retain only its small site
+        # mapping and canonical host reference alongside the versioned file.
+        # Ordinary periodic POTFIL states still avoid duplicate snapshots.
+        is_embedded = getattr(atoms, "embedding_host", None) is not None
         snapshot = (
             StructureSnapshot.capture(atoms)
-            if _snapshot_needed(resolved_version)
+            if _snapshot_needed(resolved_version) or is_embedded
             else None
         )
         source_result_id = (
@@ -360,6 +390,7 @@ class ResultStore:
             empty_spheres=empty_spheres,
             produced_by_result_id=produced_by_result_id,
             potential_source_result_id=source_result_id,
+            source_versions=tuple(source_versions),
         )
         return _PreparedState(state=state, structure=structure, creates_branch=True)
 
@@ -400,18 +431,35 @@ class ResultStore:
         if resolved_version is None or not resolved_version.available:
             resolved_source = None
 
-        if _snapshot_needed(resolved_version):
-            resolved_snapshot = (
-                parent.structure_snapshot
-                if structure_snapshot is _KEEP_STRUCTURE
-                else structure_snapshot
-            )
+        proposed_snapshot = (
+            parent.structure_snapshot
+            if structure_snapshot is _KEEP_STRUCTURE
+            else structure_snapshot
+        )
+        if _snapshot_needed(resolved_version) or _is_embedded_snapshot(proposed_snapshot):
+            resolved_snapshot = proposed_snapshot
             if resolved_snapshot is None:
                 raise ValueError(
                     "A state without a usable potential requires a structure snapshot."
                 )
         else:
             resolved_snapshot = None
+
+        # An output CLUPOT still needs its original host, but no longer
+        # depends on the previous cluster potential's contents.
+        if reuses_potential:
+            source_versions = parent.source_versions
+        elif _is_embedded_snapshot(proposed_snapshot):
+            previous = (
+                Path(parent.potential_path).expanduser().absolute()
+                if parent.potential_path is not None else None
+            )
+            source_versions = tuple(
+                version for version in parent.source_versions
+                if version.path != previous
+            )
+        else:
+            source_versions = ()
 
         resolved_empty_spheres = (
             parent.empty_spheres
@@ -435,6 +483,7 @@ class ResultStore:
             empty_spheres=resolved_empty_spheres,
             produced_by_result_id=produced_by_result_id,
             potential_source_result_id=resolved_source,
+            source_versions=source_versions,
         )
         return _PreparedState(state=state, creates_branch=creates_branch)
 
@@ -481,6 +530,7 @@ class ResultStore:
         *,
         potential_path: str | None,
         potential_version: PotentialFileVersion | None = None,
+        source_versions: tuple[FileVersion, ...] = (),
         empty_spheres: EmptySpheresState | None = None,
         produced_by_result_id: int | None = None,
         potential_source_result_id: int | None = None,
@@ -489,6 +539,7 @@ class ResultStore:
             atoms,
             potential_path=potential_path,
             potential_version=potential_version,
+            source_versions=source_versions,
             empty_spheres=empty_spheres,
             produced_by_result_id=produced_by_result_id,
             potential_source_result_id=potential_source_result_id,
@@ -610,6 +661,7 @@ class ResultStore:
         potential_path: Path | None = None,
         output_atoms: Any | None = None,
         output_potential_path: str | None = None,
+        output_potential_version: PotentialFileVersion | None = None,
         output_empty_spheres: EmptySpheresState | None | object = _KEEP_EMPTY_SPHERES,
     ) -> ResultRecord:
         """Record one native operation result and its optional state transition."""
@@ -625,6 +677,7 @@ class ResultStore:
             potential_path=potential_path,
             output_atoms=output_atoms,
             output_potential_path=output_potential_path,
+            output_potential_version=output_potential_version,
             output_empty_spheres=output_empty_spheres,
             imported=False,
         )
@@ -643,7 +696,9 @@ class ResultStore:
         potential_path: Path | None = None,
         output_atoms: Any | None = None,
         output_potential_path: str | None = None,
+        output_potential_version: PotentialFileVersion | None = None,
         output_empty_spheres: EmptySpheresState | None | object = _KEEP_EMPTY_SPHERES,
+        source_versions: tuple[FileVersion, ...] = (),
         imported: bool,
     ) -> ResultRecord:
         if (structure_id is None) != (input_state_id is None):
@@ -685,6 +740,8 @@ class ResultStore:
                 prepared_state = self._prepare_structure_state(
                     output_atoms,
                     potential_path=output_potential_path,
+                    potential_version=output_potential_version,
+                    source_versions=source_versions,
                     empty_spheres=root_empty_spheres,
                     produced_by_result_id=result_id,
                     potential_source_result_id=potential_source_result_id,
@@ -706,6 +763,7 @@ class ResultStore:
                 prepared_state = self._prepare_child_state(
                     input_state_id,
                     potential_path=child_potential,
+                    potential_version=output_potential_version,
                     structure_snapshot=child_snapshot,
                     empty_spheres=output_empty_spheres,
                     produced_by_result_id=result_id,
@@ -739,6 +797,7 @@ class ResultStore:
         output_path: Path | None,
         potential_path: Path | None,
         persistent_ref: str | None = None,
+        source_versions: tuple[FileVersion, ...] = (),
     ) -> ResultRecord:
         existing = self.result_for_external_source(
             output_path,
@@ -772,12 +831,14 @@ class ResultStore:
                 potential_path=potential_path,
                 output_atoms=atoms,
                 output_potential_path=(str(potential_path) if potential_path else None),
+                source_versions=source_versions,
                 imported=True,
             )
 
         prepared_state = self._prepare_structure_state(
             atoms,
             potential_path=(str(potential_path) if potential_path else None),
+            source_versions=source_versions,
         )
         assert prepared_state.structure is not None
         record = self._prepare_result_record(

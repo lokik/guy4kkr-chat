@@ -40,7 +40,7 @@ class _RemoteFileSignals(QObject):
 def _result_version(job: PersistentJob) -> tuple[Any, ...]:
     """Metadata affecting the persisted result, excluding file-check bookkeeping."""
     return (
-        job.state, job.updated_at, job.finished_at, job.result_files_state,
+        job.state, job.finished_at, job.result_files_state,
         job.failure_phase, job.return_code, job.directory, job.dataset, job.task,
     )
 
@@ -95,6 +95,9 @@ class PersistentJobsController(QObject):
         self._cached_presentations: dict[str, tuple[Any, ...]] = {}
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ase2sprkkr_gui-result")
         self._loads: dict[str, tuple[tuple[Any, ...], Future[Any]]] = {}
+        # Remember parse failures for a run revision, not just successful results.
+        # Repeated project projections must not parse the same broken output forever.
+        self._load_errors: dict[str, tuple[tuple[Any, ...], str]] = {}
         self._preload_ids: tuple[str, ...] = ()
         self._selected_preload_id: str | None = None
         self._result_signals = _ResultSignals(self)
@@ -151,6 +154,14 @@ class PersistentJobsController(QObject):
             lambda job_id, bound_view=view_ref: self._job_selected(job_id, bound_view())
         )
         self.refresh_view(view)
+
+    def unbind_view(self, view: PersistentJobsWidget) -> None:
+        """Release a closed browser\'s background result-loading interest."""
+        self._views = {view_ref for view_ref in self._views if view_ref() is not view}
+        if view.auto_load_results:
+            self._preload_ids = ()
+            self._selected_preload_id = None
+            self._keep_relevant_loads()
 
     def _live_views(self) -> tuple[PersistentJobsWidget, ...]:
         return tuple(
@@ -246,6 +257,12 @@ class PersistentJobsController(QObject):
         if found:
             self._set_result_in_views(job_id, result)
             return
+        previous_error = self._load_errors.get(job_id)
+        if previous_error is not None and previous_error[0] == version:
+            for view in self._live_views():
+                if view.auto_load_results:
+                    view.set_result_error(job_id, previous_error[1])
+            return
         loading = self._loads.get(job_id)
         if loading is not None:
             if loading[0] == version:
@@ -282,11 +299,13 @@ class PersistentJobsController(QObject):
         try:
             result = future.result()
         except Exception as exc:  # noqa: BLE001 - parse/backend data boundary
+            self._load_errors[job_id] = (version, str(exc))
             logger.debug("Could not preload result for %s", job_id, exc_info=True)
             for view in self._live_views():
                 if view.auto_load_results:
                     view.set_result_error(job_id, str(exc))
             return
+        self._load_errors.pop(job_id, None)
         self._result_cache.store(job_id, version, result)
         # Preloading is browsing, not a request to adopt a result in the workspace.
         self._set_result_in_views(job_id, result)
@@ -297,9 +316,13 @@ class PersistentJobsController(QObject):
         job = self._source.job(job_id)
         if job is None:
             self._result_cache.invalidate(job_id)
+            self._load_errors.pop(job_id, None)
             self._loads.pop(job_id, None)
             self.refresh_views()
             return
+        failed = self._load_errors.get(job_id)
+        if failed is not None and failed[0] != _result_version(job):
+            self._load_errors.pop(job_id, None)
         shown_version = self._cached_presentations.get(job_id)
         if shown_version is not None and shown_version != _result_version(job):
             self._cached_presentations.pop(job_id, None)
@@ -728,6 +751,7 @@ class PersistentJobsController(QObject):
         select_result: bool,
     ) -> None:
         job = self._source.job(job_id)
+        self._load_errors.pop(job_id, None)
         if _can_load_result(job, self._source):
             self._result_cache.store(job_id, _result_version(job), result)
             self._cached_presentations[job_id] = _result_version(job)
@@ -786,6 +810,7 @@ class PersistentJobsController(QObject):
         if not _can_load_result(job, self._source):
             return
         revision = _result_version(job)
+        self._load_errors.pop(job_id, None)  # Explicit Refresh retries failed parses.
         pending = self._loads.get(job_id)
 
         def reread() -> Any:
@@ -814,6 +839,8 @@ class PersistentJobsController(QObject):
             self._result_cache.store(job_id, _result_version(job), result)
             self._set_result_in_views(job_id, result)
         except Exception as exc:  # noqa: BLE001 - persisted/backend data boundary
+            self._load_errors[job_id] = (revision, str(exc))
+            view.set_result_error(job_id, str(exc))
             QMessageBox.warning(view, "Result Refresh Failed", str(exc))
 
     @property

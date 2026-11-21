@@ -21,6 +21,38 @@ GEOMETRY_COLOR = "#536f9e"
 SPECIAL_COLOR = "#8a5b9f"
 ADVANCED_COLOR = "#607d8b"
 
+FILE_SOURCE_PAGE = "input_files"
+
+
+def file_source_page(directory) -> PageSpec:
+    """Controls for a standalone native calculation without workspace atoms."""
+    return PageSpec(FILE_SOURCE_PAGE, "Input files", (
+        GroupSpec("Native input", (
+            field("CONTROL", "POTFIL", "Host or periodic potential (POTFIL):", "text"),
+            field("CONTROL", "CLUTYPE", "Cluster type (CLUTYPE):", "text"),
+            field("CONTROL", "POTFIL_CLU", "Cluster potential (POTFIL_CLU):", "text"),
+            field("CONTROL", "SFNFIL", "Shape functions (SFNFIL):", "text"),
+        ), note=f"Relative filenames use {directory}. For CLUPOT set CLUTYPE to embedded."),
+        GroupSpec("Output names", (
+            field("CONTROL", "DATASET", "Output prefix (DATASET):", "text"),
+            field("CONTROL", "ADSI", "Output suffix (ADSI):", "text"),
+        )),
+    ), OUTPUT_COLOR)
+
+
+def with_file_source_page(spec, directory):
+    source = file_source_page(directory)
+    paths = {item.path for group in source.groups for item in group.fields}
+    pages = []
+    for page in spec.pages:
+        groups = []
+        for group in page.groups:
+            fields = tuple(item for item in group.fields if item.path not in paths)
+            if fields:
+                groups.append(replace(group, fields=fields))
+        pages.append(replace(page, groups=tuple(groups)))
+    return replace(spec, pages=(source, *pages))
+
 
 VXC = field("SCF", "VXC", "Exchange-correlation:", "keyword")
 MODE = field(

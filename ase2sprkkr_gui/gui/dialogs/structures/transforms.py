@@ -5,7 +5,6 @@ from typing import Any, Optional, Tuple
 import numpy as np
 from ase2sprkkr.ase.build import aperiodic_times
 from ase2sprkkr.ase.build import rotate as rotate_by_hkl
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtWidgets import (
     QDialog,
@@ -20,6 +19,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ase2sprkkr_gui.gui.widgets.matplotlib_preview import PreviewFigureCanvas as FigureCanvas
+from ase2sprkkr_gui.ase.copy import copy_for_edit
 from ase2sprkkr_gui.gui.plots.lattice import plot_atoms_preview
 from ase2sprkkr_gui.physics.lattice import scale_lattice_to_lengths
 
@@ -79,7 +80,7 @@ class _ScaleDialog(QDialog):
         self.setWindowTitle("Scale Structure")
         self._updating = False
         self._base_lattice = np.asarray(base_lattice, dtype=float)
-        self._preview_atoms = None if preview_atoms is None else preview_atoms.copy()
+        self._preview_atoms = preview_atoms
         self._base_lengths = {
             "a": float(a0),
             "b": float(b0),
@@ -183,8 +184,10 @@ class _ScaleDialog(QDialog):
 
         preview = None
         if self._preview_atoms is not None:
-            preview = self._preview_atoms.copy()
-            preview.set_cell(lattice, scale_atoms=True)
+            preview = self._preview_atoms
+            if not np.allclose(lattice, preview.cell, rtol=0, atol=1e-12):
+                preview = copy_for_edit(preview)
+                preview.set_cell(lattice, scale_atoms=True)
 
         original_lengths = np.array([
             self._base_lengths['a'],
@@ -217,7 +220,7 @@ class _RepeatDialog(QDialog):
     def __init__(self, *, atoms: Optional[Any] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle("Repeat Structure")
-        self._preview_atoms = atoms.copy() if atoms is not None else None
+        self._preview_atoms = atoms
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -262,7 +265,7 @@ class _RepeatDialog(QDialog):
         repeated = None
         if self._preview_atoms is not None:
             try:
-                repeated = aperiodic_times(self._preview_atoms.copy(), list(self.values()))
+                repeated = aperiodic_times(self._preview_atoms, list(self.values()))
             except Exception:
                 repeated = None
 
@@ -273,7 +276,7 @@ class _RotateDialog(QDialog):
     def __init__(self, *, atoms: Optional[Any] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle("Rotate Structure (Miller hkl)")
-        self._preview_atoms = atoms.copy() if atoms is not None else None
+        self._preview_atoms = atoms
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -323,7 +326,7 @@ class _RotateDialog(QDialog):
         h, k, l = self.values()
         if self._preview_atoms is not None and not (h == 0 and k == 0 and l == 0):
             try:
-                rotated = rotate_by_hkl(self._preview_atoms.copy(), (h, k, l))
+                rotated = rotate_by_hkl(self._preview_atoms, (h, k, l))
             except Exception:
                 rotated = None
 
@@ -386,8 +389,10 @@ def scale_atoms(atoms: Any, *, parent: Optional[QWidget] = None) -> Optional[Any
     a_new, b_new, c_new = values
     new_lengths = np.array([a_new, b_new, c_new], dtype=float)
     scaled_cell = scale_lattice_to_lengths(cell, new_lengths)
+    if np.allclose(scaled_cell, cell, rtol=0, atol=1e-12):
+        return atoms
 
-    result = atoms.copy()
+    result = copy_for_edit(atoms)
     result.set_cell(scaled_cell, scale_atoms=True)
     return result
 
@@ -401,8 +406,10 @@ def repeat_atoms(atoms: Any, *, parent: Optional[QWidget] = None) -> Optional[An
     factors = np.array([nx, ny, nz], dtype=float)
     if (factors < 1.0).any():
         raise ValueError("Repeat factors Nx, Ny, Nz must be greater than or equal to 1.")
+    if np.all(factors == 1):
+        return atoms
 
-    return aperiodic_times(atoms.copy(), factors.tolist())
+    return aperiodic_times(atoms, factors.tolist())
 
 
 def rotate_atoms(atoms: Any, *, parent: Optional[QWidget] = None) -> Optional[Any]:
@@ -414,4 +421,4 @@ def rotate_atoms(atoms: Any, *, parent: Optional[QWidget] = None) -> Optional[An
     if h == 0 and k == 0 and l == 0:
         raise ValueError("h, k, l cannot all be zero.")
 
-    return rotate_by_hkl(atoms.copy(), (h, k, l))
+    return rotate_by_hkl(atoms, (h, k, l))

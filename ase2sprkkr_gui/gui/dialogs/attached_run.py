@@ -81,4 +81,5 @@ def create_attached_run_monitor_window(
         on_finished=on_finished,
         autostart=autostart,
         observation_only=True,
+        task_name=job.task,
     )

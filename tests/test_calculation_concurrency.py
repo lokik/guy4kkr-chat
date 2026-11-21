@@ -151,7 +151,7 @@ def test_backend_preparation_does_not_block_new_workspace_version(
     class Calculator:
         def create_run(self, **kwargs):
             assert kwargs["atoms"] is execution.request.atoms
-            assert kwargs["atoms"] is not atoms
+            assert kwargs["atoms"] is atoms
             assert kwargs["input_parameters"] is request.input_parameters
             preparation_entered.set()
             assert release_preparation.wait(5)

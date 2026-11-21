@@ -10,6 +10,7 @@ from typing import Any
 from ase import Atoms
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from ase2sprkkr_gui.ase.copy import copy_for_edit
 from ase2sprkkr_gui.gui.application.historical_state import (
     HistoricalStateAlreadyActive,
     NewHistoricalPotential,
@@ -69,10 +70,9 @@ class CalculationRequest:
     ``state_id``. A state-producing output may advance the workspace only while
     that exact input state is still active.
 
-    ``atoms`` identifies the authoritative launch input and is the sole physical
-    authority for its potential; potential paths are provenance/artifact metadata
-    only. The execution service copies the request atoms before ASE2SPRKKR sees
-    them, so backend bookkeeping cannot mutate the workspace structure.
+    An ordinary launch uses the attached potential of its workspace atoms.
+    A file-backed launch retains the native paths in the input parameters and
+    captures the parsed atoms for result provenance.
 
     ``restart_scf`` snapshots the pending workspace execution intent. It asks
     ASE2SPRKKR to serialize ``SCFSTATUS START`` for this run without mutating the
@@ -82,9 +82,16 @@ class CalculationRequest:
     atoms: Atoms
     input_parameters: Any
     directory: str
-    structure_id: int
-    state_id: int
+    structure_id: int | None
+    state_id: int | None
     restart_scf: bool = False
+    clear_cache: bool = False
+    # An explicit host Potential can be used without rebuilding it from a copy
+    # of its atoms (which would lose its native SCFSTATUS).
+    # False selects the backend's existing-POTFIL mode.
+    potential: Any | None = None
+    # Parsed and versioned source from an input file, not part of the workspace.
+    file_source: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +127,10 @@ class WorkspaceController(QObject):
         self._workspace = workspace or WorkspaceState()
         self._conflict_resolver = conflict_resolver
         self._results = ResultStore()
+        # A native CLUPOT may be opened read-only without its host POTFIL.
+        # It is a loaded file, not an editable Atoms document or unsaved work.
+        self._unresolved_cluster = None
+        self._unresolved_cluster_path: Path | None = None
         # The loaded or written revision, not merely the presence of a file.
         self._saved_structure_generation: Generation | None = None
         self._saved_input_parameters_generation: Generation | None = None
@@ -140,6 +151,38 @@ class WorkspaceController(QObject):
                 ),
                 generation=structure_lock.generation,
             )
+
+    @property
+    def unresolved_cluster(self):
+        """Native read-only CLUPOT awaiting an explicitly provided host."""
+        return self._unresolved_cluster
+
+    @property
+    def unresolved_cluster_path(self) -> Path | None:
+        return self._unresolved_cluster_path
+
+    def load_unresolved_cluster(
+        self,
+        potential,
+        path: str | Path,
+        *,
+        expected_structure_generation: Generation | None = None,
+        expected_directory_generation: Generation | None = None,
+    ) -> DocumentChange:
+        """Open an orphan CLUPOT without treating it as an editable structure."""
+        path = Path(path).resolve()
+        change = self.replace_structure(
+            None,
+            directory=str(path.parent),
+            expected_structure_generation=expected_structure_generation,
+            expected_directory_generation=expected_directory_generation,
+            emit_structure_changed=False,
+        )
+        if change is DocumentChange.APPLIED:
+            self._unresolved_cluster = potential
+            self._unresolved_cluster_path = path
+            self.structureChanged.emit(None)
+        return change
 
     @property
     def structure_state(self) -> StructureState:
@@ -254,12 +297,95 @@ class WorkspaceController(QObject):
     def structure_kind(self):
         return self.structure_state.structure_kind()
 
+    def can_run_embedding(self) -> bool:
+        """A guided cluster task can be configured once a native host exists."""
+        if self.structure_kind() != "0d":
+            return False
+        from ase2sprkkr import Potential
+
+        return isinstance(getattr(self.atoms, "embedding_host", None), Potential)
+
+    def embedding_host_scf_status(self) -> str | None:
+        """Raw host SCFSTATUS; a START host is not a converged input for embedding."""
+        if self.structure_kind() != "0d":
+            return None
+        from ase2sprkkr import Potential
+
+        host = getattr(self.atoms, "embedding_host", None)
+        if not isinstance(host, Potential):
+            return None
+        status = host.SCF_INFO.SCFSTATUS()
+        return str(status).strip().upper() if status is not None else None
+
+    def replace_embedding_host_if_current(self, expected_host, new_host) -> bool:
+        """Attach a completed host SCF to the *latest* embedded cluster.
+
+        Cluster edits made during the host calculation must survive. Only a
+        different host reference (or switching away from the cluster) prevents
+        adoption. The previous cluster SCF is no longer considered converged.
+        """
+        from ase2sprkkr import Potential
+        from ase2sprkkr_gui.gui.application.structure_snapshot import StructureSnapshot
+
+        if not isinstance(new_host, Potential):
+            raise TypeError("Host SCF must produce a periodic SPR-KKR Potential.")
+        atoms = self.atoms
+        if (self.structure_kind() != "0d" or
+                getattr(atoms, "embedding_host", None) is not expected_host):
+            return False
+        if self.state_id is None:
+            return False
+
+        # Work on the latest cluster rather than the launch-time snapshot.
+        # SPRKKRAtoms.copy retains the host by reference; updating the copy
+        # does not affect the original or lose edits to sites/occupations.
+        updated = copy_for_edit(atoms)
+        updated.embedding_host = new_host
+        # A different host invalidates the earlier embedded SCF, even if
+        # the cluster sites still carry a full set of radial data. Attach an
+        # explicit START ClusterPotential rather than allowing the atom data
+        # to be misinterpreted as an already converged cluster.
+        from ase2sprkkr.potentials.cluster_potentials import ClusterPotential
+
+        updated._potential = None
+        updated.info["sprkkr_embedding_scf_status"] = "START"
+        updated._potential = ClusterPotential.from_atoms(updated, scf_status="START")
+
+        parent_id = self.state_id
+        state_id = self._results.new_child_state(
+            parent_id,
+            potential_path=None,
+            structure_snapshot=StructureSnapshot.capture(updated),
+            empty_spheres=None,
+            new_branch=True,
+        )
+        state = self._results.state(state_id)
+        self._workspace.structure.force_change(StructureState(
+            atoms=updated,
+            potential_path=None,
+            structure_id=state.structure_id,
+            state_id=state.id,
+            empty_spheres=None,
+            restarted=False,
+        ))
+        self.structureChanged.emit(updated)
+        return True
+
     def can_calculate(self) -> bool:
-        """Allow execution setup before choosing the working directory."""
-        return self.atoms is not None and self.input_parameters is not None
+        """Whether a fully configured calculation can be launched."""
+        if self.atoms is None or self.input_parameters is None:
+            return False
+        return self.structure_kind() != "0d" or self.can_run_embedding()
 
     def can_build_2d(self) -> bool:
         return self.structure_kind() == "3d"
+
+    def can_build_embedding(self) -> bool:
+        """A 3D/2D host or existing embedded cluster can open the editor."""
+        kind = self.structure_kind()
+        return (kind in {"3d", "2d"}
+                or (kind == "0d" and
+                    getattr(self.atoms, "embedding_host", None) is not None))
 
     def scf_status(self) -> str | None:
         return self.structure_state.scf_status()
@@ -272,7 +398,7 @@ class WorkspaceController(QObject):
 
     def empty_spheres_action(self) -> _EmptySpheresAction | None:
         """Return the empty-sphere workflow action recommended for the draft."""
-        if self.atoms is None:
+        if self.atoms is None or self.structure_kind() == "0d":
             return None
         if self.empty_spheres is not None:
             return _EmptySpheresAction.RECALCULATE
@@ -302,6 +428,10 @@ class WorkspaceController(QObject):
         ):
             raise CalculationNotReady(
                 "Structure, input parameters, working directory and calculation state are required."
+            )
+        if not self.can_calculate():
+            raise CalculationNotReady(
+                "An embedded calculation requires a host SPR-KKR Potential."
             )
         return CalculationRequest(
             atoms=atoms,
@@ -385,6 +515,7 @@ class WorkspaceController(QObject):
         expected_structure_generation: Generation | None = None,
         expected_directory_generation: Generation | None = None,
         restarted: bool = False,
+        emit_structure_changed: bool = True,
     ) -> DocumentChange:
         checks = [(
             "structure",
@@ -437,7 +568,11 @@ class WorkspaceController(QObject):
             )
         if directory_changed:
             self.directoryChanged.emit(directory)
-        self.structureChanged.emit(atoms)
+        # A successfully loaded regular structure replaces the read-only CLUPOT.
+        self._unresolved_cluster = None
+        self._unresolved_cluster_path = None
+        if emit_structure_changed:
+            self.structureChanged.emit(atoms)
         return DocumentChange.APPLIED
 
     def apply_structure_edit(
@@ -445,7 +580,13 @@ class WorkspaceController(QObject):
         edit: Callable[[Any], Any],
         *,
         expected_structure_generation: Generation,
+        copy_source: bool = True,
     ) -> DocumentChange | None:
+        """Apply an edit transactionally, using a shallow editing copy by default.
+
+        Read-only dialogs that create their own result use ``copy_source=False``
+        to retain the source identity until an actual edit is accepted.
+        """
         rejected, _ = self._prepare_change(
             ((
                 "structure",
@@ -460,8 +601,8 @@ class WorkspaceController(QObject):
         if source is None:
             raise ValueError("No structure is loaded.")
         edit_generation = self.structure_generation
-        atoms = edit(source.copy())
-        if atoms is None:
+        atoms = edit(copy_for_edit(source) if copy_source else source)
+        if atoms is None or atoms is source:
             return None
 
         rejected, force = self._prepare_change(
@@ -481,7 +622,9 @@ class WorkspaceController(QObject):
             structure_id=structure_id,
             state_id=state_id,
             empty_spheres=None,
-            restarted=True,
+            # New embedded clusters already start with SCFSTATUS=START.
+            # Do not request another restart (which would discard radial data).
+            restarted="sprkkr_embedding" not in getattr(atoms, "arrays", {}),
         )
         self._commit_locked(
             self._workspace.structure,
@@ -668,6 +811,7 @@ class WorkspaceController(QObject):
             output_path=loaded.output_path,
             potential_path=loaded.potential_path,
             persistent_ref=loaded.persistent_ref,
+            source_versions=loaded.source_versions,
         )
         self.resultChanged.emit(loaded.result)
         if select_result:
@@ -681,10 +825,22 @@ class WorkspaceController(QObject):
         request: CalculationRequest,
     ) -> ResultAdoption:
         """Record a launched result against its exact captured provenance."""
+        structure_id, state_id = request.structure_id, request.state_id
+        if request.potential is False:
+            source = loaded.file_backed_input
+            if source is None:
+                raise ValueError("File-backed results require a captured launch input.")
+            version = source.potential_version
+            structure_id, state_id = self._results.new_structure_state(
+                source.atoms,
+                potential_path=str(version.path),
+                potential_version=version,
+                source_versions=source.input_versions,
+            )
         record = self._results.add_result(
             loaded.result,
-            structure_id=request.structure_id,
-            input_state_id=request.state_id,
+            structure_id=structure_id,
+            input_state_id=state_id,
             input_parameters=request.input_parameters,
             directory=request.directory,
             persistent_ref=loaded.persistent_ref,
@@ -697,6 +853,7 @@ class WorkspaceController(QObject):
                 if loaded.potential_path is not None
                 else None
             ),
+            output_potential_version=loaded.output_potential_version,
         )
 
         workspace_updated = False
@@ -704,8 +861,8 @@ class WorkspaceController(QObject):
         if (
             loaded.atoms is not None
             and record.output_state_id is not None
-            and request.structure_id == current.structure_id
-            and request.state_id == current.state_id
+            and structure_id == current.structure_id
+            and state_id == current.state_id
         ):
             state = self._results.state(record.output_state_id)
             self._workspace.structure.force_change(
@@ -796,6 +953,8 @@ class WorkspaceController(QObject):
 
     def reset(self) -> None:
         """Clear calculation values while preserving history and active project."""
+        self._unresolved_cluster = None
+        self._unresolved_cluster_path = None
         structure = self.structure_state
         if (
             structure.atoms is not None
@@ -923,7 +1082,7 @@ class WorkspaceController(QObject):
         baseline = self.structure_generation
         previous_state = self.empty_spheres
         previous_count = previous_state.count if previous_state is not None else 0
-        updated, count, structure_changed = edit(source.copy(), previous_count)
+        updated, count, structure_changed = edit(copy_for_edit(source), previous_count)
 
         rejected, force = self._prepare_change(
             (("structure", self._workspace.structure, baseline),)

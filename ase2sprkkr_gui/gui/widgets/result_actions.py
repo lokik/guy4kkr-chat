@@ -4,8 +4,9 @@ from collections.abc import Callable
 from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QIcon, QMouseEvent, QResizeEvent
+from PyQt6.QtGui import QIcon, QKeySequence, QMouseEvent, QResizeEvent
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -30,6 +31,7 @@ from ase2sprkkr_gui.gui.application.result_presentation import (
     present_result,
 )
 from ase2sprkkr_gui.gui.misc.resources import icon_path
+from ase2sprkkr_gui.gui.widgets.centered_icon_buttons import CenteredIconPushButton
 
 _PLOT_ICON = icon_path("labplot-xy-interpolation-curve.svg")
 _STANDARD_ICONS = {
@@ -114,6 +116,8 @@ class ResultActionsWidget(QWidget):
     newCalculationRequested = pyqtSignal(int)
     historyRequested = pyqtSignal()
     assignToProjectRequested = pyqtSignal(object)
+    loadResultRequested = pyqtSignal()
+    importDirectoryRequested = pyqtSignal()
 
     def __init__(
         self,
@@ -123,11 +127,14 @@ class ResultActionsWidget(QWidget):
         empty_text: str = "No result loaded.",
         show_history_button: bool = True,
         show_assignment_controls: bool = True,
+        single_result: bool = False,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
         self._action_handler = action_handler
         self._show_values_without_actions = show_values_without_actions
+        self._single_result = single_result
+        self._current_presentation: ResultPresentation | None = None
         self._empty_text = empty_text
         self._row_count = 0
 
@@ -151,9 +158,10 @@ class ResultActionsWidget(QWidget):
         self._selector.structureDoubleClicked.connect(self.newCalculationRequested)
         self._selector.itemSelectionChanged.connect(self._update_assignment_controls)
         self._selector.hide()
-        layout.addWidget(self._selector)
-        assignment_row = QHBoxLayout()
-        self.select_all_button = QPushButton("Select all", self)
+        top_row = QHBoxLayout()
+        top_row.setSpacing(6)
+        self._import_controls_layout = top_row
+        self.select_all_button = QPushButton("Select All", self)
         self.select_all_button.setIcon(
             QIcon.fromTheme(
                 "edit-select-all",
@@ -161,8 +169,8 @@ class ResultActionsWidget(QWidget):
             )
         )
         self.select_all_button.clicked.connect(self._select_all_results)
-        assignment_row.addWidget(self.select_all_button)
-        self.assign_project_button = QPushButton("Assign to project…", self)
+        self.assign_project_button = QPushButton("Assign to Project", self)
+        self.assign_project_button.setToolTip("Assign selected results to a project")
         self.assign_project_button.setIcon(
             QIcon.fromTheme(
                 "folder-move",
@@ -170,9 +178,58 @@ class ResultActionsWidget(QWidget):
             )
         )
         self.assign_project_button.clicked.connect(self._request_project_assignment)
-        assignment_row.addWidget(self.assign_project_button)
-        assignment_row.addStretch(1)
-        layout.addLayout(assignment_row)
+        self.load_result_button = CenteredIconPushButton("Load Result", self)
+        self.load_result_button.setObjectName("resultsLoadButton")
+        self.load_result_button.setToolTip(
+            "Load one SPR-KKR output file into Results (Ctrl+Shift+O)"
+        )
+        self.load_result_button.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        self.load_result_button.setIcon(
+            QIcon.fromTheme(
+                "document-open",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
+            )
+        )
+        self.load_result_button.clicked.connect(
+            lambda _checked=False: self.loadResultRequested.emit()
+        )
+        self.import_directory_button = CenteredIconPushButton("Import Directory…", self)
+        self.import_directory_button.setObjectName("resultsImportDirectoryButton")
+        self.import_directory_button.setIcon(
+            QIcon.fromTheme(
+                "folder-open",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon),
+            )
+        )
+        self.import_directory_button.setToolTip(
+            "Import recognized SPR-KKR outputs from a directory (Ctrl+Shift+I)"
+        )
+        self.import_directory_button.setShortcut(QKeySequence("Ctrl+Shift+I"))
+        self.import_directory_button.clicked.connect(
+            lambda _checked=False: self.importDirectoryRequested.emit()
+        )
+        # Import controls can be moved to the WorkflowWindow header. In
+        # stand-alone result browsers they remain here, above the tree.
+        for button in (
+            self.load_result_button, self.import_directory_button,
+        ):
+            button.setSizePolicy(
+                QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+            )
+            top_row.addWidget(button, 1)
+        layout.addLayout(top_row)
+        if single_result:
+            self.load_result_button.hide()
+            self.import_directory_button.hide()
+
+        self.show_all_values_checkbox = QCheckBox("Show all values", self)
+        self.show_all_values_checkbox.setObjectName("resultsShowAllValues")
+        self.show_all_values_checkbox.setToolTip(
+            "Also display output values with no available action"
+        )
+        self.show_all_values_checkbox.setChecked(show_values_without_actions)
+        self.show_all_values_checkbox.toggled.connect(self._toggle_all_values)
+        layout.addWidget(self._selector)
         self._assignment_controls = (self.select_all_button, self.assign_project_button)
         if not show_assignment_controls:
             for control in self._assignment_controls:
@@ -182,15 +239,7 @@ class ResultActionsWidget(QWidget):
         self._record_actions = QWidget(self)
         record_actions_layout = QHBoxLayout(self._record_actions)
         record_actions_layout.setContentsMargins(0, 0, 0, 0)
-        self._use_state_button = QPushButton("Use this potential", self._record_actions)
-        self._use_state_button.setIcon(
-            QIcon.fromTheme(
-                "dialog-ok-apply",
-                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton),
-            )
-        )
-        self._use_state_button.clicked.connect(self._use_selected_state)
-        record_actions_layout.addWidget(self._use_state_button)
+        record_actions_layout.setSpacing(top_row.spacing())
         self._recompute_button = QPushButton("Recompute", self._record_actions)
         self._recompute_button.setIcon(
             QIcon.fromTheme(
@@ -199,10 +248,28 @@ class ResultActionsWidget(QWidget):
             )
         )
         self._recompute_button.clicked.connect(self._recompute_selected)
-        record_actions_layout.addWidget(self._recompute_button)
-        record_actions_layout.addStretch(1)
+        self._recompute_button.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+        )
+        record_actions_layout.addWidget(self._recompute_button, 1)
+        # The middle slot mirrors Assign to Project in the selection row.
+        record_actions_layout.addWidget(QWidget(self._record_actions), 1)
+        values_slot = QWidget(self._record_actions)
+        values_slot_layout = QHBoxLayout(values_slot)
+        values_slot_layout.setContentsMargins(0, 0, 0, 0)
+        values_slot_layout.addStretch(1)
+        values_slot_layout.addWidget(
+            self.show_all_values_checkbox,
+            alignment=Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+        )
+        values_slot.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+        )
+        record_actions_layout.addWidget(values_slot, 1)
+        # Show all values is independent of whether Recompute is applicable,
+        # but neither control is useful until a result is selected.
+        self._recompute_button.setEnabled(False)
         self._record_actions.hide()
-        layout.addWidget(self._record_actions)
 
         self._result_file_warning = QLabel("", self)
         self._result_file_warning.setWordWrap(True)
@@ -217,7 +284,14 @@ class ResultActionsWidget(QWidget):
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         self._container = QWidget(self._scroll)
-        self._grid = QGridLayout(self._container)
+        value_layout = QVBoxLayout(self._container)
+        value_layout.setContentsMargins(0, 0, 0, 0)
+        value_layout.setSpacing(4)
+        self._grid = QGridLayout()
+        value_layout.addLayout(self._grid)
+        self._record_actions.setParent(self._container)
+        value_layout.addWidget(self._record_actions)
+        value_layout.addStretch(1)
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setHorizontalSpacing(8)
         self._grid.setVerticalSpacing(6)
@@ -225,6 +299,47 @@ class ResultActionsWidget(QWidget):
         self._grid.setAlignment(Qt.AlignmentFlag.AlignTop)
         self._scroll.setWidget(self._container)
         layout.addWidget(self._scroll, 1)
+
+        # Three equally wide selection controls immediately below the tree.
+        self._bottom_controls = QWidget(self)
+        bottom_row = QHBoxLayout(self._bottom_controls)
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(top_row.spacing())
+        self._use_state_button = QPushButton("Use this structure", self)
+        self._use_state_button.setIcon(
+            QIcon.fromTheme(
+                "dialog-ok-apply",
+                self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton),
+            )
+        )
+        self._use_state_button.clicked.connect(self._use_selected_state)
+        self._use_state_button.setEnabled(False)
+        for button in (
+            self._use_state_button, self.assign_project_button,
+            self.select_all_button,
+        ):
+            button.setSizePolicy(
+                QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+            )
+            bottom_row.addWidget(button, 1)
+        # Keep state/assignment controls directly below the result tree,
+        # never below the selected result's potentially long values list.
+        layout.insertWidget(layout.indexOf(self._selector) + 1, self._bottom_controls)
+        self._bottom_controls.hide()
+
+    def move_import_controls_to(self, target_layout: QHBoxLayout) -> None:
+        """Move the existing import actions to a persistent header toolbar.
+
+        Preserves signals, shortcuts, icons and tooltips instead of creating
+        duplicate actions that could get out of sync.
+        """
+        for button in (self.load_result_button, self.import_directory_button):
+            self._import_controls_layout.removeWidget(button)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+            )
+            button.setFixedHeight(40)
+            target_layout.addWidget(button)
 
     @property
     def has_rows(self) -> bool:
@@ -288,6 +403,7 @@ class ResultActionsWidget(QWidget):
             self._selector.blockSignals(False)
 
         self._selector.setVisible(bool(model.roots))
+        self._bottom_controls.setVisible(bool(model.roots))
         self._update_assignment_controls()
         self.set_result(model.selected)
 
@@ -296,15 +412,22 @@ class ResultActionsWidget(QWidget):
         self.set_result(None)
         self._show_empty(message)
 
+    def _toggle_all_values(self, checked: bool) -> None:
+        """Re-render the selected result without changing selection or state."""
+        self._show_values_without_actions = checked
+        if self._current_presentation is not None:
+            self.set_result(self._current_presentation)
+
     def set_result(self, presentation: ResultPresentation | Any | None) -> None:
         """Render one presentation; raw live results are delegated to the presenter."""
         if presentation is not None and not isinstance(presentation, ResultPresentation):
             presentation = present_result(presentation)
+        self._current_presentation = presentation
 
         self._clear()
         self._result_file_warning.hide()
         if presentation is None:
-            self._record_actions.hide()
+            self._refresh_record_actions(ResultActionAvailability())
             self._show_empty(self._empty_text)
             return
 
@@ -367,13 +490,18 @@ class ResultActionsWidget(QWidget):
     def _refresh_record_actions(self, actions: ResultActionAvailability) -> None:
         use_state = actions.use_state
         recompute = actions.recompute
-        self._use_state_button.setVisible(use_state is not None)
-        if use_state is not None:
-            self._use_state_button.setText(use_state.label)
-        self._recompute_button.setVisible(recompute is not None)
-        if recompute is not None:
-            self._recompute_button.setText(recompute.label)
-        self._record_actions.setVisible(use_state is not None or recompute is not None)
+        self._use_state_button.setEnabled(use_state is not None)
+        self._use_state_button.setText(
+            "Use current potential" if use_state and len(use_state.label) > 27
+            else use_state.label if use_state else "Use this structure"
+        )
+        self._use_state_button.setToolTip(use_state.label if use_state else "")
+        self._recompute_button.setEnabled(recompute is not None)
+        self._recompute_button.setText("Recompute")
+        self._recompute_button.setToolTip(recompute.label if recompute else "")
+        self._record_actions.setVisible(
+            self._current_presentation is not None and not self._single_result
+        )
 
     def _use_selected_state(self) -> None:
         result_id = self.selected_result_id
@@ -446,7 +574,9 @@ class ResultActionsWidget(QWidget):
     def _show_empty(self, text: str) -> None:
         self._empty_label.setText(text)
         self._empty_label.show()
-        self._scroll.hide()
+        # Keep the empty results viewport occupying its space so the
+        # persistent selection controls stay at the bottom of the column.
+        self._scroll.show()
 
     def _clear(self) -> None:
         while self._grid.count():

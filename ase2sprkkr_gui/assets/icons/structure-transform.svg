@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Transform structure</title>
+  <desc>Smaller lattice cell becoming a larger skewed lattice cell</desc>
+  <g stroke="#26384e" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M5 26 13 20 24 20 16 26Z" fill="#eaf8f7"/>
+    <path d="M16 26 24 20 24 34 16 40Z" fill="#9fafc2"/>
+    <path d="M5 26 16 26 16 40 5 40Z" fill="#c8d4e0"/>
+    <path d="M26 20 34 13 44 13 36 20Z" fill="#eaf8f7"/>
+    <path d="M36 20 44 13 44 36 36 43Z" fill="#9fafc2"/>
+    <path d="M26 20 36 20 36 43 26 43Z" fill="#c8d4e0"/>
+  </g>
+  <path d="M8 17C15 5 29 4 36 8" fill="none" stroke="#26384e" stroke-width="2.9" stroke-linecap="round"/>
+  <path d="m30 5 6 3-5 4" fill="none" stroke="#26384e" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="36" cy="43" r="3.1" fill="#03a8a1" stroke="#087f83" stroke-width="1.25"/>
+</svg>

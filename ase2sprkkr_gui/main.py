@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import QEvent, QObject, Qt
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QWidget
+from PyQt6.QtWidgets import QApplication, QCheckBox, QFileDialog, QMessageBox, QWidget
 from kkrunner.projects import ProjectRepository
 from ase2sprkkr_gui.gui.application.persistent_jobs import project_run_manager
 
@@ -27,12 +27,12 @@ from ase2sprkkr_gui.gui.application.workspace_controller import (
     WorkspaceController,
 )
 from ase2sprkkr_gui.gui.controllers.persistent_jobs import PersistentJobsController
-from ase2sprkkr_gui.gui.dialogs.main_window import MainWindow
 from ase2sprkkr_gui.gui.dialogs.project_browser import ProjectBrowserDialog
 from ase2sprkkr_gui.gui.dialogs.run_calculation import SprkkrRunWindow
 from ase2sprkkr_gui.gui.dialogs.workflow_window import WorkflowWindow
 from ase2sprkkr_gui.gui.misc.icons import application_icon
 from ase2sprkkr_gui.gui.flows import calculation as calculation_flow
+from ase2sprkkr_gui.gui.flows import custom_calculation as custom_flow
 from ase2sprkkr_gui.gui.flows import files as file_flows
 from ase2sprkkr_gui.gui.presenters.result_actions import ResultActionsPresenter
 
@@ -83,7 +83,6 @@ class GuiApplication(QObject):
             parent=self,
         )
         self._workflow_window: WorkflowWindow | None = None
-        self._main_window: MainWindow | None = None
         self._project_browser: ProjectBrowserDialog | None = None
         self.persistent_jobs_controller.resultOpened.connect(self._show_loaded_result)
         self._exit_in_progress = False
@@ -124,7 +123,6 @@ class GuiApplication(QObject):
             self._workflow_window = WorkflowWindow(
                 self.controller,
                 self.recent_files,
-                open_expert=self.show_main_window,
                 settings=self.settings,
                 track_launch_monitor=self._track_launch_monitor,
                 project_repository=self.projects,
@@ -132,32 +130,13 @@ class GuiApplication(QObject):
             self._wire_window(self._workflow_window)
         return self._workflow_window
 
-    def create_main_window(self) -> MainWindow:
-        """Return the session's expert view, creating it lazily."""
-        if self._main_window is None:
-            self._main_window = MainWindow(
-                self.controller,
-                self.recent_files,
-                self.settings,
-                track_launch_monitor=self._track_launch_monitor,
-                project_repository=self.projects,
-            )
-            self._wire_window(self._main_window)
-        return self._main_window
-
-    def _wire_window(self, window: WorkflowWindow | MainWindow) -> None:
+    def _wire_window(self, window: WorkflowWindow) -> None:
         """Connect application-owned actions exposed by a top-level window."""
         self._wire_result_actions(window)
         window.installEventFilter(self)
-        if isinstance(window, WorkflowWindow):
-            window.projectBrowserRequested.connect(self.show_project_browser)
-        else:
-            window.browser_panel.projectBrowserRequested.connect(
-                self.show_project_browser
-            )
-            window.exitRequested.connect(self.request_exit)
+        window.projectBrowserRequested.connect(self.show_project_browser)
 
-    def _wire_result_actions(self, window: WorkflowWindow | MainWindow) -> None:
+    def _wire_result_actions(self, window: WorkflowWindow) -> None:
         """Compose result presentation and route its top-level mutation intents."""
         widget = window.result_actions_widget
         if widget is None:
@@ -195,6 +174,16 @@ class GuiApplication(QObject):
         widget.assignToProjectRequested.connect(
             lambda result_ids, target=window: self._assign_results_to_project(
                 result_ids, target
+            )
+        )
+        widget.loadResultRequested.connect(
+            lambda target=window: file_flows.choose_and_load_output(
+                self.controller, self.recent_files, target
+            )
+        )
+        widget.importDirectoryRequested.connect(
+            lambda target=window: file_flows.choose_and_load_output_directory(
+                self.controller, self.recent_files, target
             )
         )
         presenter.newCalculationUnavailable.connect(
@@ -338,27 +327,78 @@ class GuiApplication(QObject):
             )
             return False
 
+        if kind == "input":
+            return custom_flow.load_custom_input(
+                self.controller, self.recent_files, parent, path,
+                track_launch_monitor=self._track_launch_monitor,
+                project_repository=self.projects,
+            )
         loaders = {
             "structure": file_flows.load_structure,
-            "input": file_flows.load_input_parameters,
             "output": file_flows.load_output,
         }
         return loaders[kind](self.controller, self.recent_files, path, parent)
 
     def show_workflow_window(self) -> None:
         """Show and activate the workflow view."""
-        self._show_window(self.create_workflow_window())
+        window = self.create_workflow_window()
+        self._show_window(window)
+        self._offer_new_supported_tasks(window)
 
-    def show_main_window(self) -> None:
-        """Show and activate the expert view, creating it lazily."""
-        self._show_window(self.create_main_window())
+    def _offer_new_supported_tasks(self, window: WorkflowWindow) -> None:
+        """Prompt once per newly supported task generation, only for saved overrides."""
+        new = self.settings.newly_supported_tasks()
+        if not new:
+            return
+
+        names = ", ".join(new)
+        singular = len(new) == 1
+        message = QMessageBox(window)
+        message.setWindowTitle(
+            "New Supported Task" if singular else "New Supported Tasks"
+        )
+        message.setIcon(QMessageBox.Icon.Information)
+        message.setText(
+            f"A new task {names} is supported. Add it to your preferred tasks?"
+            if singular else
+            f"New tasks {names} are supported. Add them to your preferred tasks?"
+        )
+        message.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        message.setDefaultButton(QMessageBox.StandardButton.Yes)
+        open_preferred = QCheckBox("Open Preferred tasks", message)
+        open_preferred.setChecked(False)
+        message.setCheckBox(open_preferred)
+        answer = message.exec()
+        if answer not in (
+            QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No,
+        ):
+            return
+
+        previous = (
+            self.settings.preferred_tasks,
+            self.settings.preferred_supported_snapshot,
+        )
+        self.settings.acknowledge_supported_tasks(
+            add=answer == QMessageBox.StandardButton.Yes,
+        )
+        if not self.settings.save():
+            (self.settings.preferred_tasks,
+             self.settings.preferred_supported_snapshot) = previous
+            QMessageBox.warning(
+                window, "Cannot Save Settings",
+                "Could not save your preferred-task choice. You will be "
+                "asked again the next time settings are loaded.",
+            )
+            return
+        window._refresh()
+        if open_preferred.isChecked():
+            window._open_settings(preferred_tasks=True)
 
     def _show_loaded_result(self, _job_id: str) -> None:
         """Bring the selected result into the primary workspace view."""
-        if self._main_window is not None and self._main_window.isVisible():
-            self._show_window(self._main_window)
-        else:
-            self.show_workflow_window()
+        self.show_workflow_window()
 
     def show_project_browser(self) -> None:
         """Show and activate the application-owned project browser."""
@@ -385,16 +425,7 @@ class GuiApplication(QObject):
             and not self._exit_approved
             and isinstance(watched, QWidget)
             and watched.isVisible()
-            and (
-                watched is self._workflow_window
-                or (
-                    watched is self._main_window
-                    and (
-                        self._workflow_window is None
-                        or not self._workflow_window.isVisible()
-                    )
-                )
-            )
+            and watched is self._workflow_window
         ):
             # Reject the original close only when shutdown is cancelled.
             # On approval, let Qt finish this close event: QWidget.close()
@@ -420,9 +451,8 @@ class GuiApplication(QObject):
                 return False
             self._exit_approved = True
             self._close_project_browser()
-            for window in (self._main_window, self._workflow_window):
-                if window is not None:
-                    window.close()
+            if self._workflow_window is not None:
+                self._workflow_window.close()
             app = QApplication.instance()
             if app is not None:
                 app.quit()
@@ -457,7 +487,7 @@ class GuiApplication(QObject):
         if answer != QMessageBox.StandardButton.Save:
             return False
 
-        parent = QApplication.activeWindow() or self._workflow_window or self._main_window
+        parent = QApplication.activeWindow() or self._workflow_window
         if structure and not file_flows.save_structure(
             self.controller, self.recent_files, parent
         ):
@@ -526,7 +556,20 @@ def main(argv: list[str] | None = None) -> int:
     gui = GuiApplication(parent=app)
     gui.show_workflow_window()
     gui.open_startup_selection(kind, file_path)
-    interrupt = ConsoleInterrupt(gui.request_exit, parent=app)
+    def shutdown_from_console() -> None:
+        if (gui.controller.has_unsaved_structure
+                or gui.controller.has_unsaved_input_parameters):
+            ConsoleInterrupt._console_notice(
+                b"GUI: awaiting response to save/discard prompt.\n"
+            )
+        else:
+            ConsoleInterrupt._console_notice(b"GUI: closing.\n")
+        if not gui.request_exit():
+            ConsoleInterrupt._console_notice(
+                b"GUI remains open (shutdown cancelled or save failed).\n"
+            )
+
+    interrupt = ConsoleInterrupt(shutdown_from_console, parent=app)
     try:
         return app.exec()
     finally:

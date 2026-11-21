@@ -6,7 +6,11 @@
   execution; the `process` backend name is no longer supported.
 - Renamed the supervision control to **KKRunner supervisor**, separating
   backend reattachment capabilities from saving persistent project records.
-- Requires ASE2SPRKKR 4.0.0 beta5 and KKRunner 0.2.0 beta3.
+- Requires ASE2SPRKKR 4.0.0 beta7 and KKRunner 0.2.0 beta5.
+- Custom input files can be calculated without loading their structure into the
+  workspace. The initial host/cluster potentials are parsed once and their
+  content identities are verified against the staged files before launch.
+- Embedded calculation history retains both host and cluster input versions.
 
 ### Features
 

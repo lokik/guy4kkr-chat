@@ -16,6 +16,7 @@ from ase2sprkkr_gui.gui.workflow.scf_status import (
         ("", ScfProgress.NOT_STARTED),
         ("START", ScfProgress.NOT_STARTED),
         ("itr", ScfProgress.ITERATING),
+        ("ITERATING", ScfProgress.ITERATING),
         ("ITR-BULK", ScfProgress.BULK),
         ("ITR-L-BULK", ScfProgress.LEFT_BULK),
         ("ITR-R-BULK", ScfProgress.RIGHT_BULK),

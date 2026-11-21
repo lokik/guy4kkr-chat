@@ -766,3 +766,21 @@ def test_imported_result_groups_by_estimated_finish_time(tmp_path):
     assert jobs.finished_value.text() == item.text(3)
     assert jobs.finished_value.toolTip() == item.toolTip(3)
     browser.close()
+
+
+def test_closing_browser_unbinds_its_shared_controller(tmp_path):
+    _application = QApplication.instance() or QApplication([])
+    repository = ProjectRepository(tmp_path / "projects")
+    project = repository.create("Project")
+    source = _JobSource((_job("one", dataset="One", project_id=project.id),))
+    controller = PersistentJobsController(source)
+    browser = ProjectBrowserDialog(repository, controller)
+    browser.show()
+    _await_initial_load(browser)
+    assert any(reference() is browser.jobs for reference in controller._views)
+
+    browser.close()
+    assert browser._closed
+    assert not any(reference() is browser.jobs for reference in controller._views)
+    assert controller._preload_ids == ()
+    assert controller._selected_preload_id is None

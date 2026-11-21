@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -18,6 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ase2sprkkr_gui.gui.widgets.matplotlib_preview import PreviewFigureCanvas as FigureCanvas
 from ase2sprkkr_gui.gui.plots.lattice import plot_atoms_preview
 
 

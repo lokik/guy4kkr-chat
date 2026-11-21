@@ -22,7 +22,9 @@ def test_gui_command_is_discoverable():
     assert command.description
     command_parser = argparse.ArgumentParser()
     command.parser(command_parser)
-    assert command_parser.parse_args([]) == argparse.Namespace(\n        file=None, open_last=False, structure=None, input=None, output=None, job=None\n    )
+    assert command_parser.parse_args([]) == argparse.Namespace(
+        file=None, open_last=False, structure=None, input=None, output=None, job=None
+    )
 
 
 def test_importing_gui_command_does_not_load_qt():

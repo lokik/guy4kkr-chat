@@ -19,13 +19,10 @@ from PyQt6.QtWidgets import QApplication, QDialog, QPlainTextEdit
 
 from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
 from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
-from ase2sprkkr_gui.gui.dialogs import main_window
 from ase2sprkkr_gui.gui.dialogs.expert_input import InputParametersDialog
 from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
 from ase2sprkkr_gui.gui.input_parameters.specs import bsf, scf
 from ase2sprkkr_gui.gui.input_parameters.validation import validate_setup
-from ase2sprkkr_gui.gui.widgets.calculation_setup import CalculationSetupPanel
-from ase2sprkkr_gui.gui.widgets.structure_overview import StructureOverviewWidget
 from ase2sprkkr_gui.main import GuiApplication
 
 
@@ -275,38 +272,6 @@ def test_expert_cancel_is_isolated(app):
     assert p.to_string(validate=False) == before
 
 
-@pytest.mark.parametrize('accept', [False, True])
-def test_preview_edits_current_task_not_fresh_scf(app, monkeypatch, accept, tmp_path):
-    gui = GuiApplication(recent_files_path=tmp_path / 'recent.json')
-    window = gui.create_main_window()
-    p = InputParameters.create('dos')
-    p.SITES.NL = [3, 4]
-    window.controller.replace_input_parameters(p)
-    result = p.copy(copy_values=True)
-    result.ENERGY.NE = [42]
-
-    def edit(controller, _parent, **_kwargs):
-        current = controller.input_parameters
-        assert current.task_name == p.task_name
-        assert current.SITES.NL().tolist() == p.SITES.NL().tolist()
-        if accept:
-            controller.replace_input_parameters(result)
-
-    monkeypatch.setattr(
-        main_window.input_editing_flow,
-        'edit_current_input_parameters',
-        edit,
-    )
-    setup = window.findChild(CalculationSetupPanel)
-    assert setup is not None
-    preview = setup.findChild(QPlainTextEdit)
-    assert preview is not None
-    QTest.mouseDClick(preview.viewport(), Qt.MouseButton.LeftButton)
-    app.processEvents()
-
-    assert window.controller.input_parameters is (result if accept else p)
-    assert window.controller.input_parameters.task_name.lower() == 'dos'
-    window.close()
 
 
 def test_corrupt_recent_history_is_ignored(tmp_path):
@@ -321,7 +286,7 @@ def test_corrupt_recent_history_is_ignored(tmp_path):
     assert recent.last_kind is None
 
 
-def test_reset_workspace_clears_the_document_and_views(app, tmp_path):
+def test_reset_workspace_clears_structure_and_guided_projection(app, tmp_path):
     workspace = WorkspaceState(
         atoms=Atoms('Fe', cell=(2.8, 2.8, 2.8), pbc=True),
         input_parameters=InputParameters.create('scf'),
@@ -332,14 +297,8 @@ def test_reset_workspace_clears_the_document_and_views(app, tmp_path):
         workspace=workspace,
         recent_files_path=tmp_path / 'recent.json',
     )
-    window = gui.create_main_window()
-    overview = window.findChild(StructureOverviewWidget)
-    setup = window.findChild(CalculationSetupPanel)
-    assert overview is not None
-    assert setup is not None
-    assert setup.input_preview_text
-    assert not hasattr(setup, 'directory_text')
-    assert setup.potential_path_text == '/tmp/potential'
+    window = gui.create_workflow_window()
+    assert "Composition: Fe" in window._structure_overview.details.text()
 
     window.controller.reset()
     app.processEvents()
@@ -349,32 +308,24 @@ def test_reset_workspace_clears_the_document_and_views(app, tmp_path):
     assert window.controller.directory is None
     assert window.controller.potential_path is None
     assert window.controller.result is None
-    assert overview.scf_status_text == ''
-    assert overview.info_text.startswith('No structure loaded.')
-    assert setup.input_preview_text == ''
-    assert setup.potential_path_text == '—'
-    assert not setup.save_input_enabled
+    assert window._structure_title.text() == "Start with..."
+    assert window._structure_overview.details.text() == ""
     window.close()
 
 
-def test_main_window_uses_site_aware_structure_formula(app, tmp_path):
+def test_guided_overview_uses_site_aware_structure_formula(app, tmp_path):
     gui = GuiApplication(recent_files_path=tmp_path / 'recent.json')
-    window = gui.create_main_window()
+    window = gui.create_workflow_window()
     atoms = Atoms('FeFeNi', cell=(3.0, 3.0, 3.0), pbc=True)
     atoms.set_array('spacegroup_kinds', np.array([0, 0, 1], dtype=int))
     atoms.info['occupancy'] = {
         '0': {'Fe': 0.5, 'Co': 0.5},
         '1': {'Ni': 1.0},
     }
-
     window.controller.replace_structure(atoms)
-
-    overview = window.findChild(StructureOverviewWidget)
-    assert overview is not None
     assert 'occupancy' not in atoms.arrays
-    assert overview.info_text.startswith('Formula: (Fe|Co)2Ni\n')
+    assert 'Composition: (Fe|Co)2Ni' in window._structure_overview.details.text()
     window.close()
-
 
 def _atoms_with_scf_status(status):
     atoms = SPRKKRAtoms.promote_ase_atoms(
@@ -388,34 +339,19 @@ def _atoms_with_scf_status(status):
     return atoms
 
 
-def test_scf_status_is_cleared_when_new_status_is_start(app, tmp_path):
+def test_guided_scf_status_updates_and_clears_on_reset(app, tmp_path):
     gui = GuiApplication(recent_files_path=tmp_path / 'recent.json')
-    window = gui.create_main_window()
-    overview = window.findChild(StructureOverviewWidget)
-    assert overview is not None
+    window = gui.create_workflow_window()
+    overview = window._structure_overview
 
     window.controller.replace_structure(_atoms_with_scf_status('CONVERGED'))
-    assert overview.scf_status_text == 'SCF Status: CONVERGED'
+    assert 'SCF status: CONVERGED' in overview.details.text()
 
     window.controller.replace_structure(_atoms_with_scf_status('START'))
-    assert overview.scf_status_text == ''
-    window.close()
-
-
-def test_scf_status_is_cleared_when_structure_is_reset(app, tmp_path):
-    gui = GuiApplication(recent_files_path=tmp_path / 'recent.json')
-    window = gui.create_main_window()
-    overview = window.findChild(StructureOverviewWidget)
-    assert overview is not None
-
-    window.controller.replace_structure(_atoms_with_scf_status('CONVERGED'))
-    assert overview.scf_status_text == 'SCF Status: CONVERGED'
-
+    assert 'SCF status: CONVERGED' not in overview.details.text()
     window.controller.reset()
-    assert window.controller.atoms is None
-    assert overview.scf_status_text == ''
+    assert overview.details.text() == ''
     window.close()
-
 
 @pytest.mark.parametrize('task', ['scf', 'dos'])
 def test_guided_dialog_rejects_another_parameter_task(app, task):

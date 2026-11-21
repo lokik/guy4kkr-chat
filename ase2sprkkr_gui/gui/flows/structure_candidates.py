@@ -63,16 +63,25 @@ def load_structure_candidate(
     parent: QWidget | None,
     *,
     reader: Callable[[Path], Any] | None = None,
+    on_loaded: Callable[[StructureCandidate], None] | None = None,
 ) -> StructureCandidate | None:
     """Load a detached structure and present reader failures at the UI boundary."""
     path = Path(file_path).resolve()
     read = reader or ase_read
+
+    def prepare_candidate(atoms):
+        candidate = StructureCandidate(atoms=atoms, source_path=path)
+        if on_loaded is not None:
+            on_loaded(candidate)
+        return candidate
+
     try:
-        atoms = run_modal_task(
+        candidate = run_modal_task(
             parent,
             lambda: read(path),
             title="Loading Structure",
             label="Reading structure…",
+            on_success=prepare_candidate,
         )
     except Exception as exc:  # noqa: BLE001 - ASE/backend readers vary
         QMessageBox.critical(
@@ -81,7 +90,7 @@ def load_structure_candidate(
             f"Failed to load structure:\n{exc}",
         )
         return None
-    return StructureCandidate(atoms=atoms, source_path=path)
+    return candidate
 
 
 def choose_structure_candidate(

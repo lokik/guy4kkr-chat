@@ -184,3 +184,23 @@ def test_apply_without_split_preserves_sprkkr_site_type_data():
     assert result is not atoms
     assert result.sites[0].site_type is result.sites[1].site_type
     assert result.sites[0].site_type.reference_system.vref == 8.0
+
+
+def test_unchanged_snapshot_accounts_for_cell_sites_occupations_and_positions():
+    draft = ElementAssignmentDraft(_atoms())
+    assert draft.is_unchanged()
+    draft.set_cell_component(0, 0, 2.0)
+    assert not draft.is_unchanged()
+    draft.set_cell_component(0, 0, 1.0)
+    assert draft.is_unchanged()
+    first = draft.sites[0]
+    draft.set_position_component(first, 0, 0, 0.25)
+    assert not draft.is_unchanged()
+    draft.set_position_component(first, 0, 0, 0.0)
+    assert draft.is_unchanged()
+    draft.set_occupancy_value(first, first.occupancies[0], 0.8)
+    assert not draft.is_unchanged()
+    draft.set_occupancy_value(first, first.occupancies[0], 1.0)
+    assert draft.is_unchanged()
+    draft.split_site(first)
+    assert not draft.is_unchanged()

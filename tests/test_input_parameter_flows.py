@@ -6,6 +6,10 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/ase2sprkkr_gui-test-matplotlib")
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
 from PyQt6.QtWidgets import QApplication
 
+from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
+from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+from ase2sprkkr_gui.gui.flows import files as workspace_files
 from ase2sprkkr_gui.gui.flows import input_parameters as input_parameter_flows
 from ase2sprkkr_gui.gui.input_parameters.session import create_input_parameters_session
 
@@ -15,6 +19,28 @@ def _changed_scf_parameters(session):
     initial = int(session.value(("SCF", "NITER")))
     parameters.SCF.NITER.set(initial + 1)
     return parameters, initial
+
+
+def test_save_workspace_input_uses_calculation_directory(monkeypatch, tmp_path):
+    directory = tmp_path / "calculation"
+    directory.mkdir()
+    parameters = InputParameters.for_task("SCF")
+    parameters.CONTROL.POTFIL = str(directory / "Fe.pot")
+    controller = WorkspaceController(
+        WorkspaceState(input_parameters=parameters, directory=str(directory))
+    )
+    recent = RecentFiles(tmp_path / "recent.json")
+    path = tmp_path / "exported.inp"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        workspace_files.QFileDialog, "getSaveFileName",
+        lambda *_args: (str(path), ""),
+    )
+
+    assert workspace_files.save_input_parameters(controller, recent, None)
+    assert InputParameters.from_file(path).CONTROL.POTFIL() == "Fe.pot"
+    assert parameters.directory is None
+    assert not controller.has_unsaved_input_parameters
 
 
 def test_load_input_parameters_is_one_named_session_transaction(

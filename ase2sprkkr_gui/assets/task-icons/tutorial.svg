@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>SPR-KKR tutorial</title>
+  <desc>An open book with a small example curve.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f0f7f8" stroke="#b6cbd2"/>
+  <g fill="#fcfeff" stroke="#26384e" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <path d="M24 15c-4-4-9-5-16-3v22c6-2 12-1 16 3Z"/>
+    <path d="M24 15c4-4 9-5 16-3v22c-6-2-12-1-16 3Z"/>
+  </g>
+  <g fill="none" stroke="#087f83" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <path d="M12 24c2.5 0 2.5-5 4.5-5s2 6 4 6"/>
+    <path d="M28 19a14 14 0 0 1 8-2m-8 8a14 14 0 0 1 8-2"/>
+  </g>
+</svg>

@@ -174,3 +174,69 @@ def test_refresh_reparses_files_without_adopting_but_load_opens_cached_result(mo
     assert parsed == ["first", "first"]  # Load uses the refreshed cache.
     view.close()
     controller._executor.shutdown(wait=True, cancel_futures=True)
+
+
+def test_failed_result_parse_is_not_requeued_by_project_reprojection():
+    from dataclasses import replace
+
+    app = QApplication.instance() or QApplication([])
+    source = _Source()
+    source.release.set()
+    attempts = []
+
+    def fail_parse(job_id):
+        attempts.append(job_id)
+        raise EOFError("Unexpected end of output")
+
+    source.load_result = fail_parse
+    controller = PersistentJobsController(source)
+    view = PersistentJobsWidget(lambda *_: None, auto_load_results=True)
+    controller.bind_view(view)
+    controller.preload_results(("first",))
+    _spin_until(app, lambda: "Result unavailable:" in view.result_widget._empty_label.text())
+    assert attempts.count("first") == 1
+
+    # Project projection and status timestamps do not change a captured result.
+    source.metadata["first"] = replace(
+        source.metadata["first"], updated_at="2026-11-13T10:30:00+00:00"
+    )
+    for _ in range(5):
+        controller._source_changed("first")
+        controller.preload_results(("first",))
+        app.processEvents()
+    assert attempts.count("first") == 1
+    assert "Unexpected end of output" in view.result_widget._empty_label.text()
+
+    # A result-relevant revision change permits one new attempt.
+    source.metadata["first"] = replace(source.metadata["first"], return_code=139)
+    controller._source_changed("first")
+    _spin_until(app, lambda: attempts.count("first") == 2)
+    controller.unbind_view(view)
+    view.close()
+    controller._executor.shutdown(wait=True, cancel_futures=True)
+
+
+def test_unbinding_browser_stops_followup_preloads_and_displays():
+    app = QApplication.instance() or QApplication([])
+    source = _Source()
+    controller = PersistentJobsController(source)
+    view = PersistentJobsWidget(lambda *_: None, auto_load_results=True)
+    shown = []
+    original_set_result = view.result_widget.set_result
+    view.result_widget.set_result = lambda result: (
+        shown.append(result), original_set_result(result)
+    )
+    controller.bind_view(view)
+    controller.preload_results(("first", "second"))
+    assert source.started.wait(timeout=5)
+
+    controller.unbind_view(view)
+    assert controller._preload_ids == ()
+    assert controller._selected_preload_id is None
+    assert not any(bound() is view for bound in controller._views)
+    source.release.set()
+    _spin_until(app, lambda: not controller._loads)
+    assert not any(isinstance(result, dict) for result in shown)
+
+    view.close()
+    controller._executor.shutdown(wait=True, cancel_futures=True)

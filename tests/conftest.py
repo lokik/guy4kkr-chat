@@ -30,3 +30,18 @@ def _cleanup_qt_widgets(_qt_application: QApplication):
         widget.close()
         widget.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+@pytest.fixture
+def native_embedded_potentials(tmp_path):
+    """Independent genuine host/CLUPOT files, freshly copied for each test."""
+    from pathlib import Path
+    from shutil import copyfile
+
+    import ase2sprkkr
+
+    examples = Path(ase2sprkkr.__file__).parent / "potentials" / "examples"
+    host, cluster = tmp_path / "host.pot", tmp_path / "cluster.pot"
+    copyfile(examples / "Fe3CoFe3.host.pot", host)
+    copyfile(examples / "Fe3CoFe3.clu.pot", cluster)
+    return host, cluster

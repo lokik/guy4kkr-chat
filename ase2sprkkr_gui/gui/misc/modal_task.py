@@ -58,15 +58,25 @@ class _ModalTaskWorker(QObject):
 class _ModalTaskReceiver(QObject):
     """Receive worker completion in the GUI thread and update the dialog."""
 
-    def __init__(self, dialog: _ModalTaskDialog) -> None:
+    def __init__(
+        self, dialog: _ModalTaskDialog,
+        on_success: Callable[[Any], Any] | None = None,
+    ) -> None:
         super().__init__(dialog)
         self._dialog = dialog
+        self._on_success = on_success
         self.result: Any = _MISSING
         self.error: Exception | None = None
 
     @pyqtSlot(object)
     def succeeded(self, value: Any) -> None:
-        self.result = value
+        try:
+            # The worker has finished reading. Keep the wait dialog visible
+            # while any final GUI-thread preparation completes.
+            self.result = self._on_success(value) if self._on_success else value
+        except Exception as exc:  # noqa: BLE001 - pass GUI preparation errors to caller
+            self.failed(exc)
+            return
         self._dialog.finish_successfully()
 
     @pyqtSlot(object)
@@ -81,15 +91,18 @@ def run_modal_task(
     *,
     title: str = "Please Wait",
     label: str = "Working…",
-) -> _T:
+    on_success: Callable[[_T], Any] | None = None,
+) -> Any:
     """Run ``operation`` in a worker while showing a responsive modal wait.
 
     Non-GUI callers may pass ``None``; in that case the operation runs directly.
     The modal cannot be dismissed while the worker is active because generic
-    operations do not provide a cancellation contract.
+    operations do not provide a cancellation contract. ``on_success``, if
+    supplied, runs on the GUI thread before the working dialog closes.
     """
     if parent is None or not isinstance(parent, QWidget):
-        return operation()
+        result = operation()
+        return on_success(result) if on_success else result
 
     dialog = _ModalTaskDialog(parent)
     dialog.setWindowTitle(title)
@@ -104,7 +117,7 @@ def run_modal_task(
     thread = QThread()
     worker = _ModalTaskWorker(operation)
     worker.moveToThread(thread)
-    receiver = _ModalTaskReceiver(dialog)
+    receiver = _ModalTaskReceiver(dialog, on_success)
 
     worker.succeeded.connect(
         receiver.succeeded,
@@ -114,8 +127,12 @@ def run_modal_task(
         receiver.failed,
         Qt.ConnectionType.QueuedConnection,
     )
-    worker.succeeded.connect(thread.quit)
-    worker.failed.connect(thread.quit)
+    # QThread lives in the GUI thread, so AutoConnection would queue quit()
+    # there. Closing the dialog can leave that call pending when wait() below
+    # blocks the GUI thread. quit() is thread-safe: request it directly from
+    # the worker so shutdown never depends on another GUI event-loop turn.
+    worker.succeeded.connect(thread.quit, Qt.ConnectionType.DirectConnection)
+    worker.failed.connect(thread.quit, Qt.ConnectionType.DirectConnection)
     worker.succeeded.connect(worker.deleteLater)
     worker.failed.connect(worker.deleteLater)
     thread.started.connect(worker.run)

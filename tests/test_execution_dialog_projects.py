@@ -767,3 +767,31 @@ def test_reopened_run_setup_preserves_profile_identifiers_and_explicit_directory
     dialog.project_selector.setCurrentIndex(dialog.project_selector.findData(other.id))
     assert dialog.directory_name() == custom
     dialog.close()
+
+
+def test_clear_cache_is_a_run_setting_not_profile(application, tmp_path):
+    dialog = ProfileSelectionDialog(
+        project_repository=ProjectRepository(tmp_path / "projects"),
+        directory=str(tmp_path),
+    )
+    assert not dialog.clear_cache_selected()
+    dialog.clear_cache_checkbox.setChecked(True)
+    assert dialog.clear_cache_selected()
+    save_index = dialog.profiles.count() - 1
+    dialog.profiles.setCurrentIndex(save_index)
+    assert dialog.save_only_selected()
+    assert not dialog.clear_cache_checkbox.isEnabled()
+    assert not dialog.clear_cache_selected()
+    dialog.profiles.setCurrentIndex(0)
+    assert dialog.clear_cache_selected()
+    dialog.close()
+
+
+def test_clear_cache_is_restored_when_reopening_setup(application, tmp_path):
+    dialog = ProfileSelectionDialog(
+        project_repository=ProjectRepository(tmp_path / "projects"),
+        directory=str(tmp_path),
+        initial_clear_cache=True,
+    )
+    assert dialog.clear_cache_selected()
+    dialog.close()

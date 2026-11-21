@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Iterable, Literal, Protocol
 
@@ -21,7 +22,7 @@ class RecentHistorySnapshot(Protocol):
 
 @dataclass(frozen=True)
 class RecentLaunch:
-    """One recent structure/output that may be continued."""
+    """One recent structure or result that may be continued."""
 
     kind: RecentLaunchKind
     path: str
@@ -46,7 +47,7 @@ class RecentMenuItem:
 
 @dataclass(frozen=True)
 class RecentLaunchGroup:
-    """One named group in the shared Continue-recent menu."""
+    """One directly selectable kind of recent continuation."""
 
     title: str
     kind: RecentLaunchKind
@@ -64,9 +65,11 @@ class RecentLaunchPresentation:
 
 def recent_path_label(path: str | Path, base: str | Path | None = None) -> str:
     """Prefer a short descendant path; never display ``..``-based relatives."""
-    absolute = Path(path).expanduser().resolve()
+    # Recent paths are canonicalized at storage time. Formatting a menu
+    # must not access the filesystem (resolve() can stall on network mounts).
+    absolute = Path(os.path.abspath(Path(path).expanduser()))
     absolute_text = str(absolute)
-    base_path = Path.cwd() if base is None else Path(base).expanduser().resolve()
+    base_path = Path(os.path.abspath(Path.cwd() if base is None else Path(base).expanduser()))
     try:
         relative = absolute.relative_to(base_path)
     except ValueError:
@@ -120,7 +123,7 @@ def recent_launch_presentation(
             recent_menu_items(snapshot.paths("structure"), base=base),
         ),
         RecentLaunchGroup(
-            "Outputs",
+            "Results",
             "output",
             recent_menu_items(snapshot.paths("output"), base=base),
         ),

@@ -33,6 +33,7 @@ class WorkflowSection(Enum):
     CREATE = auto()
     LOAD = auto()
     OTHER = auto()
+    CUSTOM = auto()
 
 
 class ActionIcon(Enum):
@@ -45,8 +46,11 @@ class ActionIcon(Enum):
     DATABASE = auto()
     SURFACE = auto()
     INTERFACE = auto()
+    EMBEDDING = auto()
     RESULT = auto()
     VIEW = auto()
+    SAVE = auto()
+    EDIT = auto()
     CONTINUE = auto()
     NEW_CALCULATION = auto()
     RESET = auto()
@@ -68,6 +72,23 @@ class RunTask:
 
 
 @dataclass(frozen=True)
+class ReconvergeScf:
+    """Start a new SCF cycle from the current converged potential."""
+
+
+@dataclass(frozen=True)
+class CustomTask:
+    """Open the native task picker for standalone input or calculation."""
+
+
+@dataclass(frozen=True)
+class ConvergeHostScf:
+    """Converge the periodic host, optionally restarting its SCF cycle."""
+
+    restart_scf: bool = False
+
+
+@dataclass(frozen=True)
 class UpdateEmptySpheres:
     pass
 
@@ -80,6 +101,16 @@ class CreateStructure:
 @dataclass(frozen=True)
 class Build2D:
     kind: Build2DKind
+
+
+@dataclass(frozen=True)
+class ExplainEmbedding:
+    """Explain which periodic host is needed before creating a cluster."""
+
+
+@dataclass(frozen=True)
+class BuildEmbedding:
+    """Build a new embedded cluster, or edit an existing one."""
 
 
 @dataclass(frozen=True)
@@ -100,8 +131,46 @@ class ContinueRecent:
 
 
 @dataclass(frozen=True)
+class LoadAllRecentResults:
+    """Import all recent output files into the result history."""
+
+
+@dataclass(frozen=True)
+class RepeatRecentInput:
+    """Reopen a recent SPR-KKR input file to repeat its calculation."""
+
+    path: str | None = None
+
+
+@dataclass(frozen=True)
 class VisualizeStructure:
     pass
+
+
+@dataclass(frozen=True)
+class EditStructure:
+    """Open the integrated structure editor for the current structure."""
+
+
+@dataclass(frozen=True)
+class SaveStructure:
+    """Write the current structure without requiring a calculation."""
+
+
+@dataclass(frozen=True)
+class LoadHostPotential:
+    """Replace the active structure with a periodic host POTFIL."""
+
+
+@dataclass(frozen=True)
+class AttachHostPotential:
+    """Associate a matching host POTFIL with an embedded cluster."""
+
+
+@dataclass(frozen=True)
+class CreateHostPotential:
+    """Generate a host potential from a periodic structure."""
+
 
 
 @dataclass(frozen=True)
@@ -116,12 +185,24 @@ class StartOver:
 
 WorkflowCommand = Union[
     RunTask,
+    ReconvergeScf,
+    CustomTask,
+    ConvergeHostScf,
     UpdateEmptySpheres,
     CreateStructure,
     Build2D,
+    BuildEmbedding,
+    ExplainEmbedding,
     Load,
     ContinueRecent,
+    LoadAllRecentResults,
+    RepeatRecentInput,
     VisualizeStructure,
+    EditStructure,
+    SaveStructure,
+    LoadHostPotential,
+    AttachHostPotential,
+    CreateHostPotential,
     UseForNewCalculation,
     StartOver,
 ]
@@ -143,6 +224,7 @@ class ActionMenuGroup:
     title: str
     items: tuple[ActionMenuItem, ...]
     empty_text: str | None = None
+    footer: ActionMenuItem | None = None
 
     def __post_init__(self) -> None:
         if not self.items and self.empty_text is None:

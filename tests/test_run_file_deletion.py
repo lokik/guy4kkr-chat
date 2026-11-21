@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from kkrunner.backends import BackendConfig
-from kkrunner.client import SshTransport
+from kkrunner.transports import SshTransport
 from kkrunner.files import CacheEntry, FileEntry, FileManifest
 from kkrunner.projects import ProjectRepository
 from kkrunner.runs import ExecutionMetadata, RunState, WorkingDirectory

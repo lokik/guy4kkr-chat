@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from ase import Atoms
+from ase2sprkkr import InputParameters
 
 from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
 from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
@@ -127,7 +128,7 @@ def test_later_import_errors_are_not_misreported_as_task_unavailable(
 ):
     controller = _controller(tmp_path)
     recent = RecentFiles(tmp_path / "recent.json")
-    parameters = object()
+    parameters = InputParameters.create("SCF")
 
     monkeypatch.setattr(
         calculation_flow,
@@ -149,13 +150,14 @@ def test_later_import_errors_are_not_misreported_as_task_unavailable(
             dataset_default_mode="auto",
         )
 
-    assert controller.input_parameters is parameters
+    # Guided parameters are transient even if later launch code raises.
+    assert controller.input_parameters is None
 
 
 def test_guided_parameter_editor_opens_without_directory_prompt(monkeypatch, tmp_path):
     controller = _controller(tmp_path)
     controller.change_directory(None)
-    parameters = object()
+    parameters = InputParameters.create("SCF")
     monkeypatch.setattr(
         calculation_flow, "choose_working_directory",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
@@ -169,11 +171,36 @@ def test_guided_parameter_editor_opens_without_directory_prompt(monkeypatch, tmp
     calls = []
     monkeypatch.setattr(
         calculation_flow, "run_calculation",
-        lambda *_args, **_kwargs: calls.append(controller.directory) or "run",
+        lambda *_args, **kwargs: calls.append(
+            (controller.directory, kwargs["request_override"])
+        ) or "run",
     )
     assert calculation_flow.configure_and_run_task(
         controller, RecentFiles(tmp_path / "recent.json"), object(),
         "scf", dataset_default_mode="auto"
     ) == "run"
-    assert calls == [None]
-    assert controller.input_parameters is parameters
+    assert len(calls) == 1
+    assert calls[0][0] is None
+    assert calls[0][1].input_parameters.task_name.lower() == "scf"
+    assert controller.input_parameters is None
+
+
+def test_cluster_guided_task_requests_native_host_before_committing(monkeypatch, tmp_path):
+    from ase2sprkkr_gui.gui.flows import files as file_flows
+    from ase2sprkkr_gui.gui.application.workspace import WorkspaceState
+    from ase2sprkkr_gui.gui.application.workspace_controller import WorkspaceController
+
+    controller = WorkspaceController(WorkspaceState(atoms=Atoms("Fe", pbc=False)))
+    # 0D atoms without an embedding host are not a valid cluster; this verifies
+    # that the Guided boundary refuses the host preparation before starting.
+    request = []
+    monkeypatch.setattr(calculation_flow, "select_guided_input_parameters",
+                        lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(file_flows, "ensure_embedded_host_potential",
+                        lambda ctrl, parent: request.append((ctrl, parent)) or False)
+    assert calculation_flow.configure_and_run_task(
+        controller, RecentFiles(tmp_path / "recent.json"), None, "scf",
+        dataset_default_mode="auto",
+    ) is None
+    assert request == [(controller, None)]
+    assert controller.input_parameters is None

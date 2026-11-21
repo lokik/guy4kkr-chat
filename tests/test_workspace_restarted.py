@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from ase import Atoms
-from ase2sprkkr import SPRKKRAtoms
+from ase2sprkkr import Potential, SPRKKRAtoms
 
 from ase2sprkkr_gui.gui.application.result_loading import LoadedResult
 from ase2sprkkr_gui.gui.application.workspace import StructureState, WorkspaceState
@@ -23,10 +23,8 @@ def _scf_atoms(status="CONVERGED"):
         Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True),
         symmetry=False,
     )
-    atoms._potential = SimpleNamespace(
-        SCF_INFO=SimpleNamespace(SCFSTATUS=lambda: status),
-        is_scf_converged=lambda _atoms: status == "CONVERGED",
-    )
+    atoms._potential = Potential.from_atoms(atoms)
+    atoms.potential.SCF_INFO.SCFSTATUS = status
     return atoms
 
 

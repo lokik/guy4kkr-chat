@@ -4,7 +4,6 @@ from typing import Dict, Optional
 
 import numpy as np
 from ase import Atoms
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -24,15 +23,18 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ase2sprkkr_gui.gui.widgets.matplotlib_preview import PreviewFigureCanvas as FigureCanvas
 from ase2sprkkr_gui.ase.element_assignment import AssignmentSite, ElementAssignmentDraft
 from ase2sprkkr_gui.gui.dialogs.structures.element_selector import select_element
 from ase2sprkkr_gui.gui.plots.lattice import plot_lattice, plot_sites_in_lattice
+from ase2sprkkr_gui.gui.plots.atom_sizes import marker_area_factors_for_occupations
 from ase2sprkkr_gui.gui.widgets.structures.element_assignment import QLetterRow
 
 
 class ElementAssignmentDialog(QDialog):
-    def __init__(self, parent: Optional[QWidget] = None, back: bool = False):
+    def __init__(self, parent: Optional[QWidget] = None, back: bool = False, *, editor_mode: bool = False):
         super().__init__(parent)
+        self._editor_mode = editor_mode
         self.setWindowTitle("Assign Elements to Wyckoff Sites")
         self.setWindowFlags(
             self.windowFlags()
@@ -51,11 +53,13 @@ class ElementAssignmentDialog(QDialog):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
 
-        splitter = QSplitter(Qt.Orientation.Horizontal, self)
-        root.addWidget(splitter, 1)
+        if not self._editor_mode:
+            splitter = QSplitter(Qt.Orientation.Horizontal, self)
+            self.splitter = splitter
+            root.addWidget(splitter, 1)
 
         # Left: Scroll area for letters
-        left = QWidget()
+        left = QWidget(self)
         left_v = QVBoxLayout(left)
         self.scroll = QScrollArea(left)
         self.scroll.setWidgetResizable(True)
@@ -67,13 +71,12 @@ class ElementAssignmentDialog(QDialog):
         left_v.addWidget(self.scroll, 1)
         # Keep left column wide enough and stable so headers and inputs fit
         # Widen left panel for better readability of element rows
-        left.setMinimumWidth(750)
-        # Initial splitter sizing (favor left)
-        splitter.setSizes([850, 550])
-        splitter.addWidget(left)
+        left.setMinimumWidth(450 if self._editor_mode else 750)
+        if not self._editor_mode:
+            splitter.addWidget(left)
 
         # Right: 3D preview
-        right = QWidget()
+        right = QWidget(self)
         right_v = QVBoxLayout(right)
 
         # Lattice vectors table (editable)
@@ -103,7 +106,8 @@ class ElementAssignmentDialog(QDialog):
             self.lattice_spinboxes.append(row_spinboxes)
 
         lattice_vectors_layout.addWidget(self.lattice_vectors_table)
-        right_v.addWidget(lattice_vectors_group, 0)
+        if not self._editor_mode:
+            right_v.addWidget(lattice_vectors_group, 0)
 
         self.fig = Figure(figsize=(4, 4))
         self.ax = self.fig.add_subplot(111, projection='3d')
@@ -116,11 +120,19 @@ class ElementAssignmentDialog(QDialog):
             "QLabel { color: #cc3333; font-size: 14px; font-weight: 600; padding: 4px 0; }"
         )
         right_v.addWidget(self.error_label)
-        splitter.addWidget(right)
+        if self._editor_mode:
+            self._build_structure_editor_layout(root, left, right, lattice_vectors_group)
+        else:
+            splitter.addWidget(right)
+            splitter.setSizes([850, 550])
 
         # Buttons
         btns = QHBoxLayout()
-        btns.addStretch(1)
+        if self._editor_mode:
+            # Page-specific help lives in the shared footer, left of actions.
+            btns.addWidget(self.footer_hint, 1)
+        else:
+            btns.addStretch(1)
         if self._allow_back:
             self.back_btn = QPushButton("Back")
             self.back_btn.clicked.connect(self._on_back)
@@ -273,26 +285,36 @@ class ElementAssignmentDialog(QDialog):
         lattice = draft.cell
         plot_lattice(self.ax, lattice)
 
-        # collect other vs active positions
-        others = []
-        active = []
+        # Compute ratios over all sites first; selecting an atom must not
+        # change the relative sizes of other atoms or the plot's zoom.
+        positions, occupations, active_indices = [], [], []
         label, index = self._active_letter
-
         for site in draft.sites:
-            if label == site.label:
-                if index is not None:
-                    active.append(site.positions[index:index + 1])
-                    others.append(site.positions[:index])
-                    others.append(site.positions[index + 1:])
-                    continue
-                to = active
-            else:
-                to = others
-            to.append(site.positions)
-        if others:
-            plot_sites_in_lattice(self.ax, lattice, np.vstack(others), role='inactive')
-        if active:
-            plot_sites_in_lattice(self.ax, lattice, np.vstack(active), role='active')
+            occupation = [
+                (entry.symbol, entry.value)
+                for entry in site.occupancies if entry.symbol
+            ]
+            for site_index, position in enumerate(site.positions):
+                positions.append(position)
+                occupations.append(occupation)
+                active_indices.append(
+                    site.label == label and
+                    (index is None or index == site_index)
+                )
+        if positions:
+            points = np.asarray(positions)
+            active_mask = np.asarray(active_indices, dtype=bool)
+            factors = marker_area_factors_for_occupations(occupations)
+            if np.any(~active_mask):
+                plot_sites_in_lattice(
+                    self.ax, lattice, points[~active_mask], role='inactive',
+                    relative_area_factors=factors[~active_mask],
+                )
+            if np.any(active_mask):
+                plot_sites_in_lattice(
+                    self.ax, lattice, points[active_mask], role='active',
+                    relative_area_factors=factors[active_mask],
+                )
         self.canvas.draw()
 
     # ---- error aggregation helpers ----

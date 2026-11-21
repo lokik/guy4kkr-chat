@@ -460,3 +460,65 @@ def test_back_from_conflict_reopens_run_picker_with_previous_settings(
     assert len(selected) == 2
     # Declining a conflicting run does not start the second calculation.
     assert len(launched) == 1
+
+
+def test_prepare_only_selection_writes_inputs_without_creating_run(monkeypatch, tmp_path):
+    controller = _controller(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        calculation_flow, "_select_profile",
+        lambda _parent, **_kw: (
+            True, None, None, str(tmp_path), None, True,
+        ),
+    )
+
+    class Execution:
+        def __init__(self, request, cancellation, *, profile_name):
+            calls.append(("prepare", request.directory, profile_name))
+
+        def prepare_files(self):
+            from types import SimpleNamespace
+            parameters = SimpleNamespace(
+                CONTROL=SimpleNamespace(POTFIL_CLU=lambda: None)
+            )
+            return parameters, tmp_path / "Fe_SCF.inp", tmp_path / "Fe.pot", None
+
+    monkeypatch.setattr(calculation_flow, "SprkkrExecution", Execution)
+    monkeypatch.setattr(calculation_flow, "SprkkrRunWindow", lambda **_kw: pytest.fail(
+        "Save-only must not create any monitor or run"
+    ))
+    monkeypatch.setattr(calculation_flow.QMessageBox, "information",
+                        lambda *_args: calls.append("reported"))
+    history = RecentFiles(tmp_path / "recent.json")
+    assert calculation_flow.run_calculation(
+        controller, history, object()
+    ) is None
+    assert calls == [("prepare", str(tmp_path), None), "reported"]
+    assert history.paths("input") == (str((tmp_path / "Fe_SCF.inp").resolve()),)
+
+
+
+def test_successful_submission_registers_input_before_result(tmp_path, monkeypatch):
+    controller = _controller(tmp_path)
+    history = RecentFiles(tmp_path / "recent.json")
+    received = []
+    input_path = tmp_path / "Fe_SCF.inp"
+
+    class Window:
+        def __init__(self, **kwargs):
+            self.on_submitted = kwargs["on_submitted"]
+
+        def show(self):
+            pass
+
+        def start(self):
+            self.on_submitted(str(input_path))
+            received.extend(history.paths("input"))
+
+    monkeypatch.setattr(calculation_flow, "SprkkrRunWindow", Window)
+    monkeypatch.setattr(calculation_flow, "profile_description", lambda _: None)
+    assert calculation_flow.run_calculation(
+        controller, history, object(), select_profile=False,
+    ) is not None
+    assert received == [str(input_path.resolve())]
+    assert history.paths("output") == ()

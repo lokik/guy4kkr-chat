@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Exchange coupling</title>
+  <desc>Two parallel spin arrows above sites joined by an exchange bond.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f0f7f8" stroke="#b6cbd2"/>
+  <path d="M14 33h20" fill="none" stroke="#8ca5b3" stroke-width="3"/>
+  <g fill="none" stroke="#087f83" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8">
+    <path d="M14 28V12m-4 5 4-5 4 5M34 28V12m-4 5 4-5 4 5"/>
+  </g>
+  <g fill="#c9eeee" stroke="#26384e" stroke-width="1.8">
+    <circle cx="14" cy="33" r="4"/>
+    <circle cx="34" cy="33" r="4"/>
+  </g>
+</svg>

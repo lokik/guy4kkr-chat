@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from ase2sprkkr.common.grammar_types import Energy
 from ase2sprkkr.input_parameters.definitions._sections import relative_energy_supported
+from ase2sprkkr.input_parameters.definitions.bsf import KK, bsf_mode
 
 
 def convert_energy(value, source, target):
@@ -58,7 +59,14 @@ def set_bound_energy(parameters, name, value, unit, relative):
         raise ValueError('This task supports absolute energy only; a relative range requires both bounds.')
     updates = bound_energy_updates(name, value, unit, relative)
     other = 'EMAX' if name == 'EMIN' else 'EMIN'
-    if other in energy and other + 'EV' in energy:
+    if (name == 'EMIN' and parameters.TASK.TASK() == 'BSF'
+            and bsf_mode(parameters) == KK):
+        # BSF-KK has a single fixed energy, not a range. EMAX is hidden in
+        # its guided editor and defaults to EMIN in the native definition.
+        # Never reinterpret an old/implicit EMAX as an independent offset to
+        # the Fermi level (e.g. -1 Ry becomes a spurious -13.6057 eV).
+        updates.update(EMAX=None, EMAXEV=None)
+    elif other in energy and other + 'EV' in energy:
         state = bound_energy_state(parameters, other)
         if value is None and relative:
             updates.update(bound_energy_updates(other, None, unit, relative))

@@ -9,19 +9,10 @@ from ase import Atoms
 from ase.build import bulk as build_bulk
 from PyQt6.QtWidgets import QApplication
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
-from ase2sprkkr.common.warnings import DataValidityWarning
 from ase2sprkkr.input_parameters.definitions.bsf import bsf_mode
 from ase2sprkkr.sprkkr.build import semiinfinite_system
 
 from ase2sprkkr_gui.gui.dialogs.guided_input import GuidedInputParametersDialog
-
-
-# A BSF alias retains its originally requested mode even after an intentional
-# GUI switch; ENERGY.NE is authoritative, so the backend warns about the hint.
-pytestmark = pytest.mark.filterwarnings(
-    r"ignore:ENERGY\.NE selects BSF-(EK|KK), but BSF-(EK|KK) was requested:"
-    r"ase2sprkkr.common.warnings.DataValidityWarning"
-)
 
 
 @pytest.fixture
@@ -113,8 +104,7 @@ def test_alias_energy_default_is_preserved_when_canonicalising(application):
 def test_mode_switch_is_atomic_and_undo_restores_custom_segments(application):
     parameters = ek_parameters()
     dialog = GuidedInputParametersDialog("bsf", parameters)
-    with pytest.warns(DataValidityWarning, match=r"ENERGY\.NE selects BSF-KK, but BSF-EK was requested"):
-        switch(dialog, "KK")
+    switch(dialog, "KK")
     assert dialog.session.undo_stack.count() == 1
     current = dialog.session.working_parameters
     assert bsf_mode(current) == "KK"

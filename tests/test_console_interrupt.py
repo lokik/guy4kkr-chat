@@ -12,7 +12,7 @@ from ase2sprkkr_gui.gui.flows import files as file_flows
 from ase2sprkkr_gui.main import GuiApplication
 
 
-def test_console_interrupt_wakes_qt_once_and_restores_handler():
+def test_console_interrupt_wakes_qt_once_and_restores_handler(capfd):
     app = QApplication.instance()
     previous_handler = signal.getsignal(signal.SIGINT)
     received = []
@@ -20,6 +20,9 @@ def test_console_interrupt_wakes_qt_once_and_restores_handler():
     try:
         assert signal.getsignal(signal.SIGINT) != previous_handler
         interrupt._mark_interrupt(signal.SIGINT, None)
+        message = capfd.readouterr().err
+        assert "Ctrl+C: shutdown requested" in message
+        assert "Hit CTRL+C again to force terminate" in message
         interrupt._writer.send(bytes([2]))
         app.processEvents()
         assert received == [True]
@@ -136,3 +139,155 @@ def test_loaded_structure_exits_without_save_prompt(tmp_path, monkeypatch):
 
     monkeypatch.setattr(QMessageBox, "question", unexpected_prompt)
     assert gui.request_exit()
+
+
+def test_second_ctrl_c_force_exits_while_first_handler_is_running(monkeypatch):
+    import pytest
+    from ase2sprkkr_gui.gui.application import console_interrupt as bridge
+
+    app = QApplication.instance() or QApplication([])
+    events = []
+
+    def forced_exit(code):
+        events.append(("forced", code))
+        raise SystemExit(code)
+
+    monkeypatch.setattr(bridge.os, "_exit", forced_exit)
+    clock = [10.0]
+    monkeypatch.setattr(bridge, "monotonic", lambda: clock[0])
+    interrupt = None
+
+    def shutdown():
+        events.append("shutdown")
+        clock[0] = 10.2
+        interrupt._mark_interrupt(signal.SIGINT, None)  # Accidental repeat.
+        clock[0] = 10.51
+        interrupt._mark_interrupt(signal.SIGINT, None)  # Deliberate force.
+
+    interrupt = ConsoleInterrupt(shutdown, parent=app)
+    try:
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        with pytest.raises(SystemExit) as exc:
+            interrupt._on_readable()
+        assert exc.value.code == 130
+        assert events == ["shutdown", ("forced", 130)]
+    finally:
+        interrupt.close()
+
+
+def test_second_ctrl_c_force_exits_before_qt_consumes_first(monkeypatch):
+    import pytest
+    from ase2sprkkr_gui.gui.application import console_interrupt as bridge
+
+    app = QApplication.instance() or QApplication([])
+    called = []
+    clock = [0.0]
+    monkeypatch.setattr(bridge, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        bridge.os, "_exit",
+        lambda code: (_ for _ in ()).throw(SystemExit(code)),
+    )
+    interrupt = ConsoleInterrupt(lambda: called.append(True), parent=app)
+    try:
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        clock[0] = 0.49
+        interrupt._mark_interrupt(signal.SIGINT, None)  # Ignored.
+        clock[0] = 0.51
+        with pytest.raises(SystemExit, match="130"):
+            interrupt._mark_interrupt(signal.SIGINT, None)
+        assert not called
+    finally:
+        interrupt.close()
+
+
+def test_late_ctrl_c_resets_force_window_during_modal_shutdown(monkeypatch):
+    from ase2sprkkr_gui.gui.application import console_interrupt as bridge
+
+    app = QApplication.instance() or QApplication([])
+    clock = [10.0]
+    events = []
+    monkeypatch.setattr(bridge, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        bridge.os, "_exit",
+        lambda code: (_ for _ in ()).throw(AssertionError(f"forced exit: {code}")),
+    )
+
+    interrupt = None
+
+    def shutdown():
+        events.append("shutdown")
+        clock[0] = 13.1
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        assert interrupt._first_interrupt_at == 13.1
+        clock[0] = 13.3
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        # Even in an in-progress modal shutdown, repeated Ctrl+C must not
+        # recursively invoke the callback or unexpectedly terminate.
+        assert events == ["shutdown"]
+
+    interrupt = ConsoleInterrupt(shutdown, parent=app)
+    try:
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        interrupt._on_readable()
+        assert events == ["shutdown"]
+    finally:
+        interrupt.close()
+
+
+def test_rearmed_force_window_still_allows_deliberate_second_ctrl_c(monkeypatch):
+    import pytest
+    from ase2sprkkr_gui.gui.application import console_interrupt as bridge
+
+    app = QApplication.instance() or QApplication([])
+    clock = [10.0]
+    events = []
+    monkeypatch.setattr(bridge, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        bridge.os, "_exit",
+        lambda code: (_ for _ in ()).throw(SystemExit(code)),
+    )
+
+    interrupt = None
+
+    def shutdown():
+        events.append("shutdown")
+        clock[0] = 13.1
+        interrupt._mark_interrupt(signal.SIGINT, None)  # Late: re-arm.
+        clock[0] = 13.7
+        interrupt._mark_interrupt(signal.SIGINT, None)  # Force within new window.
+
+    interrupt = ConsoleInterrupt(shutdown, parent=app)
+    try:
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        with pytest.raises(SystemExit) as exc:
+            interrupt._on_readable()
+        assert exc.value.code == 130
+        assert events == ["shutdown"]
+    finally:
+        interrupt.close()
+
+
+def test_ctrl_c_after_cancelled_shutdown_starts_fresh_request(monkeypatch):
+    from ase2sprkkr_gui.gui.application import console_interrupt as bridge
+
+    app = QApplication.instance() or QApplication([])
+    clock = [1.0]
+    monkeypatch.setattr(bridge, "monotonic", lambda: clock[0])
+    calls = []
+    monkeypatch.setattr(
+        bridge.os, "_exit",
+        lambda code: (_ for _ in ()).throw(AssertionError(f"forced exit: {code}")),
+    )
+    interrupt = ConsoleInterrupt(lambda: calls.append("requested"), parent=app)
+    try:
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        clock[0] = 1.12
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        interrupt._on_readable()  # The user cancels the save prompt.
+        assert calls == ["requested"]
+        clock[0] = 5.0
+        interrupt._mark_interrupt(signal.SIGINT, None)
+        interrupt._on_readable()
+        assert calls == ["requested", "requested"]
+    finally:
+        interrupt.close()

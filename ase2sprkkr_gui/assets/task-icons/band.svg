@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Bloch bands</title>
+  <desc>Three schematic energy bands along a momentum path.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f0f7f8" stroke="#b6cbd2"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 10v28h29" stroke="#26384e" stroke-width="2"/>
+    <path d="M24 11v26" stroke="#a5b9c6" stroke-width="1.4" stroke-dasharray="2 3"/>
+    <path d="M11 14c8 0 8 8 13 8s8-10 15-10M11 33c6 0 9-4 13-4 6 0 8 5 15 5" stroke="#087f83" stroke-width="2.4"/>
+    <path d="M11 23c7 0 9 6 13 6 6 0 8-7 15-7" stroke="#544080" stroke-width="2.4"/>
+  </g>
+</svg>

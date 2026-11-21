@@ -137,6 +137,7 @@ def action_card_stylesheet(
     selector: str,
     *,
     subtle: bool = False,
+    accent_width: int = ACTION_ACCENT_WIDTH,
 ) -> str:
     """Return a semantic action-card style with common hover and border rules."""
     amount = .08 if subtle else .22
@@ -151,7 +152,7 @@ def action_card_stylesheet(
         f"{selector} {{ text-align: left; padding: 0; "
         f"color: {text.name()}; background-color: {background.name()}; "
         f"border: {BORDER_WIDTH}px solid {accent.name()}; "
-        f"border-left: {ACTION_ACCENT_WIDTH}px solid {accent.name()}; "
+        f"border-left: {accent_width}px solid {accent.name()}; "
         f"border-radius: {PANEL_RADIUS}px; }} "
         f"{selector}:hover {{ color: {text.name()}; "
         f"background-color: {hover.name()}; }}"

@@ -4,7 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from kkrunner.runs import ExecutionMetadata, WorkingDirectory, RunState, FailurePhase
 from kkrunner.files import FileManifest
-from kkrunner.client import SshTransport
+from kkrunner.transports import SshTransport
 from kkrunner.backends import BackendConfig
 from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
 from ase2sprkkr_gui.gui.application import persistent_jobs as jobs_module

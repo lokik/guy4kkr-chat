@@ -4,7 +4,7 @@ import ase2sprkkr_gui.gui.application.persistent_jobs as module
 from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJobSource
 from kkrunner.runs import RunState, ExecutionMetadata, WorkingDirectory
 from kkrunner.files import FileManifest
-from kkrunner.client import LocalTransport
+from kkrunner.transports import LocalTransport
 from kkrunner.backends import BackendConfig
 
 def _record(state=RunState.POSTPROCESSING):

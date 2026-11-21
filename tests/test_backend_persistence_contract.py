@@ -7,7 +7,7 @@ from ase2sprkkr import InputParameters, TaskResult
 from ase2sprkkr.outputs.reader_registry import reader_registry
 from ase2sprkkr.outputs.task_result import KkrOutputReader
 from kkrunner.backends import BackendConfig
-from kkrunner.client import LocalTransport
+from kkrunner.transports import LocalTransport
 from kkrunner.files import FileEntry, FileManifest
 from kkrunner.projects import ProjectRepository, ProjectRunManager
 from kkrunner.runs import RunState, RunStore

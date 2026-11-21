@@ -12,6 +12,7 @@ def parser(parser):
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
+        "-c",
         "--open-last", action="store_true",
         help="Open the most recent existing structure (not the last output).",
     )

@@ -12,7 +12,7 @@ _FILENAME_COMPONENT = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 def filename_component(value: str) -> str:
-    """Convert a DATASET value to a safe single filename component."""
+    """Normalize a name to a single filename component."""
     return _FILENAME_COMPONENT.sub("_", value.strip()).strip("._")
 
 
@@ -71,5 +71,5 @@ def dataset_value(parameters: Any) -> str | None:
         return None
     if value is None:
         return None
-    text = str(value).strip()
+    text = str(value)
     return text or None

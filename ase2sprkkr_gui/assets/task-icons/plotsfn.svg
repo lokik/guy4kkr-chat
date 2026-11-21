@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Shape functions</title>
+  <desc>A faceted cell with one face highlighted in teal.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f0f7f8" stroke="#b6cbd2"/>
+  <g stroke="#26384e" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9">
+    <path d="m24 8 13 7 4 13-9 10H16L7 28l4-13Z" fill="#e2eaf0"/>
+    <path d="m11 15 8 5 10-1 8-4M7 28l9 1 6 5h11l8-6M16 29v9m6-4 2-9 5-6m4 15-1 4" fill="none"/>
+    <path d="m19 20 10-1 6 7-2 8H22l-6-5Z" fill="#a3dcde"/>
+  </g>
+</svg>

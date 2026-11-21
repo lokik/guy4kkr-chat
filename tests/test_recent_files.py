@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from ase2sprkkr_gui.gui.application.config import config_home
-from ase2sprkkr_gui.gui.application.recent_files import RecentFiles, default_recent_files_path
+from ase2sprkkr_gui.gui.application.recent_files import (
+    RecentFiles, default_recent_files_path, find_missing_recent_paths,
+)
 from ase2sprkkr_gui.gui.recent_presentation import recent_path_label
 
 
@@ -130,3 +132,116 @@ def test_recent_path_label_defaults_to_current_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     assert recent_path_label(target) == str(Path("results") / "Fe.out")
+
+def test_recent_menu_labels_do_not_touch_filesystem(tmp_path, monkeypatch):
+    from ase2sprkkr_gui.gui.recent_presentation import recent_menu_items
+
+    path = tmp_path / "missing" / "calculation.inp"
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("menu labels must not probe the filesystem")
+
+    monkeypatch.setattr(Path, "resolve", unexpected)
+    monkeypatch.setattr(Path, "exists", unexpected)
+    items = recent_menu_items((str(path),), base=tmp_path)
+    assert len(items) == 1
+    assert items[0].label == "missing/calculation.inp"
+    assert items[0].tooltip == str(path)
+
+
+def test_background_recent_scan_only_prunes_definitely_missing(tmp_path, monkeypatch):
+    existing = tmp_path / "present.cif"
+    existing.touch()
+    missing = tmp_path / "missing.inp"
+    inaccessible = tmp_path / "inaccessible.out"
+    history = RecentFiles(tmp_path / "recent.json")
+    history.remember("structure", existing)
+    history.remember("input", missing)
+    history.remember("output", inaccessible)
+    original_stat = Path.stat
+
+    def stat_with_network_error(path, *args, **kwargs):
+        if str(path) == str(inaccessible):
+            raise PermissionError("mount inaccessible")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat_with_network_error)
+    snapshot = history.read_snapshot()
+    assert find_missing_recent_paths(snapshot) == {
+        "input": (str(missing),),
+    }
+
+
+def test_checked_recent_files_cleanup_is_atomic_and_snapshot_guarded(tmp_path):
+    first = tmp_path / "missing-structure.cif"
+    next_file = tmp_path / "later.cif"
+    first_history = RecentFiles(tmp_path / "recent.json")
+    first_history.remember("structure", first)
+    stale_snapshot = first_history.read_snapshot()
+    first_history.remember("structure", next_file)
+    notifications = []
+    first_history.changed.connect(lambda: notifications.append(True))
+
+    # A slow scan must not remove items from a newer history.
+    assert not first_history.remove_known_missing(
+        stale_snapshot, {"structure": (str(first),)}
+    )
+    assert first_history.paths("structure") == (str(next_file), str(first))
+    assert notifications == []
+
+    current = first_history.read_snapshot()
+    assert first_history.remove_known_missing(
+        current, {"structure": (str(first),)}
+    )
+    assert first_history.paths("structure") == (str(next_file),)
+    assert notifications == [True]
+    assert not first_history.remove_known_missing(
+        current, {"structure": (str(first),)}
+    )
+    assert notifications == [True]
+
+
+def test_result_and_potential_history_are_atomic_and_keep_output_primary(tmp_path):
+    output = tmp_path / "SCF.out"
+    potential = tmp_path / "SCF.pot_new"
+    output.touch()
+    potential.touch()
+    history = RecentFiles(tmp_path / "recent.json")
+    changes = []
+    history.changed.connect(lambda: changes.append(history.read_snapshot()))
+
+    history.remember_result(output, potential_path=potential)
+
+    assert history.paths("structure") == (str(potential.resolve()),)
+    assert history.paths("output") == (str(output.resolve()),)
+    assert history.last_kind == "output"
+    assert len(changes) == 1
+    assert changes[0] == history.read_snapshot()
+    history.remember_result(output, potential_path=potential)
+    assert len(changes) == 1
+
+    reloaded = RecentFiles(history.path)
+    reloaded.load()
+    assert reloaded.read_snapshot() == history.read_snapshot()
+
+
+def test_batch_related_potentials_preserve_recent_results_and_kind(tmp_path):
+    old = tmp_path / "old.out"
+    latest = tmp_path / "latest.out"
+    a = tmp_path / "a.pot"
+    b = tmp_path / "b.clu"
+    history = RecentFiles(tmp_path / "recent.json")
+    history.remember("output", old)
+    history.remember("output", latest)
+    before = history.paths("output")
+    changes = []
+    history.changed.connect(lambda: changes.append(history.read_snapshot()))
+
+    history.remember_many(
+        (("structure", a), ("structure", b)),
+        preserve_last_kind=True,
+    )
+
+    assert history.paths("output") == before
+    assert history.paths("structure") == (str(b.resolve()), str(a.resolve()))
+    assert history.last_kind == "output"
+    assert len(changes) == 1

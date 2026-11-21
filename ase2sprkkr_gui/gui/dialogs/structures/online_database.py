@@ -4,7 +4,6 @@ import re
 from typing import Callable, Optional, Sequence
 
 from ase.data import atomic_numbers
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import QObject, QRunnable, Qt, QThreadPool, pyqtSignal
 from PyQt6.QtGui import QPalette
@@ -34,6 +33,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ase2sprkkr_gui.gui.widgets.matplotlib_preview import PreviewFigureCanvas as FigureCanvas
 from ase2sprkkr_gui.gui.misc.colors import mixed_color as _mixed_color
 from ase2sprkkr_gui.gui.plots.lattice import plot_atoms_preview
 from ase2sprkkr_gui.gui.widgets.optimade_filters import (

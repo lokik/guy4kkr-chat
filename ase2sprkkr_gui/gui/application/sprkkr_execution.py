@@ -7,6 +7,8 @@ from dataclasses import replace
 from typing import Any, Callable
 
 from ase2sprkkr import SPRKKR
+from kkrunner.backends.contracts import SubmissionNotStarted
+from kkrunner.files import FileManifest
 from kkrunner.runs import MpiNotFoundWarning
 
 from ase2sprkkr_gui.gui.application.execution_cancellation import (
@@ -15,9 +17,9 @@ from ase2sprkkr_gui.gui.application.execution_cancellation import (
     register_runner,
     wait_for_runner,
 )
-from ase2sprkkr_gui.gui.application.result_loading import LoadedResult, load_result
+from ase2sprkkr_gui.gui.application.result_loading import FileBackedInput, LoadedResult, load_result
 from ase2sprkkr_gui.gui.application.workspace_controller import CalculationRequest
-from ase2sprkkr_gui.gui.input_parameters.dataset import dataset_value, filename_component
+from ase2sprkkr_gui.gui.input_parameters.dataset import dataset_value
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +39,9 @@ class SprkkrExecution:
         status: Callable[[str], None] | None = None,
         warning: Callable[[str], None] | None = None,
         persistent_job_changed: Callable[[str], None] | None = None,
+        submitted: Callable[[str | None], None] | None = None,
     ) -> None:
-        self.request = replace(request, atoms=request.atoms.copy())
+        self.request = request
         self.cancellation = cancellation
         self.profile_name = profile_name
         self.execution_manager = execution_manager
@@ -47,15 +50,16 @@ class SprkkrExecution:
         self._status = status or (lambda _text: None)
         self._warning = warning or (lambda _text: None)
         self._persistent_job_changed = persistent_job_changed
+        self._submitted = submitted
+        self._file_backed_input = None
 
     def file_names(self) -> tuple[str, str, str]:
         """Return input, potential and output filename templates for the request."""
         dataset = dataset_value(self.request.input_parameters)
         if dataset is None:
             return "%a_%T.inp", "%a.pot", "%a_%T.out"
-        base = filename_component(dataset)
-        if not base:
-            return "%a_%T.inp", "%a.pot", "%a_%T.out"
+        # DATASET is literal. Escape the percent markers used by ASE2SPRKKR.
+        base = dataset.replace("%", "%%")
         return f"{base}_%T.inp", f"{base}.pot", f"{base}_%T.out"
 
     def _with_mpi_warnings(self, operation):
@@ -82,28 +86,65 @@ class SprkkrExecution:
 
     def _project_context(self):
         if self.project_id is None:
-            return None
+            # Even an unassigned clean-cache run needs the same reservation
+            # store as project runs. Without an injected manager, ASE2SPRKKR
+            # supplies its default persistent manager for clear_cache=True.
+            if not self.request.clear_cache or self.execution_manager is None:
+                return None
+            from kkrunner.runs.manager import RunManager
+            # ProjectRunManager cannot create unassigned jobs; an ordinary
+            # RunManager can reserve against the very same shared RunStore.
+            return RunManager(
+                self.execution_manager.store,
+                client_pool=self.execution_manager.client_pool,
+            )
         if self.execution_manager is None:
             return self.project_id
         return self.execution_manager.for_project(self.project_id)
 
     def _create_runner(self, calculator: SPRKKR):
         input_file, potential_file, output_file = self.file_names()
+        # The backend Potential.from_atoms factory recognizes embedded Atoms.
+        # Keep the same public atoms= path as periodic calculations.
         return self._with_mpi_warnings(
             lambda: calculator.create_run(
-                atoms=self.request.atoms,
+                **self._input_source(potential_file),
                 input_parameters=self.request.input_parameters,
                 directory=self.request.directory,
                 input_file=input_file,
-                potential_file=potential_file,
                 output_file=output_file,
                 empty_spheres=False,
                 read_callback=self._output,
                 print_output=False,
                 project=self._project_context(),
                 restart_scf=self.request.restart_scf,
+                clear_cache=self.request.clear_cache,
+                create_subdirs=True,
             )
         )
+
+    def prepare_files(self):
+        """Write native input/potential files without submitting a runner."""
+        input_file, potential_file, _output_file = self.file_names()
+        return self._calculator().save_input(
+            **self._input_source(potential_file),
+            input_parameters=self.request.input_parameters,
+            directory=self.request.directory,
+            input_file=input_file,
+            output_file=False,
+            empty_spheres=False,
+            restart_scf=self.request.restart_scf,
+            create_subdirs=True,
+        )
+
+    def _input_source(self, potential_file):
+        if self.request.potential is False:
+            # The parsed atoms establish geometry, but the native POTFIL files
+            # remain authoritative and must never be regenerated from them.
+            return {"potential": False, "atoms": self.request.atoms}
+        if self.request.potential is not None:
+            return {"potential": self.request.potential, "potential_file": potential_file}
+        return {"atoms": self.request.atoms, "potential_file": potential_file}
 
     def _notify_persistent_job_changed(self, runner: Any) -> None:
         callback = self._persistent_job_changed
@@ -119,15 +160,42 @@ class SprkkrExecution:
         register_runner(self.cancellation, runner)
 
         try:
-            self._with_mpi_warnings(runner.submit)
+            if self.request.potential is False:
+                self._with_mpi_warnings(lambda: runner.submit(validate_inputs=self._validate_file_input))
+            else:
+                self._with_mpi_warnings(runner.submit)
         finally:
             # Submission is the first point at which ASE2SPRKKR may have written
             # the persistent RunRecord. The observer receives only its stable id
             # and must reload authoritative metadata from the store.
             self._notify_persistent_job_changed(runner)
+        # submit() returned successfully: ASE2SPRKKR has prepared its input
+        # files and handed the calculation to the backend. Result completion
+        # and parsing are unrelated to whether those inputs were saved.
+        if self._submitted is not None:
+            try:
+                # Exact staged input, not an inferred filename template.
+                spec = getattr(runner, "spec", None)
+                path = FileManifest.from_spec(spec).input_file if spec is not None else None
+                self._submitted(str(path) if path is not None else None)
+            except Exception:  # noqa: BLE001 - observers must not fail a launched job
+                logger.exception("Submission observer failed")
         if self.cancellation.requested:
             raise ExecutionCancelled
         return runner
+
+    def _validate_file_input(self, manifest):
+        """Verify every loaded potential against the actual staged input bytes."""
+        source = self.request.file_source
+        if source is None:
+            raise SubmissionNotStarted("File-backed calculation has no validated input source.")
+        for expected in source.versions:
+            staged = manifest.input_version(expected.path)
+            if staged is None or staged != expected or not expected.is_current():
+                raise SubmissionNotStarted(
+                    f"Source potential does not match the launch input: {expected.path}"
+                )
+        self._file_backed_input = FileBackedInput(source.potential.atoms, source.versions)
 
     def run(self) -> LoadedResult:
         """Execute the request and return its loaded result."""
@@ -148,10 +216,18 @@ class SprkkrExecution:
             self._notify_persistent_job_changed(runner)
 
         self._status("Loading result…")
-        loaded = load_result(
-            result,
-            fallback_directory=self.request.directory,
-            persistent_ref=(runner.id if self.project_id is not None else None),
-        )
+        kwargs = {
+            "fallback_directory": self.request.directory,
+            "persistent_ref": runner.id if self.project_id is not None else None,
+        }
+        atoms = self._file_backed_input.atoms if self._file_backed_input is not None else self.request.atoms
+        host = getattr(atoms, "embedding_host", None)
+        if host is not None:
+            # Native CLUPOT is not a standalone structure. Preserve the
+            # canonical launch host when interpreting the result file.
+            kwargs["embedding_host"] = host
+        loaded = load_result(result, **kwargs)
+        if self._file_backed_input is not None:
+            loaded = replace(loaded, file_backed_input=self._file_backed_input)
         self._status("Finished")
         return loaded

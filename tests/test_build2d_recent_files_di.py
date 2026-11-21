@@ -7,7 +7,6 @@ from ase import Atoms
 from PyQt6.QtWidgets import QApplication, QDialog
 
 from ase2sprkkr_gui.gui.application.recent_files import RecentFiles
-from ase2sprkkr_gui.gui.dialogs import main_window as main_window_module
 from ase2sprkkr_gui.gui.dialogs import workflow_window as workflow_module
 from ase2sprkkr_gui.gui.dialogs.structures import build_2d as build_2d_module
 from ase2sprkkr_gui.gui.flows import structures as structure_flows
@@ -70,8 +69,9 @@ def test_build2d_flow_threads_recent_files_to_selector(tmp_path, monkeypatch):
         def can_build_2d(self):
             return True
 
-        def apply_structure_edit(self, edit, *, expected_structure_generation):
+        def apply_structure_edit(self, edit, *, expected_structure_generation, copy_source):
             assert expected_structure_generation is self.structure_generation
+            assert copy_source is False
             self.atoms = edit(self.atoms)
             return object()
 
@@ -110,35 +110,26 @@ def test_build2d_flow_threads_recent_files_to_selector(tmp_path, monkeypatch):
     }
 
 
-def test_windows_pass_recent_files_explicitly(tmp_path, monkeypatch):
+def test_workflow_passes_recent_files_explicitly(tmp_path, monkeypatch):
     _application = QApplication.instance() or QApplication([])
     gui = GuiApplication(recent_files_path=tmp_path / "recent.json")
-    expert = gui.create_main_window()
     workflow = gui.create_workflow_window()
-    expert.controller.replace_structure(
+    workflow.controller.replace_structure(
         Atoms("Fe", cell=(2.8, 2.8, 2.8), pbc=True)
     )
     calls = []
 
-    def capture(*args, **kwargs):
-        calls.append((args, kwargs))
+    monkeypatch.setattr(
+        workflow_module.structure_flows, "build_2d_structure",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
 
-    monkeypatch.setattr(main_window_module.structure_flows, "build_2d_structure", capture)
-    monkeypatch.setattr(workflow_module.structure_flows, "build_2d_structure", capture)
-
-    expert.build_2d_structure(surface_mode=True)
     workflow._build_2d(surface_mode=False)
 
     assert calls == [
-        (
-            (expert.controller, expert.recent_history, expert),
-            {"surface_mode": True},
-        ),
         (
             (workflow.controller, workflow.recent_history, workflow),
             {"surface_mode": False},
         ),
     ]
-
-    expert.close()
     workflow.close()

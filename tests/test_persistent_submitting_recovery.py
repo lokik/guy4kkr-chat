@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from kkrunner.runs import ExecutionMetadata, WorkingDirectory
-from kkrunner.client import LocalTransport
+from kkrunner.transports import LocalTransport
 from kkrunner.backends import BackendConfig
 from kkrunner.files import FileManifest
 

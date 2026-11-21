@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>Lattice cell</title>
+  <desc>Three-dimensional primitive cell with shaded faces and a teal lattice node</desc>
+  <g stroke="#26384e" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M7 17 21 7 41 7 27 17Z" fill="#eaf8f7"/>
+    <path d="M27 17 41 7 41 31 27 41Z" fill="#9fafc2"/>
+    <path d="M7 17 27 17 27 41 7 41Z" fill="#c8d4e0"/>
+    <path d="M7 41 21 31 41 31M21 31 21 7" fill="none" opacity=".55" stroke-width="1.6"/>
+  </g>
+  <circle cx="7" cy="41" r="4" fill="#03a8a1" stroke="#087f83" stroke-width="1.5"/>
+  <circle cx="5.8" cy="39.7" r="1" fill="#d4fffa"/>
+</svg>

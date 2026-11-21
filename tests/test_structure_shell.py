@@ -114,9 +114,10 @@ def test_shell_shift_enter_edits_multiline_before_execution():
     _flush()
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert dialog.candidate.get_chemical_symbols() == ["Ni"]
-    # The accepted value is a copy of the console variable.
+    assert dialog.candidate is dialog.console.interpreter.locals["structure"]
+    # Publication retains the selected structure as is.
     dialog.console.interpreter.locals["structure"].set_chemical_symbols(["Cu"])
-    assert dialog.candidate.get_chemical_symbols() == ["Ni"]
+    assert dialog.candidate.get_chemical_symbols() == ["Cu"]
 
 
 def test_shell_invalid_candidate_does_not_close_and_reports_error():

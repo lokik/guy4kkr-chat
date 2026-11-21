@@ -4,7 +4,9 @@ import logging
 from typing import Any, Callable
 
 from PyQt6.QtCore import QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import QMessageBox
 from kkrunner import RunState
+from kkrunner.backends.contracts import SubmissionNotStarted
 from kkrunner.runs import DuplicateSubmissionError
 from kkrunner.runs.conflicts import submission_conflicts
 
@@ -16,6 +18,8 @@ from ase2sprkkr_gui.gui.application.sprkkr_execution import SprkkrExecution
 from ase2sprkkr_gui.gui.application.workspace_controller import CalculationRequest
 from ase2sprkkr_gui.gui.dialogs.run_monitor import RunMonitorWindow, RunMonitorWorker
 from ase2sprkkr_gui.gui.dialogs.run_conflict import SubmissionConflictDialog
+from ase2sprkkr_gui.gui.dialogs.scf_progress import scf_tolerance_from_parameters
+from ase2sprkkr.outputs.readers.dos import dos_total_points_from_parameters
 
 
 logger = logging.getLogger(__name__)
@@ -25,7 +29,9 @@ class _SprkkrRunWorker(RunMonitorWorker):
     """Qt signal adapter around the backend-only :class:`SprkkrExecution`."""
 
     persistentJobChanged = pyqtSignal(str)
+    submitted = pyqtSignal(object)
     conflict = pyqtSignal(object)
+    submissionRejected = pyqtSignal(str)
 
     def __init__(
         self,
@@ -47,6 +53,7 @@ class _SprkkrRunWorker(RunMonitorWorker):
             status=self.status.emit,
             warning=self.warning.emit,
             persistent_job_changed=self.persistentJobChanged.emit,
+            submitted=self.submitted.emit,
         )
 
     def _emit_cancelled(self) -> None:
@@ -63,6 +70,9 @@ class _SprkkrRunWorker(RunMonitorWorker):
             # This is a rejected preflight reservation, not a backend failure.
             # Preserve the RunRecords and per-file collisions for the UI.
             self.conflict.emit(exc)
+            self.cancelled.emit()
+        except SubmissionNotStarted as exc:
+            self.submissionRejected.emit(str(exc))
             self.cancelled.emit()
         except Exception as exc:  # noqa: BLE001 - worker/backend boundary
             logger.exception("SPR-KKR calculation or result loading failed")
@@ -84,6 +94,7 @@ class SprkkrRunWindow(RunMonitorWindow):
         profile_description: str | None = None,
         project_id: str | None = None,
         on_finished=None,
+        on_submitted: Callable[[str | None], None] | None = None,
         on_back_to_setup: Callable[[], None] | None = None,
     ) -> None:
         header = f"Directory: {request.directory}"
@@ -95,6 +106,8 @@ class SprkkrRunWindow(RunMonitorWindow):
         self.launch_project_id = project_id
         self._project_id: str | None = project_id
         self._back_to_setup = on_back_to_setup
+        self._submitted_callback = on_submitted
+        self._submission_error: str | None = None
 
         def worker_factory(cancellation: RunCancellation) -> _SprkkrRunWorker:
             worker = _SprkkrRunWorker(
@@ -105,7 +118,9 @@ class SprkkrRunWindow(RunMonitorWindow):
                 project_id=self._project_id,
             )
             worker.persistentJobChanged.connect(self._persistent_job_changed_received)
+            worker.submitted.connect(self._on_submitted)
             worker.conflict.connect(self._on_conflict)
+            worker.submissionRejected.connect(self._on_submission_rejected)
             return worker
 
         # Ownership and execution/project context are established by the caller
@@ -118,6 +133,13 @@ class SprkkrRunWindow(RunMonitorWindow):
             header=header,
             warning_title="MPI Not Detected",
             on_finished=on_finished,
+            task_name=str(getattr(getattr(request, "input_parameters", None), "task_name", "")),
+            scf_tolerance=scf_tolerance_from_parameters(
+                getattr(request, "input_parameters", None)
+            ),
+            dos_total_points=dos_total_points_from_parameters(
+                getattr(request, "input_parameters", None)
+            ),
             autostart=False,
         )
         self._conflict_cancellation_pending = False
@@ -141,6 +163,12 @@ class SprkkrRunWindow(RunMonitorWindow):
         self._execution_manager = manager
         self._project_id = project_id
 
+    @pyqtSlot(object)
+    def _on_submitted(self, input_path: str | None) -> None:
+        """Deliver submission acknowledgement on the GUI thread."""
+        if self._submitted_callback is not None:
+            self._submitted_callback(input_path)
+
     @pyqtSlot(str)
     def _persistent_job_changed_received(self, job_id: str) -> None:
         self.set_job_id(job_id)
@@ -156,6 +184,28 @@ class SprkkrRunWindow(RunMonitorWindow):
         callback = self._back_to_setup
         self.close()
         QTimer.singleShot(0, callback)
+
+    @pyqtSlot(str)
+    def _on_submission_rejected(self, message: str) -> None:
+        self._on_error(message)
+        self._set_status("Calculation not started")
+        self._submission_error = message
+        if self._thread is None or not self._thread.isRunning():
+            self._show_submission_error()
+
+    @pyqtSlot()
+    def _thread_finished(self) -> None:
+        super()._thread_finished()
+        if not self._close_requested:
+            self._show_submission_error()
+
+    def _show_submission_error(self) -> None:
+        message = self._submission_error
+        if message is None or self._close_requested:
+            return
+        self._submission_error = None
+        QMessageBox.critical(self, "Could Not Start Calculation", message)
+        self._return_to_setup()
 
     @pyqtSlot(object)
     def _on_conflict(self, conflict: DuplicateSubmissionError) -> None:

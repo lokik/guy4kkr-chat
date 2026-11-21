@@ -8,7 +8,6 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 from ase2sprkkr.input_parameters.input_parameters import InputParameters
-from ase2sprkkr.common.warnings import DataValidityWarning
 
 from ase2sprkkr_gui.gui.widgets.input_parameters.energy import EnergyEditor
 from ase2sprkkr_gui.gui.input_parameters.energy import convert_energy
@@ -185,21 +184,54 @@ def test_arpes_absolute_bounds_and_relative_defaults(application, expert):
     dialog.close()
 
 
-@pytest.mark.filterwarnings(
-    r"ignore:ENERGY\.NE selects BSF-(EK|KK), but BSF-(EK|KK) was requested:"
-    r"ase2sprkkr.common.warnings.DataValidityWarning"
-)
 def test_bsf_relative_kk_import_can_switch_to_ek_and_edit_both_references(application):
     parameters = InputParameters.create('bsfkk')
     parameters.ENERGY.EMINEV.set(0.)
     dialog = GuidedInputParametersDialog('bsf', parameters)
     mode = dialog.editors_for(('ENERGY', 'NE'))[0]
-    with pytest.warns(DataValidityWarning, match=r"ENERGY\.NE selects BSF-EK, but BSF-KK was requested"):
-        mode.control.mode_combo.setCurrentIndex(mode.control.mode_combo.findData('EK'))
+    mode.control.mode_combo.setCurrentIndex(mode.control.mode_combo.findData('EK'))
     for name in ('EMIN', 'EMAX'):
         editor = dialog.editors_for(('ENERGY', name))[-1].control
         assert editor.relative.isEnabled()
         editor.relative.setChecked(True)
         assert dialog.session.value(('ENERGY', name)) is None
         assert dialog.session.value(('ENERGY', name + 'EV')) is not None
+    dialog.close()
+
+
+@pytest.mark.parametrize('old_upper_bound', [None, -1.0])
+def test_bsfkk_relative_fixed_energy_tracks_hidden_upper_bound(
+    application, old_upper_bound
+):
+    """An implicit/old EMAX must never become -13.6057 eV relative to EF."""
+    parameters = InputParameters.create('bsfkk')
+    parameters.TASK.set({
+        'KA': [[0., 0., 0.]], 'K1': [1., 0., 0.],
+        'K2': [0., 1., 0.], 'NK1': 60, 'NK2': 60,
+    })
+    if old_upper_bound is not None:
+        parameters.ENERGY.EMAX.set(old_upper_bound)
+
+    dialog = GuidedInputParametersDialog('bsf', parameters)
+    editor = dialog.editors_for(('ENERGY', 'EMIN'))[-1].control
+    editor.units.setCurrentText('eV')
+    editor.relative.setChecked(True)
+    editor.number.setValue(0.)
+    assert editor.commit()
+
+    current = dialog.session.result()
+    assert current.ENERGY.EMINEV() == pytest.approx(0.)
+    assert current.ENERGY.EMAXEV() == pytest.approx(0.)
+    assert current.ENERGY.EMAX() is None
+    assert not current.ENERGY.EMAX.is_set()
+    assert not current.ENERGY.EMAXEV.is_set()
+    source = current.to_string(validate=False)
+    assert 'EMINEV=0.0' in source
+    assert 'EMAXEV=0.0' in source
+    assert 'EMAXEV=-13.605' not in source
+
+    # Editing only the fixed energy should continue to synchronize its bound.
+    editor.number.setValue(-0.5)
+    assert editor.commit()
+    assert dialog.session.working_parameters.ENERGY.EMAXEV() == pytest.approx(-0.5)
     dialog.close()

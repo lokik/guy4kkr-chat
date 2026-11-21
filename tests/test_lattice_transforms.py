@@ -11,6 +11,23 @@ from ase2sprkkr_gui.physics.lattice import (
 )
 
 
+@pytest.mark.parametrize("operation,selector,values", [
+    ("scale_atoms", "select_scale_lengths", (2.0, 2.0, 2.0)),
+    ("repeat_atoms", "select_repeat_factors", (1.0, 1.0, 1.0)),
+])
+def test_unchanged_transform_retains_structure(monkeypatch, operation, selector, values):
+    from ase2sprkkr_gui.gui.dialogs.structures import transforms
+
+    atoms = Atoms("Fe", cell=[2.0, 2.0, 2.0], pbc=True)
+    monkeypatch.setattr(transforms, selector, lambda **_kwargs: values)
+
+    def forbid_copy():
+        raise AssertionError("An unchanged dialog must retain the original structure")
+
+    monkeypatch.setattr(atoms, "copy", forbid_copy)
+    assert getattr(transforms, operation)(atoms) is atoms
+
+
 @pytest.mark.parametrize(
     'pbc, expected',
     [

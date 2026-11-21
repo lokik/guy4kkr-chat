@@ -27,6 +27,7 @@ from ase2sprkkr_gui.ase.element_assignment import (
     ElementAssignmentDraft,
     OccupancyEntry,
 )
+from ase2sprkkr_gui.gui.widgets.structures.occupation import OccupationEditor
 
 
 class QLetterRow(QWidget):
@@ -80,31 +81,43 @@ class QLetterRow(QWidget):
         self.vbox = QVBoxLayout(left)
         self.vbox.setContentsMargins(0, 0, 0, 0)
 
-        # Controls row
-        controls = QHBoxLayout()
-        controls.addStretch(1)
-        self.normalize_btn = QPushButton("Normalize")
-        self.normalize_btn.clicked.connect(self._normalize)
-        controls.addWidget(self.normalize_btn)
-        # Break symmetry button (visible only when multiplicity > 1)
+        # This is the same occupation component used by the embedding editor.
+        # Model mutations remain delegated to ElementAssignmentDraft.
+        self.occupation_editor = OccupationEditor(
+            left,
+            on_add=lambda: self.draft.add_occupancy(self.site, value=0.0),
+            on_remove=lambda entry: self.draft.remove_occupancy(self.site, entry),
+            on_symbol=lambda entry, value: self.draft.set_occupancy_symbol(
+                self.site, entry, value
+            ),
+            on_value=lambda entry, value: self.draft.set_occupancy_value(
+                self.site, entry, value
+            ),
+            on_normalize=lambda: self.draft.normalize_occupancy(self.site),
+            on_restore=self._restore_initial_occupation,
+            on_validation=lambda msg: self._notify_occupation_validation(msg),
+            on_focus=lambda: (
+                self._on_activity(self.label)
+                if callable(self._on_activity) else None
+            ),
+            selector=select_element,
+        )
+        self.vbox.addWidget(self.occupation_editor)
+        self.occupation_editor.set_initial_occupation(self.site.occupancies)
+        # Splitting symmetry changes the grouping of Wyckoff positions, not
+        # their occupation. Keep this bulk-only action outside the shared widget.
         self.break_btn = QPushButton("Break symmetry")
-        can_break = site.can_split
-        self.break_btn.setVisible(bool(can_break))
-        if can_break and callable(self._on_break):
+        self.break_btn.setVisible(bool(site.can_split))
+        if callable(self._on_break):
             self.break_btn.clicked.connect(lambda: self._on_break(self.site))
-        controls.addWidget(self.break_btn)
-        self.vbox.addLayout(controls)
-
-        # Rows area
-        self.rows_box = QVBoxLayout()
-        self.vbox.addLayout(self.rows_box)
-
-        # Add-row button
-        add_row = QHBoxLayout()
-        self.add_btn = QPushButton("＋ Add element")
-        self.add_btn.clicked.connect(self.add_row)
-        add_row.addWidget(self.add_btn)
-        self.vbox.addLayout(add_row)
+        self.vbox.addWidget(
+            self.break_btn, alignment=Qt.AlignmentFlag.AlignRight
+        )
+        # Compatibility handles used by this dialog's older callers/tests.
+        self.rows = self.occupation_editor.rows
+        self.normalize_check = self.occupation_editor.normalize_check
+        self.add_btn = self.occupation_editor.add_btn
+        self.rows_box = self.occupation_editor.rows_box
 
         # Positions table (fractional X/Y/Z per equivalent site)
         # Positions on the right; title omitted (there is a global header above all sites)
@@ -243,164 +256,46 @@ class QLetterRow(QWidget):
         if callable(self._on_activity):
             self._on_activity(self.label, row, True)
 
-    def load_occupancy(self) -> None:
-        """Refresh element controls from the model's occupancy entries."""
-        # remove existing row widgets
-        for r in list(self.rows):
-            r['w'].setParent(None)
-        self.rows.clear()
+    def _restore_initial_occupation(
+        self, original: list[OccupancyEntry]
+    ) -> list[OccupancyEntry]:
+        self.site.occupancies[:] = original
+        return self.site.occupancies
 
-        for entry in self.site.occupancies:
-            self._add_entry_widget(entry)
+    def load_occupancy(self) -> None:
+        """Load the site's model entries into the common occupation editor."""
+        self.occupation_editor.set_entries(self.site.occupancies)
+
+    def _notify_occupation_validation(self, message: str | None) -> None:
+        if self._on_validation is not None:
+            # The assigned site model remains the authority for validity.
+            self._on_validation(self.label, message)
 
     def add_row(self) -> None:
-        """Add a blank element row."""
-        self._add_entry_widget(self.draft.add_occupancy(self.site))
-        self._validate_controls_state()
-        self._validate_totals()
-
-    def _add_entry_widget(self, entry: OccupancyEntry) -> None:
-        select_element = self._select_element
-
-        row_w = QWidget(self)
-        row_w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        h = QHBoxLayout(row_w)
-        h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(6)
-
-        elem_edit = QLineEdit()
-        elem_edit.setPlaceholderText("Element")
-        elem_edit.setText(entry.symbol)
-        elem_edit.setMaxLength(3)
-        elem_edit.setFixedWidth(55)
-        label_elem = QLabel("Element")
-        label_elem.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        h.addWidget(label_elem)
-        h.addWidget(elem_edit)
-
-        pick_btn = QPushButton("⚛️")
-        pick_btn.setFont(self.glyph_font)
-        pick_btn.setToolTip("Pick element")
-        pick_btn.setEnabled(select_element is not None)
-        pick_btn.setFixedWidth(34)
-        h.addWidget(pick_btn)
-
-        occ_spin = QDoubleSpinBox()
-        occ_spin.setRange(0.0, 1.0)
-        occ_spin.setDecimals(3)
-        occ_spin.setSingleStep(0.05)
-        occ_spin.setValue(entry.value)
-        label_occ = QLabel("occupation")
-        label_occ.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        occ_spin.setFixedWidth(70)
-        h.addWidget(occ_spin)
-
-        # Keep controls left; push only the trash button to the far right.
-        h.addStretch(1)
-
-        del_btn = QPushButton()
-        del_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
-        del_btn.setToolTip("Remove this element row")
-        del_btn.setFixedWidth(34)
-        h.addWidget(del_btn)
-
-        row = {
-            'w': row_w,
-            'elem': elem_edit,
-            'occ': occ_spin,
-            'del': del_btn,
-            'pick': pick_btn,
-            'entry': entry,
-        }
-        self.rows.append(row)
-        self.rows_box.addWidget(row_w)
-
-        def do_pick():
-            sym = select_element(self)
-            if sym:
-                elem_edit.setText(sym)
-        pick_btn.clicked.connect(do_pick)
-        del_btn.clicked.connect(lambda: self._remove_row(row))
-        # Validation only; no redraw on value changes
-        elem_edit.textChanged.connect(
-            lambda text: self._on_symbol_changed(row, text)
-        )
-        occ_spin.valueChanged.connect(
-            lambda value: self._on_occupancy_changed(row, value)
-        )
-
-        # Focus-driven highlighting
-        for w in (elem_edit, occ_spin, pick_btn, del_btn):
-            w.installEventFilter(self)
-
-        self._validate_row(row)
-
-    def _remove_row(self, row: Dict[str, Any]) -> None:
-        if not self.draft.remove_occupancy(self.site, row['entry']):
-            return
-        row['w'].setParent(None)
-        self.rows.remove(row)
-        self._validate_controls_state()
-        self._validate_totals()
-
-    def _validate_controls_state(self) -> None:
-        # disable delete when only one row
-        for r in self.rows:
-            r['del'].setEnabled(len(self.rows) > 1)
-
-    def _validate_row(self, row: Dict[str, Any]) -> None:
-        elem = row['elem'].text().strip()
-        ok = self.draft.symbol_is_valid(elem)
-        # Styling: red border when invalid. Keep readable background.
-        if ok or elem == "":
-            row['elem'].setStyleSheet("")
-        else:
-            # Use a darker background only if palette seems light; simple heuristic
-            row['elem'].setStyleSheet("QLineEdit { border: 1px solid #cc3333; background-color: #330000; color: #ffecec; }")
-        self._validate_totals()
+        self.occupation_editor.add_row()
 
     def _normalize(self) -> None:
-        self.draft.normalize_occupancy(self.site)
-        for r in self.rows:
-            r['occ'].blockSignals(True)
-            r['occ'].setValue(r['entry'].value)
-            r['occ'].blockSignals(False)
-        self._validate_totals()
+        self.occupation_editor.normalize()
+
+    def _validate_controls_state(self) -> None:
+        self.occupation_editor._validate()
 
     def _validate_totals(self) -> None:
-        over = self.draft.occupancy_is_overfull(self.site)
-        # red border on all occupancy widgets when overfull
-        style_bad = "QDoubleSpinBox { border: 1px solid #cc3333; }"
-        for r in self.rows:
-            r['occ'].setStyleSheet(style_bad if over else "")
-        msg = f"Occupation too large for site {self.label}" if over else None
-        if self._on_validation is not None:
-            self._on_validation(self.label, msg)
+        self.occupation_editor._validate()
 
-    # Focus event filter to trigger highlighting only when user focuses a widget.
+    # The original position-editor focus behavior stays independent from
+    # occupation rows (which now install their own focus filter).
     def eventFilter(self, obj, event):  # type: ignore[override]
         if event.type() == QEvent.Type.FocusIn:
             if isinstance(obj, QDoubleSpinBox):
-                r = obj.property("pos_row")
-                c = obj.property("pos_col")
-                if r is not None and c is not None:
-                    self.positions_table.setCurrentCell(int(r), int(c))
-            if callable(self._on_activity):
-                if isinstance(obj, QDoubleSpinBox) and obj.property("pos_row") is not None:
-                    self._on_activity(self.label, int(obj.property("pos_row")), False)
-                else:
-                    self._on_activity(self.label)
+                row = obj.property("pos_row")
+                col = obj.property("pos_col")
+                if row is not None and col is not None:
+                    self.positions_table.setCurrentCell(int(row), int(col))
+                    if callable(self._on_activity):
+                        self._on_activity(self.label, int(row), False)
         return super().eventFilter(obj, event)
 
     def is_valid(self) -> bool:
         return self.draft.is_site_valid(self.site)
 
-    def _on_symbol_changed(self, row: Dict[str, Any], text: str) -> None:
-        self.draft.set_occupancy_symbol(self.site, row['entry'], text)
-        self._validate_row(row)
-
-    def _on_occupancy_changed(
-        self, row: Dict[str, Any], value: float
-    ) -> None:
-        self.draft.set_occupancy_value(self.site, row['entry'], value)
-        self._validate_totals()

@@ -55,6 +55,26 @@ def test_workspace_restart_is_snapshotted_into_request_and_result(tmp_path):
     assert controller.restarted
 
 
+def test_explicit_host_potential_is_passed_to_calculator_without_atoms(tmp_path):
+    host = object()
+    request = CalculationRequest(
+        atoms=Atoms("Fe"), input_parameters=object(), directory=str(tmp_path),
+        structure_id=1, state_id=1, potential=host, restart_scf=True,
+    )
+    execution = SprkkrExecution(request, _Cancellation())
+    seen = {}
+
+    class Calculator:
+        def create_run(self, **kwargs):
+            seen.update(kwargs)
+            return object()
+
+    execution._create_runner(Calculator())
+    assert seen["potential"] is host
+    assert "atoms" not in seen
+    assert seen["restart_scf"]
+
+
 def test_execution_forwards_restart_scf_to_create_run(monkeypatch, tmp_path):
     request = CalculationRequest(
         atoms=Atoms("Fe"),

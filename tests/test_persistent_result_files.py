@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from kkrunner.runs import ExecutionMetadata, WorkingDirectory
-from kkrunner.client import LocalTransport
+from kkrunner.transports import LocalTransport
 from types import SimpleNamespace
 
 from ase2sprkkr_gui.gui.application.persistent_jobs import PersistentJob, PersistentJobSource
@@ -76,7 +76,7 @@ def test_unavailable_execution_keeps_local_history_visible(tmp_path):
     from dataclasses import replace
 
     from kkrunner.backends import BackendConfig
-    from kkrunner.client.transports import transport_from_dict
+    from kkrunner.transports import transport_from_dict
 
     record = _record()
     record.execution = replace(

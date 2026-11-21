@@ -128,3 +128,75 @@ def test_overwritten_output_path_creates_new_result(tmp_path):
     assert second is not None
     assert second.id != first.id
     assert len(controller.result_store.results) == 2
+
+
+def test_continue_output_reports_potential_error_once(tmp_path, monkeypatch):
+    output = tmp_path / "SCF.out"
+    output.write_text("calculation", encoding="utf-8")
+    broken_potential = tmp_path / "SCF.pot"
+    loaded = LoadedResult(
+        result=SimpleNamespace(
+            task_name="scf",
+            produces_potential=True,
+            output_values={},
+        ),
+        output_path=output,
+        potential_path=broken_potential,
+        atoms=None,
+        potential_error=ValueError("invalid POT section"),
+        directory=str(tmp_path),
+        input_parameters=None,
+    )
+    monkeypatch.setattr(file_flows, "_read_output", lambda _path, _parent: loaded)
+    warnings = []
+    monkeypatch.setattr(
+        file_flows.QMessageBox,
+        "warning",
+        lambda _parent, title, message: warnings.append((title, message)),
+    )
+
+    controller = WorkspaceController()
+    recent = RecentFiles(tmp_path / "recent.json")
+    assert not file_flows.continue_output(controller, recent, output, None)
+
+    assert len(warnings) == 1
+    title, message = warnings[0]
+    assert title == "Cannot Continue Calculation"
+    assert "invalid POT section" in message
+    assert "no reusable calculation state" in message
+    assert message.index("invalid POT section") < message.index("no reusable calculation state")
+    assert len(controller.result_store.results) == 1
+    assert controller.state_id is None
+
+
+def test_continue_output_without_reconstructable_structure_reports_one_warning(
+    tmp_path, monkeypatch
+):
+    output = tmp_path / "SCF.out"
+    loaded = LoadedResult(
+        result=SimpleNamespace(
+            task_name="scf",
+            produces_potential=True,
+            output_values={},
+        ),
+        output_path=output,
+        potential_path=None,
+        atoms=None,
+        potential_error=None,
+        directory=str(tmp_path),
+        input_parameters=None,
+    )
+    monkeypatch.setattr(file_flows, "_read_output", lambda _path, _parent: loaded)
+    warnings = []
+    monkeypatch.setattr(
+        file_flows.QMessageBox,
+        "warning",
+        lambda _parent, title, message: warnings.append((title, message)),
+    )
+
+    controller = WorkspaceController()
+    recent = RecentFiles(tmp_path / "recent.json")
+    assert not file_flows.continue_output(controller, recent, output, None)
+    assert len(warnings) == 1
+    assert "no reusable calculation state" in warnings[0][1]
+    assert "potential could not be loaded" not in warnings[0][1]

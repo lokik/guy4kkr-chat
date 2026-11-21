@@ -4,25 +4,19 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import numpy as np
-from ase2sprkkr import SPRKKRAtoms
+from ase2sprkkr.sprkkr.sprkkr_atoms import system_kind_for_atoms
 
-StructureKind = Literal["2d", "3d", "unknown"]
+from ase2sprkkr_gui.ase.copy import copy_for_edit
+
+StructureKind = Literal["0d", "2d", "3d", "unknown"]
 
 
 def detect_structure_kind(atoms: Any | None) -> StructureKind | None:
     """Classify structures supported by the bulk and layered workflows."""
-    if atoms is None:
-        return None
-    periodic = sum(atoms.get_pbc())
-    if periodic == 3:
-        return "3d"
-    if (
-        periodic == 2
-        and isinstance(atoms, SPRKKRAtoms)
-        and {"left", "central", "right"}.issubset(atoms.regions)
-    ):
-        return "2d"
-    return "unknown"
+    kind = system_kind_for_atoms(atoms)
+    if kind == "embedded":
+        return "0d"
+    return "unknown" if kind == "cluster" else kind
 
 
 def scale_lattice_to_lengths(lattice, lengths):
@@ -71,6 +65,6 @@ def match_structure_axis_length(source, target, axis):
         )
 
     source_cell[axis] = source_vector / source_length * target_length
-    result = source.copy()
+    result = copy_for_edit(source)
     result.set_cell(source_cell, scale_atoms=True)
     return result

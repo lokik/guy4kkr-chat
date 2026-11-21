@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional, Sequence
 import numpy as np
 from matplotlib import colormaps
 from matplotlib.colors import to_hex
+from ase2sprkkr_gui.gui.plots.atom_sizes import marker_areas, marker_area_scale
 
 _SITE_ROLE_STYLES = {
     'inactive': {
@@ -143,6 +144,7 @@ def plot_atoms_preview(
     if base_style:
         style.update(base_style)
 
+    sizes = marker_areas(atoms, float(style.get('s', 40)))
     grouped_indices: Dict[str, list[int]] = {}
     for idx, kind in enumerate(kinds):
         if idx in hovered_set:
@@ -156,17 +158,32 @@ def plot_atoms_preview(
             continue
         kind_style = dict(style)
         kind_style['color'] = color
-        plot_sites_in_lattice(ax, lattice, scaled[selected_indices], **kind_style)
+        kind_style['s'] = sizes[selected_indices]
+        plot_sites_in_lattice(
+            ax, lattice, scaled[selected_indices],
+            marker_sizes_scaled=True, **kind_style,
+        )
 
     focus_style = dict(style)
     focus_style.setdefault('color', 'black')
     focus_style['color'] = 'black'
-    focus_style['s'] = int(float(focus_style.get('s', 40)) * 1.5)
+    focus_style['s'] = float(focus_style.get('s', 40)) * 1.5
     if hovered_style:
         focus_style.update(hovered_style)
 
     for idx in sorted(hovered_set):
-        plot_sites_in_lattice(ax, lattice, scaled[idx], **focus_style)
+        atom_focus_style = dict(focus_style)
+        if hovered_style and 's' in hovered_style:
+            atom_focus_style['s'] = (
+                sizes[idx] * float(hovered_style['s'])
+                / float(style.get('s', 40))
+            )
+        else:
+            atom_focus_style['s'] = sizes[idx] * 1.5
+        plot_sites_in_lattice(
+            ax, lattice, scaled[idx], marker_sizes_scaled=True,
+            **atom_focus_style,
+        )
 
     if extra_draw is not None:
         extra_draw(ax, atoms, lattice)
@@ -221,12 +238,13 @@ def plot_structure_axis_projection(ax, atoms: Any, axis: int, *, canvas=None) ->
         (positions @ horizontal, positions @ vertical)
     )
     symbols = np.asarray(atoms.get_chemical_symbols())
+    sizes = marker_areas(atoms, 40)
     for symbol in dict.fromkeys(symbols.tolist()):
         selected = symbols == symbol
         ax.scatter(
             projected[selected, 0],
             projected[selected, 1],
-            s=40,
+            s=sizes[selected],
             edgecolors="black",
             linewidths=0.9,
             label=symbol,
@@ -292,7 +310,10 @@ def plot_lattice(ax, lattice):
     ax.set_ylim(mn[1], mx[1])
     ax.set_zlim(mn[2], mx[2])
 
-def plot_sites_in_lattice(ax, lattice, points, *, role: str | None = None, **kwargs):
+def plot_sites_in_lattice(
+    ax, lattice, points, *, role: str | None = None,
+    marker_sizes_scaled: bool = False, relative_area_factors=None, **kwargs
+):
     """Plot atomic sites inside a lattice using role-based styling.
 
     Parameters
@@ -306,6 +327,11 @@ def plot_sites_in_lattice(ax, lattice, points, *, role: str | None = None, **kwa
     role
         Optional semantic role: ``'inactive'``, ``'focused'``, or ``'active'`` to apply
         consistent coloring with the Qt space-group selector.
+    marker_sizes_scaled
+        True when marker areas were already derived from ``marker_areas``.
+    relative_area_factors
+        Optional per-point ratios for draft sites with known occupations;
+        the common percentage scaling is still applied here.
     kwargs
         Forwarded to ``ax.scatter`` and override role defaults when provided.
     """
@@ -334,6 +360,12 @@ def plot_sites_in_lattice(ax, lattice, points, *, role: str | None = None, **kwa
                 config.setdefault(key, value)
 
     config.update(kwargs)
+    if not marker_sizes_scaled:
+        config['s'] = np.asarray(config['s'], dtype=float) * marker_area_scale()
+    if relative_area_factors is not None:
+        config['s'] = np.asarray(config['s'], dtype=float) * np.asarray(
+            relative_area_factors, dtype=float
+        )
 
     if 'color' not in config:
         config['color'] = 'red'

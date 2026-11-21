@@ -1,7 +1,7 @@
 """Embedded, multiline ASE Python shell for detached structure creation.
 
 User code runs in the GUI process. An explicit use(atoms) / use_structure(atoms)
-selects a snapshot; closing the dialog or exiting the interpreter leaves the
+selects that structure as is; closing the dialog or exiting the interpreter leaves the
 workspace unchanged.
 """
 from __future__ import annotations
@@ -150,14 +150,14 @@ class StructureShellDialog(QDialog):
 
     @property
     def candidate(self) -> Atoms | None:
-        """Detached accepted structure, or None after ordinary dismissal."""
+        """Selected structure as supplied, or None after ordinary dismissal."""
         return self._candidate
 
     def use_structure(self, atoms: Atoms) -> None:
-        """Select a defensive copy; publication belongs to the calling flow."""
+        """Select the supplied structure; publication belongs to the calling flow."""
         if not isinstance(atoms, Atoms):
             raise TypeError("use_structure() expects an ase.Atoms object")
-        self._candidate = atoms.copy()
+        self._candidate = atoms
         self.accept()
 
 

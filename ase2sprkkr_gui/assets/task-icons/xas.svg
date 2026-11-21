@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>X-ray absorption spectroscopy</title>
+  <desc>XAS above a simplified trace of the calculated copper L₂,₃ absorption spectrum.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="10" fill="#f0f7f8" stroke="#b6cbd2"/>
+  <path d="M10 36 11.3 34.8 11.9 32.9 13 18 14.2 22.2 15.1 21 16 22.5
+           17.1 22.6 19.4 25.6 21.3 26.8 22.4 26.7 23.3 25.7 24.5 21.1 24.9 20.4
+           26 21.2 26.8 21 29.3 21 33.2 22.6 36 23.4 38 24.4 38.5 24.2V38H10Z"
+        fill="#bee7e8"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 17v21h30" stroke="#26384e" stroke-width="1.9"/>
+    <path d="M10 36 11.3 34.8 11.9 32.9 13 18 14.2 22.2 15.1 21 16 22.5
+             17.1 22.6 19.4 25.6 21.3 26.8 22.4 26.7 23.3 25.7 24.5 21.1 24.9 20.4
+             26 21.2 26.8 21 29.3 21 33.2 22.6 36 23.4 38 24.4 38.5 24.2"
+          stroke="#087f83" stroke-width="1.8"/>
+    <path d="m19.5 8.5 5 7m0-7-5 7m7 0 2.5-7h.5l2.5 7m-4.6-2h3.7
+             m7.5-4.4c-1.2-1.2-4.2-.9-4.2.9 0 2.1 4.4 1.3 4.4 3.7
+             0 2-3 2.3-4.6 1"
+          stroke="#26384e" stroke-width="1.45"/>
+  </g>
+</svg>
