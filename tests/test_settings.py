@@ -124,6 +124,7 @@ def test_settings_has_independent_frame_tabs(tmp_path):
 
     from ase2sprkkr_gui.gui.dialogs.settings import SettingsDialog
     from ase2sprkkr_gui.gui.widgets.settings.preferred_tasks import PreferredTasksPage
+    from ase2sprkkr_gui.gui.widgets.settings.presets import PresetsSettingsPage
     from ase2sprkkr_gui.gui.widgets.settings.general import GeneralSettingsPage
     from ase2sprkkr_gui.gui.widgets.settings.ase2sprkkr import Ase2sprkkrSettingsPage
     from ase2sprkkr_gui.gui.widgets.settings.run_configurations import RunConfigurationsPage
@@ -133,10 +134,11 @@ def test_settings_has_independent_frame_tabs(tmp_path):
         profile_store=_FakeProfileStore(),
     )
     assert [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())] == [
-        "General", "Preferred tasks", "Run configurations", "Ase2sprkkr"
+        "General", "Preferred tasks", "Presets", "Run configurations", "Ase2sprkkr"
     ]
-    assert all(isinstance(dialog.tabs.widget(i), QFrame) for i in range(4))
+    assert all(isinstance(dialog.tabs.widget(i), QFrame) for i in range(5))
     assert isinstance(dialog.preferred_tasks_page, PreferredTasksPage)
+    assert isinstance(dialog.presets_page, PresetsSettingsPage)
     assert isinstance(dialog.general_page, GeneralSettingsPage)
     assert isinstance(dialog.run_configurations_page, RunConfigurationsPage)
     assert isinstance(dialog.ase2sprkkr_page, Ase2sprkkrSettingsPage)

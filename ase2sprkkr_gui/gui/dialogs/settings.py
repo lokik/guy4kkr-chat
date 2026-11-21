@@ -18,6 +18,7 @@ from ase2sprkkr_gui.gui.application.execution_profiles import ExecutionProfileSt
 from ase2sprkkr_gui.gui.application.settings import ApplicationSettings
 from ase2sprkkr_gui.gui.input_parameters.task_preferences import default_preferred_task_names
 from ase2sprkkr_gui.gui.widgets.settings.preferred_tasks import PreferredTasksPage
+from ase2sprkkr_gui.gui.widgets.settings.presets import PresetsSettingsPage
 from ase2sprkkr_gui.gui.widgets.settings.run_configurations import RunConfigurationsPage
 from ase2sprkkr_gui.gui.widgets.settings.general import GeneralSettingsPage
 from ase2sprkkr_gui.gui.widgets.settings.ase2sprkkr import Ase2sprkkrSettingsPage
@@ -52,6 +53,8 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self.general_page, "General")
         self.preferred_tasks_page = PreferredTasksPage(settings, self.tabs)
         self.tabs.addTab(self.preferred_tasks_page, "Preferred tasks")
+        self.presets_page = PresetsSettingsPage(self.tabs)
+        self.tabs.addTab(self.presets_page, "Presets")
         self.tabs.addTab(self.run_configurations_page, "Run configurations")
         configuration = (
             ase_configuration if ase_configuration is not None

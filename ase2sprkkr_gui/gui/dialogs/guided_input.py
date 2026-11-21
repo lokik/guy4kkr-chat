@@ -90,9 +90,11 @@ class GuidedInputParametersDialog(QDialog):
         file_source_directory=None,
         directory: str | Path | None = None,
         recent_files: RecentFiles | None = None,
+        preset_save: Callable[[InputParameters], bool] | None = None,
     ) -> None:
         super().__init__(parent)
         self.recent_files = recent_files
+        self._preset_save = preset_save
         self._calculation_unavailable_reason = calculation_unavailable_reason
         self.task = task.lower()
         self.atoms = atoms
@@ -130,7 +132,10 @@ class GuidedInputParametersDialog(QDialog):
             self._apply_pending_history_navigation
         )
 
-        self.setWindowTitle(self.spec.title)
+        self.setWindowTitle(
+            f"Save preset · {self.spec.title}" if preset_save is not None
+            else self.spec.title
+        )
         manage_window_geometry(
             self, "guided-input", default_size=(1180, 740)
         )
@@ -274,7 +279,8 @@ class GuidedInputParametersDialog(QDialog):
         self.presets_menu = QMenu(self.presets_btn)
         self.replace_preset_menu = self.presets_menu.addMenu("Replace by preset")
         self.merge_preset_menu = self.presets_menu.addMenu("Load preset")
-        self.presets_menu.addAction("Save as preset…", self._save_preset)
+        save_preset_action = self.presets_menu.addAction("Save as preset…", self._save_preset)
+        save_preset_action.setVisible(self._preset_save is None)
         self.presets_menu.aboutToShow.connect(self._refresh_preset_menus)
         self.presets_btn.setMenu(self.presets_menu)
         self._refresh_preset_menus()
@@ -303,11 +309,20 @@ class GuidedInputParametersDialog(QDialog):
         self.cancel_button.setStyleSheet(button_stylesheet(self.palette()))
         self.cancel_button.clicked.connect(self.reject)
         file_actions.addWidget(self.cancel_button)
-        self.calculate_button = QPushButton("Calculate", self)
-        self.calculate_button.setObjectName("guidedCalculate")
+        self.calculate_button = QPushButton(
+            "Save" if self._preset_save is not None else "Calculate", self
+        )
+        self.calculate_button.setObjectName(
+            "guidedSavePreset" if self._preset_save is not None else "guidedCalculate"
+        )
         self.calculate_button.setStyleSheet(button_stylesheet(self.palette(), primary=True))
         self.calculate_button.setDefault(True)
-        self.calculate_button.setIcon(QIcon(str(icon_path("system-run.svg"))))
+        self.calculate_button.setIcon(
+            QIcon.fromTheme("document-save", self.style().standardIcon(
+                QStyle.StandardPixmap.SP_DialogSaveButton
+            )) if self._preset_save is not None
+            else QIcon(str(icon_path("system-run.svg")))
+        )
         self.calculate_button.clicked.connect(self._accept)
         file_actions.addWidget(self.calculate_button)
         root.addLayout(file_actions)
@@ -420,7 +435,14 @@ class GuidedInputParametersDialog(QDialog):
                 f"{parameters.task_name or 'an unknown task'}."
             )
         elif self.form.errors:
-            reason = "Correct the highlighted input values before calculating."
+            reason = (
+                "Correct the highlighted input values before saving."
+                if self._preset_save is not None else
+                "Correct the highlighted input values before calculating."
+            )
+        elif self._preset_save is not None:
+            # A reusable preset needs valid fields, not an executable calculation.
+            reason = None
         else:
             try:
                 validate_setup(parameters)
@@ -434,7 +456,11 @@ class GuidedInputParametersDialog(QDialog):
                 )
         self.calculate_button.setEnabled(not reason)
         self.calculate_button.setToolTip(
-            reason or "Run a calculation with the edited SPR-KKR input"
+            reason or (
+                "Save these input parameters as a new preset"
+                if self._preset_save is not None
+                else "Run a calculation with the edited SPR-KKR input"
+            )
         )
 
     def group_note(self, group_id: str) -> QLabel:
@@ -479,6 +505,21 @@ class GuidedInputParametersDialog(QDialog):
         return True
 
     def _accept(self) -> None:
+        if self._preset_save is not None:
+            if not self._commit_pending():
+                QMessageBox.warning(
+                    self, "Invalid Settings", "Correct the highlighted value before saving."
+                )
+                return
+            self._update_calculation_availability()
+            if not self.calculate_button.isEnabled():
+                QMessageBox.information(
+                    self, "Cannot Save Preset", self.calculate_button.toolTip()
+                )
+                return
+            if self._preset_save(self.parameters()):
+                self.accept()
+            return
         if not self._commit_pending():
             QMessageBox.warning(self, "Invalid Settings", "Correct the highlighted value before calculating.")
             return
@@ -513,6 +554,7 @@ class GuidedInputParametersDialog(QDialog):
             atoms=self.atoms,
             directory=self.directory,
             recent_files=self.recent_files,
+            allow_incomplete=self._preset_save is not None,
         )
         if accepted is None:
             return

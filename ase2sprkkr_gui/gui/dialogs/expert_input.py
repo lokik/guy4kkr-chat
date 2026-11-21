@@ -56,9 +56,13 @@ class InputParametersDialog(QDialog):
         file_source_directory=None,
         directory: str | Path | None = None,
         recent_files: RecentFiles | None = None,
+        preset_save: Callable[[InputParameters], bool] | None = None,
+        allow_incomplete: bool = False,
     ) -> None:
         super().__init__(parent)
         self.recent_files = recent_files
+        self._preset_save = preset_save
+        self._allow_incomplete = allow_incomplete or preset_save is not None
         self.atoms = atoms
         self.directory = directory or file_source_directory
         self._calculation_mode = calculation_mode
@@ -68,7 +72,10 @@ class InputParametersDialog(QDialog):
         else:
             self.session = create_input_parameters_session(parameters, self)
 
-        self.setWindowTitle('Edit Input Parameters')
+        self.setWindowTitle(
+            'Save preset · Input parameters' if preset_save is not None
+            else 'Edit Input Parameters'
+        )
         manage_window_geometry(
             self,
             "expert-input",
@@ -135,12 +142,15 @@ class InputParametersDialog(QDialog):
         self.replace_preset_menu.aboutToShow.connect(self._refresh_preset_menus)
         self.merge_preset_menu.aboutToShow.connect(self._refresh_preset_menus)
         self.save_preset_btn = add_button('Save as preset…', self._save_preset)
+        self.save_preset_btn.setVisible(self._preset_save is None)
         self._refresh_preset_menus()
         self.edit_input_btn = add_button('Edit input file…', self._edit_input_file)
         file_actions.addStretch(1)
         self.cancel_btn = add_button('Cancel', self.reject, finish=True)
         self.ok_btn = add_button(
-            'Calculate' if calculation_mode else 'OK', self._on_ok, finish=True
+            'Save' if self._preset_save is not None else (
+                'Calculate' if calculation_mode else 'OK'
+            ), self._on_ok, finish=True
         )
         self.calculate_button = self.ok_btn if calculation_mode else None
         self.tree_editor.validationChanged.connect(
@@ -219,12 +229,17 @@ class InputParametersDialog(QDialog):
         self._validation_error.hide()
         if not self._commit_pending():
             return
-        try:
-            validate_setup(self.session.working_parameters)
-        except InputParametersValidationError as error:
-            self._validation_error.setText(str(error))
-            self._validation_error.show()
+        if self._preset_save is not None:
+            if self._preset_save(self.parameters()):
+                self.accept()
             return
+        if not self._allow_incomplete:
+            try:
+                validate_setup(self.session.working_parameters)
+            except InputParametersValidationError as error:
+                self._validation_error.setText(str(error))
+                self._validation_error.show()
+                return
         self._update_calculation_availability()
         if self._calculation_mode and not self.ok_btn.isEnabled():
             self._validation_error.setText(self.ok_btn.toolTip())
@@ -269,6 +284,7 @@ def edit_input_parameters_session(
     atoms: Any = None,
     directory: str | Path | None = None,
     recent_files: RecentFiles | None = None,
+    allow_incomplete: bool = False,
 ) -> InputParametersSession | None:
     """Run Expert over an isolated fork and return the fork only on Accept."""
     dialog = InputParametersDialog(
@@ -278,6 +294,7 @@ def edit_input_parameters_session(
         atoms=atoms,
         directory=directory,
         recent_files=recent_files,
+        allow_incomplete=allow_incomplete,
     )
     code = dialog.exec()
     if code == QDialog.DialogCode.Accepted:
